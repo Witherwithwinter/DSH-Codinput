@@ -19,11 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-本软件的部分视觉素材与样式取值复刻自 @deepseek-ai/dsh（DeepSeek Harness，
-MIT License，Copyright (c) 2026 DeepSeek）：包括若干 SVG 图标路径（盾牌系列
-glyph、plus/paperclip/arrow-up 等）与输入框卡片的 CSS 取值（尺寸、圆角、
-间距、颜色变量用法）。上述内容依 MIT 许可使用，其原始版权与许可声明随本
-仓库一并保留（见 README「第三方归属」一节）。

@@ -158,7 +158,7 @@ npm run typecheck
 
 ## Third-party attribution
 
-Parts of this project **replicate DeepSeek Harness** (`@deepseek-ai/dsh`, MIT License, Copyright (c) 2026 DeepSeek): several SVG icon paths (the permission shield set, plus, paperclip, arrow-up, the generic file glyph, …) and CSS values for the composer card and attachment rail. They are used under the MIT license; the original copyright and permission notice are retained at the end of [LICENSE](./LICENSE).
+Parts of this project **replicate DeepSeek Harness** (`@deepseek-ai/dsh`, MIT License, Copyright (c) 2026 DeepSeek): several SVG icon paths (the permission shield set, plus, paperclip, arrow-up, the generic file glyph, …) and CSS values for the composer card and attachment rail. They are used under the MIT license; the original copyright and permission notice are retained in [NOTICE](./NOTICE) alongside [LICENSE](./LICENSE).
 
 Bundled third-party dependencies: CodeMirror 6 (MIT), marked (MIT), DOMPurify (Apache-2.0 / MPL-2.0 dual licensed).
 

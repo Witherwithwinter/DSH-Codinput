@@ -1,0 +1,18 @@
+DSH-Codinput — 第三方归属 / Third-party attribution
+=====================================================
+
+本软件的部分视觉素材与样式取值复刻自 DeepSeek Harness（`@deepseek-ai/dsh`，
+MIT License，Copyright (c) 2026 DeepSeek），包括：
+
+  - 若干 SVG 图标路径：权限盾牌系列 glyph（read-only / workspace-write /
+    danger-full-access）、plus、paperclip、arrow-up、发送箭头与停止方块、
+    通用文件图形（file body / fold）；
+  - 输入框卡片与附件轨的 CSS 取值：尺寸、圆角、间距、颜色变量的用法。
+
+上述内容依 MIT 许可使用。其原始版权与许可声明（MIT License, Copyright (c)
+2026 DeepSeek）与本仓库的 LICENSE 一并保留；详见 README「第三方归属」一节。
+
+Portions of this project replicate DeepSeek Harness (`@deepseek-ai/dsh`, MIT
+License, Copyright (c) 2026 DeepSeek), as detailed above. They are used under
+the MIT license, and the original copyright and permission notice are retained
+alongside this repository's LICENSE file.
