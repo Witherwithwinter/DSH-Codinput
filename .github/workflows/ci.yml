@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build (release bundle)
+        run: npm run build
+
+      - name: 产物自检（bundle 非空且无内联 sourcemap）
+        run: |
+          test -s lib/client.js
+          head -c 200 lib/client.js | grep -q '__ModuleLoader__.load'
+          if grep -q 'sourceMappingURL=data:application/json' lib/client.js; then
+            echo "::error::lib/client.js 含内联 sourcemap，请用 npm run build（发布配置）构建"
+            exit 1
+          fi
+          echo "lib/client.js $(du -h lib/client.js | cut -f1)"
+
+      # 仓库带构建产物，走 GitHub 源码安装的人直接用这份（README 的「装源码
+      # 无需构建」就靠它）。构建可复现，所以能拿重建结果跟提交比对：不一致
+      # 说明提交里的产物落后于源码，别让 CI 绿着把旧产物发出去。
+      - name: 产物与源码一致（lib/ 已入库且是最新构建）
+        run: |
+          if ! git ls-files --error-unmatch lib/client.js >/dev/null 2>&1; then
+            echo "::error::lib/client.js 未被 git 跟踪；源码安装要靠它，必须入库"
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain -- lib/)" ]; then
+            echo "::error::lib/ 与当前源码不一致（提交的产物落后于源码）。本地 npm run build 后一并提交。"
+            git status --porcelain -- lib/
+            exit 1
+          fi
+          echo "lib/ 已入库，且与当前源码的构建结果一致"

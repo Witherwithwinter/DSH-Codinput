@@ -1,0 +1,5 @@
+# dsh-codinput bundle 层：插入 Codinput 输入接管插件行。
+- insert:
+    - id: dsh-codinput
+      name: dsh-codinput
+      config: {}

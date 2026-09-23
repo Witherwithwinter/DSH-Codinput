@@ -1,0 +1,78 @@
+{
+  "name": "dsh-codinput",
+  "version": "0.1.0",
+  "description": "DSH WebUI 插件：把聊天输入框变成代码编辑器一样的输入风格（CodeMirror 6 接管 conversation.composer.bar）。",
+  "license": "MIT",
+  "author": "Witherwithwinter",
+  "keywords": [
+    "dsh",
+    "deepseek",
+    "deepseek-harness",
+    "codemirror",
+    "composer",
+    "input",
+    "plugin",
+    "webui"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Witherwithwinter/DSH-Codinput.git"
+  },
+  "homepage": "https://github.com/Witherwithwinter/DSH-Codinput#readme",
+  "bugs": {
+    "url": "https://github.com/Witherwithwinter/DSH-Codinput/issues"
+  },
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/",
+    "src/",
+    "assets/",
+    "cordis.patch.yml",
+    "CHANGELOG.md",
+    "TESTING.md"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:dev": "node scripts/build.mjs --dev",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build && npm run typecheck"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "slots",
+        "conversation"
+      ],
+      "external": [
+        "react",
+        "react-dom"
+      ]
+    }
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.8.0",
+    "@codemirror/language": "^6.10.8",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.36.0",
+    "dompurify": "^3.2.4",
+    "marked": "^15.0.6"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.7",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.3"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true
+  }
+}
