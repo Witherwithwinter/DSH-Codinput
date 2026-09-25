@@ -243,7 +243,9 @@ export function ContextGauge(props: { useProjection: UseProjection | undefined }
 
   if (!pressure || !pressure.contextWindow) return null;
   const windowTokens = pressure.contextWindow;
-  const pct = Math.min(100, Math.max(0, ((pressure.pressureTokens ?? 0) / windowTokens) * 100));
+  // 官方 contextOccupancy 语义：优先 projectedTokens（含投影增长），缺失退 pressureTokens。
+  const usedTokens = pressure.projectedTokens ?? pressure.pressureTokens ?? 0;
+  const pct = Math.min(100, Math.round((usedTokens / windowTokens) * 100));
   const dash = (pct / 100) * GAUGE_CIRCUMFERENCE;
   const segments: readonly [string, number][] = [
     ['dci-gauge-colorSystem', breakdown?.systemTokens ?? 0],
@@ -278,7 +280,7 @@ export function ContextGauge(props: { useProjection: UseProjection | undefined }
             <span className="dci-gauge-headline">{t("tool.contextTitle")}</span>
             <span className="dci-gauge-percent">{Math.round(pct)}%</span>
             <span className="dci-gauge-figures">
-              ~{shortTokens(pressure.pressureTokens ?? 0)} / {shortTokens(windowTokens)}
+              ~{shortTokens(usedTokens)} / {shortTokens(windowTokens)}
             </span>
           </div>
           <div className="dci-gauge-bar">

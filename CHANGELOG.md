@@ -12,6 +12,10 @@
 - **上下文小圈挪进数据行**：官方 `0.1.7-rc.2` 把上下文占用小圈从输入卡片工具行挪到卡片下方 dock 行（stats 胶囊之后），trigger 变为「双环仪表 + 百分比」药丸（padding 1px 8px、gap 6px、13px tabular-nums），且独立于 stats 胶囊渲染（无统计数据时也出现）。已逐值对齐。
 - **候选菜单尺寸同步 rc.2**：max-height 320→400（`SlashMenu` 的 JS 上限常量同步修正——该常量以内联样式覆盖 CSS，仅改 CSS 不生效）、item 行 40px/14px→34px/13px（gap 8→6、radius→`--dsw-radius-md`）、图标 16→14px 且颜色走新的 `--dsw-alias-menu-icon`、分节标题/骨架屏/面包屑收紧值同步。
 
+### 修复
+
+- **上下文小圈数值与官方不一致**：官方 `contextOccupancy` 优先取 `projectedTokens`（含投影增长），缺失才退 `pressureTokens`；复刻此前只读 `pressureTokens`，导致启用 Codinput 前后小圈显示不同（如官方 3%、Codinput 2%）。已按官方语义修正（含分段面板 figures 取数）。
+
 ### 说明
 
 - **双通道兼容**：`0.1.7-rc.2` 走新 token（亚克力、16px 圆角、menu-icon 色）；`0.1.5-rc.3` 等旧宿主没有这些 token，回退链落回原 rc.3 形态（不透明 `--dsw-specific-menu`、20px 圆角、无 blur），两端均与各自官方一致。

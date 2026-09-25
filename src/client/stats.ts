@@ -23,7 +23,7 @@ export interface SessionStats {
   tokensPerSecond?: number;
   totalTokens?: number;
   cacheHitPct?: number;
-  /** 上下文占用百分比（pressureTokens / contextWindow）。 */
+  /** 上下文占用百分比（projectedTokens ?? pressureTokens，除以 contextWindow）。 */
   contextPct?: number;
   /** 会话统计面板：模型用时（流式活跃累计毫秒）与首 token 延迟。 */
   modelMs?: number;
@@ -152,9 +152,10 @@ export function useSessionStats(
     if (sample.ttftMs !== undefined && sample.ttftMs > 0) stats.ttftMs = sample.ttftMs;
   }
   const window_ = pressure?.contextWindow;
-  const pressured = pressure?.pressureTokens;
-  if (window_ !== undefined && window_ > 0 && pressured !== undefined) {
-    stats.contextPct = (pressured / window_) * 100;
+  // 官方 contextOccupancy：优先 projectedTokens。
+  const used = pressure?.projectedTokens ?? pressure?.pressureTokens;
+  if (window_ !== undefined && window_ > 0 && used !== undefined) {
+    stats.contextPct = (used / window_) * 100;
   }
   return Object.keys(stats).length > 0 ? stats : null;
 }
