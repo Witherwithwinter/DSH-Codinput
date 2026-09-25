@@ -112,15 +112,16 @@ After editing the profile by hand, run `pnpm install` inside the profile directo
 
 ## Compatibility
 
-The host publishes **rc** builds on npm's `latest` tag (`next` is the following rc, `alpha` is the further-ahead channel), so a plain install gives you an rc.
+The host publishes **rc** builds on npm (`latest` is the current stable rc, `next` is the following rc, `alpha` is the further-ahead channel), so a plain install gives you an rc.
 
 | Host version | Status |
 | --- | --- |
-| `0.1.5-rc.2` | ✅ Verified on a real instance (this is what a plain install gives you) |
+| `0.1.7-rc.2` | ✅ Verified on a real instance (current `next`; the acrylic candidate menu and the relocated context meter are aligned to this build) |
+| `0.1.5-rc.2` | ✅ Verified on a real instance |
 | `0.1.6-alpha.2` | ✅ Current development baseline; every feature verified end to end |
-| others | untested |
+| others (incl. `0.1.5-rc.3`, the current `latest`) | untested; older hosts lack the rc.2 tokens, so the fallback chain keeps each host's official look |
 
-On top of the real-instance run, `0.1.5-rc.2` was also checked statically: the client packages for that version were pulled from npm and every contract this plugin relies on was confirmed present — the three slots it uses (`conversation.composer.bar`, `sidebar.right.pane.tab`, `settings.section`), the `sidebarRight` / `sidebarRightTabs` / `locale` services and `openTabIn`, the sidebar expansion planner (dockkit `planSetExpanded`), and the official primitives the replicas are copied from (`fileSizeText` / `fileExtension` and the attachment glyph paths, byte for byte). Relative to the development baseline, rc is only missing a few slots the plugin never uses (`conversation.content`, `conversation.input.permission`, `conversation.session.header.leading`, `sidebar.right.tab.guide.entry`). For how to re-run this on another channel, see the “Verifying on another channel” section of [TESTING.md](./TESTING.md).
+For `0.1.7-rc.2`, on top of the real-instance run, the official CSS for the candidate menu and the context meter was extracted value by value from that version's client packages (`dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation`) and checked against the replica. The contracts this plugin relies on were verified per version: the three slots it uses (`conversation.composer.bar`, `sidebar.right.pane.tab`, `settings.section`), the `sidebarRight` / `sidebarRightTabs` / `locale` services and `openTabIn`, the sidebar expansion planner (dockkit `planSetExpanded`), and the official primitives the replicas are copied from (`fileSizeText` / `fileExtension` and the attachment glyph paths, byte for byte). For how to re-run this on another channel, see the “Verifying on another channel” section of [TESTING.md](./TESTING.md).
 
 The plugin leans on host internals (slot shadowing, `useTabInfo`, `sidebarRight`, `--dsw-*` tokens). Every call site guards with `typeof` checks and degrades gracefully, but a major host upgrade can still break it. **After upgrading the host, walk through [TESTING.md](./TESTING.md).**
 

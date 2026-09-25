@@ -22,7 +22,7 @@ export interface SlashMenuProps {
 }
 
 /** 组标题按来源映射到 i18n；未知来源回退原名（与官方同语义）。 */
-const MAX_HEIGHT = 320;
+const MAX_HEIGHT = 400;
 
 function sourceLabel(source: string): string {
   return tOptional(`menu.source.${source}`) ?? source;

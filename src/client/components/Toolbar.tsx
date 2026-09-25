@@ -3,9 +3,10 @@
  * 左侧 .dci-tools：指令（plus）、添加附件（paperclip）、权限（shield 触发器）；
  * 右侧 .dci-trailing：模型与思考强度（触发器）、发送（.primary 圆钮）。
  * 按钮沿用官方 keepFocus 语义（mousedown 不夺走编辑器焦点）。
+ * 0.1.7-rc.2 起官方上下文小圈不再在工具行（挪进卡片下方 dock 行，见 StatsRow）。
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import type { DraftAttachmentId, InputActions, InputState, InputTriggerController, UseProjection } from '../host-types';
 import { openCommandMenu } from '../triggers';
 import { stash } from '../services';
@@ -102,7 +103,6 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
           sessionId={sessionId}
           onNotify={onNotify}
         />
-        <ContextGauge useProjection={useProjection} />
         <button
           type="button"
           className="dci-send"
@@ -116,124 +116,5 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
         </button>
       </div>
     </div>
-  );
-}
-
-const GAUGE_CIRCUMFERENCE = 2 * Math.PI * 5.5;
-
-interface PressureSnapshot {
-  contextWindow?: number;
-  pressureTokens?: number;
-  projectedTokens?: number;
-}
-
-interface BreakdownSnapshot {
-  messageTokens?: number;
-  systemTokens?: number;
-  toolsTokens?: number;
-}
-
-function shortTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}K`;
-  return `${n}`;
-}
-
-/** 上下文占用小圈（官方 JObwrW 复刻）：双环仪表 + 点击展开分段面板。 */
-function ContextGauge(props: { useProjection: UseProjection | undefined }): JSX.Element | null {
-  const { useProjection } = props;
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLSpanElement | null>(null);
-  const pressure = useProjection
-    ? (useProjection('contextPressure') as PressureSnapshot | undefined)
-    : undefined;
-  const breakdown = useProjection
-    ? (useProjection('contextBreakdown') as BreakdownSnapshot | undefined)
-    : undefined;
-  // 点外面关闭。
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (event: PointerEvent): void => {
-      if (rootRef.current && event.target instanceof Node && rootRef.current.contains(event.target)) return;
-      setOpen(false);
-    };
-    window.addEventListener('pointerdown', onDown, true);
-    return () => window.removeEventListener('pointerdown', onDown, true);
-  }, [open]);
-
-  if (!pressure || !pressure.contextWindow) return null;
-  const windowTokens = pressure.contextWindow;
-  const pct = Math.min(100, Math.max(0, ((pressure.pressureTokens ?? 0) / windowTokens) * 100));
-  const dash = (pct / 100) * GAUGE_CIRCUMFERENCE;
-  const segments: readonly [string, number][] = [
-    ['dci-gauge-colorSystem', breakdown?.systemTokens ?? 0],
-    ['dci-gauge-colorTools', breakdown?.toolsTokens ?? 0],
-    ['dci-gauge-colorMessages', breakdown?.messageTokens ?? 0],
-  ];
-  return (
-    <span className="dci-gauge-root" ref={rootRef}>
-      <button
-        type="button"
-        className="dci-gauge-trigger"
-        aria-label={t("tool.context", { percent: Math.round(pct) })}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        title={t("tool.context", { percent: Math.round(pct) })}
-        onClick={() => setOpen(!open)}
-      >
-        <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
-          <circle className="dci-gauge-track" cx="7" cy="7" r="5.5" />
-          <circle
-            className="dci-gauge-fill"
-            cx="7" cy="7" r="5.5"
-            strokeDasharray={`${dash} ${GAUGE_CIRCUMFERENCE}`}
-            transform="rotate(-90 7 7)"
-          />
-        </svg>
-      </button>
-      {open ? (
-        <div className="dci-gauge-panel" role="dialog" aria-label={t("tool.contextTitle")}>
-          <div className="dci-gauge-header">
-            <span className="dci-gauge-headline">{t("tool.contextTitle")}</span>
-            <span className="dci-gauge-percent">{Math.round(pct)}%</span>
-            <span className="dci-gauge-figures">
-              ~{shortTokens(pressure.pressureTokens ?? 0)} / {shortTokens(windowTokens)}
-            </span>
-          </div>
-          <div className="dci-gauge-bar">
-            {segments.map(([cls, tokens]) => (
-              <div
-                key={cls}
-                className={`dci-gauge-segment ${cls}`}
-                style={{ width: `${(tokens / windowTokens) * 100}%` }}
-              />
-            ))}
-          </div>
-          <dl className="dci-gauge-rows">
-            <div className="dci-gauge-row">
-              <dt>
-                <span className={`dci-gauge-swatch dci-gauge-colorSystem`} aria-hidden="true" />
-                {t("stats.prompt")}
-              </dt>
-              <dd>~{shortTokens(breakdown?.systemTokens ?? 0)}</dd>
-            </div>
-            <div className="dci-gauge-row">
-              <dt>
-                <span className={`dci-gauge-swatch dci-gauge-colorTools`} aria-hidden="true" />
-                {t("stats.tools")}
-              </dt>
-              <dd>~{shortTokens(breakdown?.toolsTokens ?? 0)}</dd>
-            </div>
-            <div className="dci-gauge-row">
-              <dt>
-                <span className={`dci-gauge-swatch dci-gauge-colorMessages`} aria-hidden="true" />
-                {t("stats.messages")}
-              </dt>
-              <dd>~{shortTokens(breakdown?.messageTokens ?? 0)}</dd>
-            </div>
-          </dl>
-        </div>
-      ) : null}
-    </span>
   );
 }

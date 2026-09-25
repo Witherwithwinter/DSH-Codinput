@@ -112,17 +112,16 @@ dsh plugin --profile web add link:/abs/path/to/DSH-Codinput
 
 ## 兼容性
 
-宿主通过 npm 的 `latest` 通道发的是 **rc** 版本（`next` 是下个 rc，`alpha` 是更超前的通道），所以普通用户装到的就是 rc。
+宿主通过 npm 发的是 **rc** 版本（`latest` 是当前稳定 rc，`next` 是下个 rc，`alpha` 是更超前的通道），所以普通用户装到的就是 rc。
 
 | 宿主版本 | 状态 |
 | --- | --- |
-| `0.1.5-rc.2` | ✅ 实机实测通过（普通安装拿到的就是这一版） |
+| `0.1.7-rc.2` | ✅ 实机实测通过（`next` 通道当前版本；候选菜单亚克力、上下文小圈挪位即为此版对齐） |
+| `0.1.5-rc.2` | ✅ 实机实测通过 |
 | `0.1.6-alpha.2` | ✅ 开发基线，全部功能端到端实测通过 |
-| 其它 | 未验证 |
+| 其它（含 `latest` 现指向的 `0.1.5-rc.3`） | 未实测；旧宿主无 rc.2 新 token，回退链自动保持各版官方原形态 |
 
-rc 这一版除了实机跑过，还做过一次静态契约核对：从 npm 取该版本的客户端包，逐项确认本插件依赖的契约仍在——用到的 3 个槽位（`conversation.composer.bar`、`sidebar.right.pane.tab`、`settings.section`）、`sidebarRight` / `sidebarRightTabs` / `locale` 服务与 `openTabIn`、侧栏展开规划（dockkit `planSetExpanded`）、以及复刻所依据的官方原语（`fileSizeText` / `fileExtension` 与附件 glyph 路径，逐字一致）。rc 相对开发基线只少了几个插槽（`conversation.content`、`conversation.input.permission`、`conversation.session.header.leading`、`sidebar.right.tab.guide.entry`），本插件均未使用。换通道复验的步骤见 [TESTING.md](./TESTING.md) 的「换通道验证」一节。
-
-插件对宿主内部结构的依赖较多（槽位遮蔽、`useTabInfo`、`sidebarRight`、`--dsw-*` 令牌），代码里处处用 `typeof` 守卫 + `try/catch` 降级，但宿主大版本升级仍可能失效。**升级宿主后请按 [TESTING.md](./TESTING.md) 走一遍冒烟清单。**
+对 `0.1.7-rc.2` 除实机验证外，还从该版本的客户端包（`dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation`）逐值提取了候选菜单与上下文小圈的官方 CSS 核对。插件依赖的契约按版本核对过：用到的 3 个槽位（`conversation.composer.bar`、`sidebar.right.pane.tab`、`settings.section`）、`sidebarRight` / `sidebarRightTabs` / `locale` 服务与 `openTabIn`、侧栏展开规划（dockkit `planSetExpanded`）、以及复刻所依据的官方原语（`fileSizeText` / `fileExtension` 与附件 glyph 路径，逐字一致）。插件对宿主内部结构的依赖较多（槽位遮蔽、`useTabInfo`、`sidebarRight`、`--dsw-*` 令牌），代码里处处用 `typeof` 守卫 + `try/catch` 降级，但宿主大版本升级仍可能失效。**升级宿主后请按 [TESTING.md](./TESTING.md) 走一遍冒烟清单。**
 
 ## 已知限制
 
