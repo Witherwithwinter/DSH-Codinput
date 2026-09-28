@@ -14,7 +14,7 @@
 
 <p align="center">中文 | <a href="./README.en.md">English</a></p>
 
-<p align="center">把 DeepSeek Harness 的聊天输入框，换成一个真正的代码编辑器。</p>
+<p align="center">把 DeepSeek Harness 的聊天输入框，换成编辑器式的输入面板。</p>
 
 ![普通模式](./assets/preview-normal.png)
 

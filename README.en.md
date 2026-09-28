@@ -14,7 +14,7 @@
 
 <p align="center"><a href="./README.md">中文</a> | English</p>
 
-<p align="center">A real code editor, right where the DeepSeek Harness chat composer used to be.</p>
+<p align="center">An editor-style input panel, right where the DeepSeek Harness chat composer used to be.</p>
 
 ![Default mode](./assets/en/preview-normal.png)
 
