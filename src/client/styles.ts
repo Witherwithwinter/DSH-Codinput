@@ -21,8 +21,13 @@ const CSS = `
    会话态（无包裹约束）不再被拉满，左右居中；拖边调节后由内联 max-width 接管。 */
 .dci-card { box-sizing: border-box; width: 100%; max-width: var(--dsh-composer-card-max-width, 760px); margin-inline: auto;
   background: var(--dsw-specific-input-major, color-mix(in srgb, currentColor 4%, transparent));
-  box-shadow: var(--dsw-elevation-soft, none); font-size: 14px; line-height: 24px;
-  border: 0; border-radius: 22px; flex-direction: column; gap: 0; padding-top: 4px; display: flex; position: relative; min-width: 0; }
+  box-shadow: var(--dsw-elevation-soft, none); font-size: var(--dsh-content-font-size, 14px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+  border: 0; border-radius: var(--dsw-radius-panel, 22px); flex-direction: column; gap: 0; padding-top: 4px; display: flex; position: relative; min-width: 0; }
+/* 主模式 surface 复刻官方 composer root：侧向 clearance 内缩 + 底部 4px，
+   卡片与数据行由数据行自身 padding-top 定距（官方 root 无 gap，dock 上边距 4px）。
+   side/float 形态自带铺满布局，不参与。 */
+.dci-surface:not([data-side]):not([data-float]) { padding: 0 var(--dsh-composer-side-clearance, 0px) 4px; align-items: center; gap: 0; }
 /* 卡片边缘调节把手：左右调宽、上下调高（对称灵敏度），悬停显形。 */
 .dci-rip { position: absolute; z-index: 60; touch-action: none; }
 .dci-rip[data-axis="y"] { left: 12px; right: 12px; height: 9px; cursor: ns-resize; }
@@ -388,10 +393,25 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
   background: var(--dsw-alias-label-primary-foreground, #fff); transition: transform 120ms ease; }
 .dci-switch[aria-checked="true"]::after { transform: translateX(16px); }
 
-/* ===== 数据行（官方 bOPqQW 复刻：居中双胶囊）===== */
-.dci-stat-root { max-width: var(--dsh-chat-content-width, 100%); box-sizing: border-box; width: 100%;
-  padding: 4px calc(var(--dsh-composer-side-clearance, 0px) + 16px) 0; font-size: 13px; line-height: 20px;
-  justify-content: center; gap: 12px; margin: 0 auto; display: flex; }
+
+/* ===== 原图预览（官方 primitives ImageLightbox 逐值复刻）===== */
+.dci-lightbox { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 40px; }
+.dci-lightbox-mask { position: absolute; inset: 0; background: var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.55));
+  backdrop-filter: var(--dsw-mask-blur, blur(4px)); }
+.dci-lightbox-image { position: relative; max-width: min(100%, 1600px); max-height: calc(100vh - 80px);
+  object-fit: contain; border-radius: var(--dsw-radius-lg, 16px); background: var(--dsw-specific-input-major);
+  border: 0; box-shadow: var(--dsw-elevation-prominent, 0 10px 34px rgba(0, 0, 0, 0.35)); }
+.dci-lightbox-close { position: fixed; top: 20px; right: 20px; z-index: 1; display: grid; place-items: center;
+  width: 36px; height: 36px; border: 0.5px solid var(--dsw-alias-border-l2-darkmode-thin, var(--dsw-alias-border-l2, transparent));
+  border-radius: 999px; corner-shape: round; background: var(--dsw-specific-input-major);
+  color: var(--dsw-alias-label-primary, currentColor); cursor: pointer; }
+.dci-lightbox-close:focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, currentColor)); outline-offset: 3px; }
+
+/* ===== 数据行（官方 uV2eYG_dock 复刻：root 内居中、无横向 padding）===== */
+.dci-stat-root { max-width: 100%; box-sizing: border-box; width: 100%;
+  padding: 4px 0 0; font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
+  justify-content: center; gap: 12px; display: flex; }
 .dci-stat-anchor { min-width: 0; display: inline-flex; position: relative; }
 
 /* 数据行详情面板（官方 bRhRbq 复刻：锚点上方弹出） */
@@ -411,7 +431,7 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
   gap: 6px 16px; margin: 0; display: grid; }
 .dci-stat-details dt, .dci-stat-details dd { min-width: 0; margin: 0; }
 .dci-stat-details dd { color: var(--dsw-alias-label-secondary, inherit); font-variant-numeric: tabular-nums; text-align: right; }
-.dci-stat-pill { box-sizing: border-box; max-width: 100%; color: var(--dsw-alias-label-tertiary, currentColor);
+.dci-stat-pill { font: inherit; box-sizing: border-box; max-width: 100%; color: var(--dsw-alias-label-tertiary, currentColor);
   white-space: nowrap; background: transparent; border: none; border-radius: 24px; align-items: center; gap: 6px;
   padding: 1px 8px; display: inline-flex; cursor: pointer; font-variant-numeric: tabular-nums; }
 .dci-stat-pill svg { flex: none; width: 14px; height: 14px; }

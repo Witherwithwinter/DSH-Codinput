@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { ImageLightbox } from './ImageLightbox';
 import type { ConversationFace, DraftAttachmentId, InputState } from '../host-types';
 import { stash } from '../services';
 import { useSnapshot } from './useSnapshot';
@@ -72,6 +73,8 @@ export function AttachmentRail(props: AttachmentRailProps): JSX.Element | null {
   const uploads = useSnapshot(conversation?.fileUploads) as Record<string, UploadLike> | undefined;
   const railRef = useRef<HTMLDivElement | null>(null);
   const [overflow, setOverflow] = useState<{ left: boolean; right: boolean }>({ left: false, right: false });
+  // 原图预览（官方 ComposerAttachments 同款：缩略图点击 → lightbox）。
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
 
   const attachments =
     state === undefined || typeof conversation?.resolveDraftAttachments !== 'function'
@@ -123,7 +126,15 @@ export function AttachmentRail(props: AttachmentRailProps): JSX.Element | null {
           if (isImage) {
             return (
               <div className="dci-attach-item" key={att.id}>
-                <button type="button" className="dci-attach-thumb" title={att.file.name} aria-label={att.file.name}>
+                <button
+                  type="button"
+                  className="dci-attach-thumb"
+                  title={t('image.openOriginal')}
+                  aria-label={t('image.openOriginalLabel', { name: att.file.name })}
+                  onClick={() => {
+                    if (att.previewUrl) setPreview({ url: att.previewUrl, name: att.file.name });
+                  }}
+                >
                   {att.previewUrl ? <img src={att.previewUrl} alt={att.file.name} /> : <FileGlyph size={28} />}
                 </button>
                 <button
@@ -202,6 +213,14 @@ export function AttachmentRail(props: AttachmentRailProps): JSX.Element | null {
         <button type="button" className="dci-attach-arrow dci-attach-arrowRight" aria-label={t('attach.scrollRight')} onClick={() => page(1)}>
           <ArrowGlyph dir="right" />
         </button>
+      ) : null}
+      {preview ? (
+        <ImageLightbox
+          src={preview.url}
+          alt={preview.name}
+          labels={{ dialog: t('image.preview'), close: t('image.closePreview') }}
+          onClose={() => setPreview(null)}
+        />
       ) : null}
     </div>
   );

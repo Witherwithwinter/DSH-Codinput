@@ -1,19 +1,20 @@
-# DSH-Codinput
-
-[中文](./README.md) | English
-
-[![npm Version](https://img.shields.io/npm/v/dsh-codinput)](https://www.npmjs.com/package/dsh-codinput)
-[![DSH Version](https://img.shields.io/badge/DSH-0.1.5--rc.2%2B-blue)](https://github.com/deepseek-ai/deepseek-harness)
-[![Downloads](https://img.shields.io/npm/dm/dsh-codinput)](https://www.npmjs.com/package/dsh-codinput)
-[![GitHub Stars](https://img.shields.io/github/stars/Witherwithwinter/DSH-Codinput)](https://github.com/Witherwithwinter/DSH-Codinput/stargazers)
-[![License](https://img.shields.io/github/license/Witherwithwinter/DSH-Codinput)](./LICENSE)
-
-> Replaces the DeepSeek Harness WebUI composer with a **code-editor style** input panel: CodeMirror 6 takes over `conversation.composer.bar`, while the official `/` `@` trigger pipeline, model and permission controls, stats projections, and draft persistence are all preserved.
-
-<p>
-  <img src="./assets/icon.svg" width="22" alt="" align="top" />
-  &nbsp;Icon: lucide <code>file-code-corner</code> (also used as the recall ball when the sidebar is collapsed)
+<p align="center">
+  <img src="./assets/icon.png" width="128" alt="DSH-Codinput" />
 </p>
+
+<h1 align="center">DSH-Codinput</h1>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/dsh-codinput"><img src="https://img.shields.io/npm/v/dsh-codinput" alt="npm Version" /></a>
+  <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/DSH-0.1.5--rc.2%2B-blue" alt="DSH Version" /></a>
+  <a href="https://www.npmjs.com/package/dsh-codinput"><img src="https://img.shields.io/npm/dm/dsh-codinput" alt="Downloads" /></a>
+  <a href="https://github.com/Witherwithwinter/DSH-Codinput/stargazers"><img src="https://img.shields.io/github/stars/Witherwithwinter/DSH-Codinput" alt="GitHub Stars" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/Witherwithwinter/DSH-Codinput" alt="License" /></a>
+</p>
+
+<p align="center"><a href="./README.md">中文</a> | English</p>
+
+<p align="center">A real code editor, right where the DeepSeek Harness chat composer used to be.</p>
 
 ![Default mode](./assets/en/preview-normal.png)
 
@@ -24,7 +25,7 @@
   </tr>
   <tr>
     <td width="50%"><img src="./assets/en/preview-side.png" alt="Sidebar tab mode" /><br /><sub>Sidebar tab mode (full-height, VS Code panel style)</sub></td>
-    <td width="50%"><img src="./assets/en/preview-ball-detail.png" alt="Recall ball" /><br /><sub>The recall ball shown when the sidebar is collapsed</sub></td>
+    <td width="50%"><img src="./assets/en/preview-ball-detail.png" alt="Recall ball" /><br /><sub>The recall ball shown when the sidebar is collapsed (close-up)</sub></td>
   </tr>
 </table>
 
@@ -40,15 +41,15 @@
 | --- | --- | --- |
 | Normal `normal` | default | The takeover card sits in the composer's own place |
 | Floating `float` | drag the blank area of the card's top row | Pops out into a floating window: draggable, resizable from all four edges and four corners (position and size are remembered) |
-| Sidebar tab `side` | open the “Codinput” tab in the right sidebar | The input lives in the sidebar panel; **collapsing the sidebar does not give the composer back** — the round ball under the title bar brings it back |
+| Sidebar tab `side` | open the “Codinput” tab in the right sidebar | The input lives in the sidebar panel; **collapsing the sidebar does not give the composer back** — the round ball under the title bar brings it back; `/codinput` from the sidebar exits to the official composer and closes the tab |
 
-- **Editor**: line numbers (optional), current-line and gutter highlighting, soft wrap, Tab indentation, a line/column indicator, and **undo history that survives mode switches** (drag into floating mode, come back, and `Ctrl+Z` still works).
-- **`/` `@`**: entirely the official trigger pipeline (track → official menu store → a faithful MenuView replica): candidate menu, drill-down, crumbs and skeletons match the official UI; the command list is sorted by name for empty queries.
+- **Editor**: line numbers (optional), current-line and gutter highlighting, soft wrap, Tab indentation, a line/column indicator, and an **edit + preview split** (live markdown, exactly half and half).
+- **Undo history that survives mode switches**: drag into floating mode, hop into the sidebar, come back — `Ctrl+Z` still works. All three modes share the same official input machine, whose draft is the single source of truth (it survives mode switches, plugin toggles and reloads).
+- **`/` `@`**: entirely the official trigger pipeline (track → official menu store → a faithful MenuView replica): candidate menu, drill-down, crumbs and skeletons match the official UI; `/codinput` slots into the head of the commands section alphabetically; everything else keeps the official usage order.
 - **Model & reasoning effort**: read from the official shared directory (the same state source as `/model`). **Permissions**: the three official presets plus the RiskConfirmation modal for full access.
-- **Attachments**: pick files with the paperclip, **paste images directly**, or **drop files onto the card** (the rail is a faithful replica of the official one: 64×64 image thumbnails, file cards with type glyph/name/size, upload spinner, progress bar, retry on failure).
-- **Stats row**: replicated official composer stats (turns/steps · tok/s, total tok · cache hit) plus the context-usage dial, both with detail panels; available in all three modes.
-- **Settings**: Settings → Codinput (takeover on/off, line numbers, font, **fully custom send / line-break shortcuts** via a recorder, default view).
-- **Draft**: the official input machine is the single source of truth (one write entry point); drafts survive mode switches, plugin toggles, and reloads.
+- **Attachments**: slash Add · File (the takeover surface binds the shell's file-picker contract, so the entry keeps working while Codinput owns the composer), **paste images directly**, or **drop files onto the card** (clicking an image thumbnail opens the original-image lightbox, an ImageLightbox replica; the rail is a faithful replica of the official one: 64×64 image thumbnails, file cards with type glyph/name/size, upload spinner, progress bar, retry on failure).
+- **Performance & usage**: a replica of the official stats dock — turns/steps · tok/s, total tok · cache hit, plus the context-usage dial — with value-for-value parity in data and formatting, each opening a detail panel; available in all three modes.
+- **Settings**: Settings → Codinput (takeover on/off, line numbers, font, **fully custom send / line-break shortcuts** via a recorder, default view); with the takeover off, **opening the Codinput tab in the right sidebar enables it directly**.
 
 ## Installation
 
@@ -93,7 +94,7 @@ To pin a version or maintain the profile by hand, the manual equivalent of **Met
 ```jsonc
 {
   "dependencies": {
-    "dsh-codinput": "^0.1.0"          // for local development: "link:/abs/path/to/DSH-Codinput"
+    "dsh-codinput": "^0.1.1"          // for local development: "link:/abs/path/to/DSH-Codinput"
   },
   "dsh": {
     "profile": {
@@ -116,12 +117,12 @@ The host publishes **rc** builds on npm (`latest` is the current stable rc, `nex
 
 | Host version | Status |
 | --- | --- |
-| `0.1.7-rc.2` | ✅ Verified on a real instance (current `next`; the acrylic candidate menu and the relocated context meter are aligned to this build) |
+| `0.1.7-rc.2` | ✅ Verified on a real instance (current `next`; the acrylic candidate menu, the relocated context meter and the dock row layout are aligned to this build) |
 | `0.1.5-rc.2` | ✅ Verified on a real instance |
 | `0.1.6-alpha.2` | ✅ Current development baseline; every feature verified end to end |
 | others (incl. `0.1.5-rc.3`, the current `latest`) | untested; older hosts lack the rc.2 tokens, so the fallback chain keeps each host's official look |
 
-For `0.1.7-rc.2`, on top of the real-instance run, the official CSS for the candidate menu and the context meter was extracted value by value from that version's client packages (`dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation`) and checked against the replica. The contracts this plugin relies on were verified per version: the three slots it uses (`conversation.composer.bar`, `sidebar.right.pane.tab`, `settings.section`), the `sidebarRight` / `sidebarRightTabs` / `locale` services and `openTabIn`, the sidebar expansion planner (dockkit `planSetExpanded`), and the official primitives the replicas are copied from (`fileSizeText` / `fileExtension` and the attachment glyph paths, byte for byte). For how to re-run this on another channel, see the “Verifying on another channel” section of [TESTING.md](./TESTING.md).
+For `0.1.7-rc.2`, on top of the real-instance run, the official CSS for the candidate menu, the context meter and the stats dock was extracted value by value from that version's client packages (`dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation` / `dsh-client-ui-chat`) and checked against the replicas. The contracts this plugin relies on were verified per version: the three slots it uses (`conversation.composer.bar`, `sidebar.right.pane.tab`, `settings.section`), the `sidebarRight` / `sidebarRightTabs` / `locale` services and `openTabIn`, the sidebar expansion planner (dockkit `planSetExpanded`), the file-picker and tab-close contracts (`shell.bindFilePicker` / `tab.actions.close`), and the official primitives the replicas are copied from (`fileSizeText` / `fileExtension` and the attachment glyph paths, byte for byte). For how to re-run this on another channel, see the “Verifying on another channel” section of [TESTING.md](./TESTING.md).
 
 The plugin leans on host internals (slot shadowing, `useTabInfo`, `sidebarRight`, `--dsw-*` tokens). Every call site guards with `typeof` checks and degrades gracefully, but a major host upgrade can still break it. **After upgrading the host, walk through [TESTING.md](./TESTING.md).**
 
@@ -129,9 +130,10 @@ The plugin leans on host internals (slot shadowing, `useTabInfo`, `sidebarRight`
 
 - `/` `@` candidates come from host directories (skills / commands / files / sessions); when the host provides none, the menu is empty — the plugin cannot fill that in.
 - **No syntax highlighting** and **no Esc behaviour** — deliberate product decisions (this is an input panel, not a code reader).
-- While the sidebar tab is visible the composer is hidden entirely (single input surface rule). The official stats dock and context dial live inside the official composer, so they disappear with it and the replicated stats row takes over.
+- While a Codinput sidebar tab exists the composer is hidden entirely (single input surface rule; browsing another tab in the same pane does not bring it back). The official stats dock and context dial live inside the official composer, so they disappear with it and the replicated stats row takes over.
 - Duplicating the “Codinput” tab into a second split pane shows a notice instead of a second editor (the input surface stays unique).
 - The floating gesture only keeps “drag back to the composer area = normal”; “drag into the right sidebar = sidebar mode” was dropped by product decision.
+- After a page reload, if the sidebar layout restores a Codinput tab that has not been opened yet, the composer shows up first — dockkit mounts restored tab bodies lazily; opening the tab once restores the sidebar carry.
 
 ## Development
 
@@ -151,15 +153,17 @@ npm run typecheck
 ### Host facts worth knowing before changing code
 
 - **Takeover point**: `conversation.composer.bar` (a `single` slot; `priority:-1` shadows the official entry). Disposing the entry restores the official composer untouched.
-- **Single input surface**: a sidebar tab body **counts as carrying the input the moment it mounts** (not based on visibility — collapsing the sidebar is CSS hiding plus a translate, the body stays mounted). The main entry renders `null` accordingly, and the mode is derived as `carrying ? 'side' : prefs.mode`, so coexistence is impossible by construction.
+- **Single input surface**: a sidebar tab body **counts as carrying the input the moment it mounts** (not based on visibility — collapsing the sidebar is CSS hiding plus a translate, the body stays mounted). The main entry renders `null` accordingly, and the mode is derived as `carrying ? 'side' : prefs.mode`, so coexistence is impossible by construction. The carry claim lives on the body's lifetime, so the tab definition sets `keepMounted: true`: dockkit unmounts inactive tab bodies by default, and switching to another tab in the same pane would drop the claim and bring the composer back (same switch the official browser tab uses; note a tab restored after a reload only mounts its body once it has been activated).
 - **Undo history**: switching modes remounts the editor, so `EditorState` is cached per session (`take/putEditorSnapshot`); extension callbacks go through a module-level hooks slot so a reused state never calls into an unmounted instance's props.
 - **Official-side writes** (pick / claim / submit-clears) carry `externalAnnotation` + `Transaction.addToHistory.of(false)`, so undo only ever reverts what you typed.
 - **Drawing a circle needs `corner-shape: round`**: the host root sets `corner-shape: superellipse(1.5)` globally, so a plain `border-radius:50%` renders as a rounded square.
 - **The ball occupies no slot**: `conversation.session.header.corner` is the official sidebar expand button's seat (a `single` slot — taking it would remove the official button), so the ball is portalled to `body` and positioned from the measured header rect.
+- **The slash File entry lives on the filePicker binding**: the official `file` contribution's `available` reads `shell.canPickFiles()`, and the picker is bound by the official InputBar when it mounts (`bindFilePicker`) and unbound on unmount — the takeover surface must re-bind it on mount (`attachments.bindSessionFilePicker`) or the entry disappears. **Never register a same-name contribution**: the host rejects duplicates at `register` time, fail-loud.
+- **Closing a tab goes through the tab-domain action face**: `useTabInfo().tab.actions.close()` closes the tab itself (dockkit semantics; with a single docked tab it lays a guide down and collapses). To locate the session, do not use the diagnostic `__dshCodinputSessionId` (surface unmounts null it) — read the carry snapshot from the sideinput bus.
 
 ## Third-party attribution
 
-Parts of this project **replicate DeepSeek Harness** (`@deepseek-ai/dsh`, MIT License, Copyright (c) 2026 DeepSeek): several SVG icon paths (the permission shield set, plus, paperclip, arrow-up, the generic file glyph, …) and CSS values for the composer card and attachment rail. They are used under the MIT license; the original copyright and permission notice are retained in [NOTICE](./NOTICE) alongside [LICENSE](./LICENSE).
+Parts of this project **replicate DeepSeek Harness** (`@deepseek-ai/dsh`, MIT License, Copyright (c) 2026 DeepSeek): several SVG icon paths (the permission shield set, plus, paperclip, close, arrow-up, the generic file glyph, …) and CSS values for the composer card, the attachment rail and the original-image lightbox. They are used under the MIT license; the original copyright and permission notice are retained in [NOTICE](./NOTICE) alongside [LICENSE](./LICENSE).
 
 Bundled third-party dependencies: CodeMirror 6 (MIT), marked (MIT), DOMPurify (Apache-2.0 / MPL-2.0 dual licensed).
 

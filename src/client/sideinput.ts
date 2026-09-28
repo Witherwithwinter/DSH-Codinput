@@ -21,7 +21,7 @@ export interface SidebarCarryState {
 }
 
 export interface SidebarCarry {
-  /** 本次承载的令牌（同会话多 body 时，最早的持令牌者渲染编辑面）。 */
+  /** 本次承载的令牌（同会话多 body 时，可见者优先、同可见最早者渲染编辑面）。 */
   readonly token: number;
   /** 可见性/展开态变化时更新（同一 body 生命周期内）。 */
   set(state: SidebarCarryState): void;
@@ -53,11 +53,12 @@ function recompute(): void {
   for (const [token, claim] of claims) {
     const prev = next.get(claim.sessionId);
     // 同一会话多 body（分栏里复制出第二个 Codinput 标签）时取「最可见」的一份，
-    // 编辑面归属最早声明者（owner），其余 body 只出提示，杜绝双编辑面。
+    // 编辑面归属可见者（owner 随 visible 走——否则编辑面会留在看不见的标签里，
+    // 正在看的标签只剩提示），同可见时归最早声明者，杜绝双编辑面。
     if (!prev) {
       next.set(claim.sessionId, { visible: claim.visible, expanded: claim.expanded, owner: token });
     } else if (!prev.visible && claim.visible) {
-      next.set(claim.sessionId, { ...prev, visible: true, expanded: claim.expanded });
+      next.set(claim.sessionId, { visible: true, expanded: claim.expanded, owner: token });
     }
   }
   if (sameSnapshot(next)) return;
@@ -93,6 +94,11 @@ export function isSidebarInputCarried(sessionId: string | undefined): boolean {
   return sessionId !== undefined && snapshot.has(sessionId);
 }
 
+/** 当前被侧栏承载的会话 id 列表（/codinput 退出时广播关闭标签用）。 */
+export function carriedSessionIds(): string[] {
+  return [...snapshot.keys()];
+}
+
 /** 任一会话被侧栏承载（主遮蔽条目需保持挂载以执行隐藏）。 */
 export function isAnySidebarInputCarried(): boolean {
   return snapshot.size > 0;
@@ -105,12 +111,28 @@ export function sidebarCarryState(sessionId: string | undefined): SidebarCarrySt
 
 /**
  * 编辑面归属：同会话被多个 body 承载（分栏里复制出第二个 Codinput 标签）时，
- * 只有最早声明者渲染编辑面。`token === 0`（尚未声明）一律返回 true——避免
- * 首帧把还没拿到令牌的自己判成非归属者。
+ * 可见者优先，同可见归最早声明者。`token === 0`（尚未声明）一律返回 true——
+ * 避免首帧把还没拿到令牌的自己判成非归属者。
  */
 export function isSidebarCarryOwner(sessionId: string | undefined, token: number): boolean {
   if (token === 0 || sessionId === undefined) return true;
   return snapshot.get(sessionId)?.owner === token;
+}
+
+
+/** 标签关闭请求总线：/codinput 从侧栏退出时，命令侧请求 body 关掉自己的标签。 */
+const tabCloseListeners = new Set<(sessionId: string) => void>();
+
+/** 请求关闭某会话的侧栏 Codinput 标签（无 body 在听时无害）。 */
+export function requestSidebarTabClose(sessionId: string): void {
+  for (const fn of tabCloseListeners) fn(sessionId);
+}
+
+export function subscribeSidebarTabClose(fn: (sessionId: string) => void): () => void {
+  tabCloseListeners.add(fn);
+  return () => {
+    tabCloseListeners.delete(fn);
+  };
 }
 
 /** 归属订阅（body 用）：令牌变化、其他 body 挂载/卸载都会重渲染。 */
@@ -150,12 +172,16 @@ export function useSidebarInputCarried(sessionId: string | undefined): boolean {
 
 /**
  * 侧栏承载态订阅（小球用）：`carried` = 本会话输入在侧栏里，
- * `collapsed` = 侧栏已收起（承载但不可见 → 输入入口需要小球唤出）。
+ * `collapsed` = 输入面不可见（承载但侧栏已收起 → 输入入口需要小球唤出）。
+ * 浮动面板 visible=true——输入就在眼前，即使侧栏恰好收起也不出球。
  */
 export function useSidebarCarry(sessionId: string | undefined): { carried: boolean; collapsed: boolean } {
   const read = (): { carried: boolean; collapsed: boolean } => {
     const state = sidebarCarryState(sessionId);
-    return { carried: state !== undefined, collapsed: state !== undefined && state.expanded === false };
+    return {
+      carried: state !== undefined,
+      collapsed: state !== undefined && state.expanded === false && state.visible === false,
+    };
   };
   const [value, setValue] = useState(read);
   useEffect(() => {

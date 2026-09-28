@@ -1,7 +1,8 @@
 /**
  * 接管条目：conversation.composer.bar（single，priority -1 遮蔽官方条目）。
  * 卸载本条目即官方输入框原样恢复（槽位体系一等机制），草稿不丢。
- * 另从 useChat 抽取轮次计时（模型用时 / TTFT），供数据行详情面板使用。
+ * 另从 useChat 订阅官方 legacy 节点数组（sessionStats 投影缺席时按官方
+ * deriveStats 派生轮次/decode 计时，见 stats.ts），供数据行使用。
  *
  * 三态单实例（任一时刻恰好一个入口，且不与官方输入框共存）：
  * - `normal`：接管卡片在原输入位；
@@ -15,7 +16,7 @@
  * 高于持久化的 normal/float，因此不可能出现 side+float 并存或双实例。
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { SessionMaybeStandard, SlotRegisterOptions } from '../host-types';
 import { loadPrefs, savePrefs, subscribePrefs, type CodinputPrefs } from '../prefs';
@@ -34,39 +35,14 @@ interface BarOwner {
 /** 槽位作用域里的 chat 会话钩子（ui-session chat 源贡献）。 */
 type BarProps = BarOwner & SessionMaybeStandard & { useChat?: <S>(sel: (s: unknown) => S) => S };
 
-export interface ChatTimings {
-  /** 模型用时：全部步骤时长之和（毫秒）。 */
-  modelMs?: number;
-  /** 首 token 平均（TTFT）：以首步骤时长近似（毫秒）。 */
-  ttftMs?: number;
-}
-
-/** 从 chat 树的节点缓存解析步骤计时（location.step.start/end）。 */
-function computeTimings(valuesCache: unknown): ChatTimings {
-  if (!Array.isArray(valuesCache)) return {};
-  let modelMs = 0;
-  let ttftSum = 0;
-  let ttftCount = 0;
-  for (const node of valuesCache) {
-    const n = node as { kind?: string; location?: { step?: { start?: { time?: number }; end?: { time?: number } } } };
-    if (n?.kind !== 'assistant-step') continue;
-    const start = n.location?.step?.start?.time;
-    const end = n.location?.step?.end?.time;
-    if (start !== undefined && end !== undefined && end > start) {
-      modelMs += end - start;
-      ttftSum += end - start;
-      ttftCount += 1;
-    }
-  }
-  return { modelMs: modelMs > 0 ? modelMs : undefined, ttftMs: ttftCount > 0 ? ttftSum / ttftCount : undefined };
-}
-
 export function CodinputBar(props: BarProps): JSX.Element | null {
-  const { variant, blocked, disabled, placeholder, sessionId, useInput, inputActions, useProjection, useChat } = props;
+  const { variant, blocked, disabled, placeholder, sessionId, useInput, inputActions, useProjection, useChat, useSession } = props;
   const state = useInput((s) => s);
-  // 选择器只取数组引用（稳定），计时换算放在 useMemo 里做。
-  const valuesCache = useChat ? useChat((s: unknown) => (s as { nodes?: { valuesCache?: unknown } })?.nodes?.valuesCache) : undefined;
-  const chatTimings = useMemo<ChatTimings>(() => computeTimings(valuesCache), [valuesCache]);
+  // 官方 StatsPills 同款数据源：chat store 的 legacy 节点数组（选择器只取
+  // 数组引用，派生换算在 stats.ts 的 useSessionStats 里做）。
+  const chatNodes = useChat ? useChat((s: unknown) => (s as { legacy?: { nodes?: unknown } })?.legacy?.nodes) : undefined;
+  // 会话运行中（官方 useSession s.running）：空草稿时主按钮变停止。
+  const running = useSession ? useSession((s: unknown) => (s as { running?: boolean } | undefined)?.running) === true : false;
   const sideCarried = useSidebarInputCarried(sessionId);
   const [mode, setMode] = useState<CodinputPrefs['mode']>(() => loadPrefs().mode);
   useEffect(() => subscribePrefs(() => setMode(loadPrefs().mode)), []);
@@ -81,9 +57,11 @@ export function CodinputBar(props: BarProps): JSX.Element | null {
       actions={inputActions}
       useProjection={useProjection}
       placeholder={placeholder}
-      disabled={disabled === true || blocked !== undefined}
+      disabled={disabled === true}
+      blocked={blocked !== undefined}
+      running={running}
       hero={variant === 'hero'}
-      chatTimings={chatTimings}
+      chatNodes={chatNodes}
       float={floating}
       onDragZonePointerDown={beginFloatDrag}
     />

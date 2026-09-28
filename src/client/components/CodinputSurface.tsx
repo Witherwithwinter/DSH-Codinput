@@ -17,7 +17,7 @@ import type {
 } from '../host-types';
 import { stash } from '../services';
 import { loadPrefs, savePrefs } from '../prefs';
-import { addFilesToDraft, dragHasFiles } from '../attachments';
+import { addFilesToDraft, bindSessionFilePicker, dragHasFiles } from '../attachments';
 import { diagError, diagSession, diagWindow } from '../diag';
 import { IconEdit, IconEye } from '../icons';
 import { t, useT } from '../i18n';
@@ -37,10 +37,15 @@ export interface CodinputSurfaceProps {
   /** 宿主 bar owner props 透传：占位文案与禁用。 */
   placeholder?: string;
   disabled?: boolean;
+  /** 会话级阻塞（宿主 blocked）：编辑器与发送锁死，但停止钮仍可点（官方同款）。 */
+  blocked?: boolean;
+  /** 会话运行中（useSession s.running）：空草稿时主按钮变停止（官方同款）。 */
+  running?: boolean;
   /** 官方 bar variant：hero（新会话，无对话记录）不渲染数据行。 */
   hero?: boolean;
   /** chat 树解析的轮次计时（模型用时 / TTFT），数据行详情面板用。 */
-  chatTimings?: { modelMs?: number; ttftMs?: number };
+  /** chat legacy 节点数组（sessionStats 投影缺席时派生轮次/decode 计时）。 */
+  chatNodes?: unknown;
   /** 侧栏形态（视觉略紧凑）。 */
   side?: boolean;
   /** 悬浮形态（卡片在 FloatingShell 内 portal 渲染；拖动由 CodinputBar 的会话管理）。 */
@@ -56,7 +61,7 @@ const DOMPurify = ((DOMPurifyModule as unknown as { default?: unknown }).default
   DOMPurifyModule) as unknown as { sanitize(html: string): string };
 
 export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
-  const { sessionId, state, actions, useProjection, placeholder, disabled, side, hero, chatTimings, float, onDragZonePointerDown } = props;
+  const { sessionId, state, actions, useProjection, placeholder, disabled, blocked, running, side, hero, chatNodes, float, onDragZonePointerDown } = props;
   // 语言切换时整棵表面重渲染（文案都走 i18n 的 t()）。
   useT();
 
@@ -157,6 +162,14 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, svcEpoch]);
 
+  // 文件拾取绑定：官方 InputBar 挂载时把 shell 的 filePicker 绑给自己，卸载
+  // 解绑——slash「添加 · 文件」行 available = shell.canPickFiles，接管期间不
+  // 绑该行就消失。接管面挂载即绑、卸载即解，open 走本模块的附件入草稿链路。
+  useEffect(() => {
+    if (!sessionId) return;
+    return bindSessionFilePicker(sessionId);
+  }, [sessionId]);
+
   // popup 拾取后的 composer 焦点归还（官方 overlay wiring 的等价绑定）。
   // alpha 的 commandUi 未提供 bindComposerFocus——按需可用。
   useEffect(() => {
@@ -187,6 +200,21 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
     caretRef.current = caret;
   };
 
+  // 官方 stop 同链路：sessions.scope(sid).get('conversation').cancel()。
+  const stopSession = (): void => {
+    if (!sessionId) return;
+    try {
+      const scope = stash.sessions?.scope(sessionId) as
+        | { get?: (name: string) => { cancel?: () => Promise<unknown> } }
+        | undefined;
+      const conversation = scope?.get?.('conversation');
+      void conversation?.cancel?.()?.catch?.(() => {});
+    } catch {
+      /* 会话作用域缺席：静默（下一拍 running 投影自会收敛） */
+    }
+  };
+  const onStop = stopSession;
+
   const sendGesture = (): void => {
     if (!actions) return;
     const st = state;
@@ -200,10 +228,14 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
   };
 
   // 官方同语义：草稿与附件皆空时发送禁用（空草稿手势仍可经键盘 Steer）。
+  const inert = disabled === true || blocked === true;
   const draftEmpty = (state?.draft ?? '').trim() === '';
   const noAttachments = (state?.attachmentIds.length ?? 0) === 0;
+  // 官方 primaryStops：运行中且草稿与附件皆空 → 主按钮变停止；停止形态不随
+  // 禁用锁死（官方 primaryDisabled 在 stops 分支只看 stop 是否可用）。
+  const primaryStops = running === true && draftEmpty && noAttachments;
   const sendDisabled =
-    disabled ||
+    inert ||
     actions === undefined ||
     (state !== undefined && state.phase === 'submitting') ||
     (draftEmpty && noAttachments);
@@ -313,7 +345,7 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
               placeholder={placeholderText}
               viewRef={viewRef}
               onCaretMoved={caretMoved}
-              disabled={disabled === true}
+              disabled={inert}
               autoFocus={true}
               solo={!previewOn}
               stateKey={sessionId ?? 'hero'}
@@ -333,7 +365,9 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
           triggers={triggers}
           caretRef={caretRef}
           useProjection={useProjection}
-          disabled={disabled}
+          disabled={inert}
+          primaryStops={primaryStops}
+          onStop={onStop}
           onNotify={notifyFor(sessionId)}
           onSend={sendGesture}
           sendDisabled={sendDisabled}
@@ -341,7 +375,7 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
 
         {/* 数据行：悬浮形态收进卡片（工具行下方，随卡片圆角一体）。 */}
         {float && hero !== true ? (
-          <StatsRow useProjection={useProjection} sessionId={sessionId} chatTimings={chatTimings} />
+          <StatsRow useProjection={useProjection} sessionId={sessionId} chatNodes={chatNodes} />
         ) : null}
 
         {/* 官方 MenuView 锚定：主模式以卡片顶上方弹出；侧栏/悬浮形态由
@@ -351,7 +385,7 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
 
       {/* 数据行：主输入/侧栏渲染在卡片下方（官方 hero 新会话态无 stats）。 */}
       {!float && hero !== true ? (
-        <StatsRow useProjection={useProjection} sessionId={sessionId} chatTimings={chatTimings} />
+        <StatsRow useProjection={useProjection} sessionId={sessionId} chatNodes={chatNodes} />
       ) : null}
 
       {popup ? <PopupSelectView popup={popup} /> : null}

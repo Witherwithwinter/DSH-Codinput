@@ -4,15 +4,15 @@
  * 点外关闭。 */
 
 import { useEffect, useRef, useState } from 'react';
-import { useSessionStats, formatTokens, type SessionStats } from '../stats';
+import { useSessionStats, formatTokens, formatTokensPerSecond, formatCacheHitPercent, formatDuration, type SessionStats } from '../stats';
 import type { UseProjection } from '../host-types';
 import { t } from '../i18n';
 
 export interface StatsRowProps {
   useProjection: UseProjection | undefined;
   sessionId: string | undefined;
-  /** chat 树解析的轮次计时（模型用时 / TTFT）。 */
-  chatTimings?: { modelMs?: number; ttftMs?: number };
+  /** chat legacy 节点数组（sessionStats 投影缺席时按官方 deriveStats 派生）。 */
+  chatNodes?: unknown;
 }
 
 /** 官方仪表盘 glyph（弧 + 指针 + 中点，stroke 1.25）。 */
@@ -67,17 +67,44 @@ function StatPanel(props: {
   );
 }
 
+/** 官方 exactCount：千分位分组 + " tok"。 */
+function exactCount(value: number | undefined): string {
+  const digits = String(value ?? 0);
+  const groups: string[] = [];
+  for (let end = digits.length; end > 0; end -= 3) groups.unshift(digits.slice(Math.max(0, end - 3), end));
+  return `${groups.join(',')} tok`;
+}
+
+/** 官方 TimePill：轮/步 + · tok/s（decodeMs>0 才出），面板 = 模型/工具用时、TTFT 均值、TPS。 */
 function Pill(props: { stats: SessionStats; open: boolean; onToggle(): void }): JSX.Element {
   const { stats, open, onToggle } = props;
-  const roundsPart =
-    stats.turns !== undefined && stats.steps !== undefined
-      ? t('stats.turns', { turns: stats.turns, steps: stats.steps })
-      : stats.turns !== undefined
-        ? t('stats.turns', { turns: stats.turns, steps: 0 })
-        : t('stats.turns', { turns: 0, steps: 0 });
-  const speedPart = stats.tokensPerSecond !== undefined ? `${Math.round(stats.tokensPerSecond)} tok/s` : null;
-  const modelSec = stats.modelMs !== undefined ? stats.modelMs / 1000 : null;
-  const ttftSec = stats.ttftMs !== undefined ? stats.ttftMs / 1000 : null;
+  const roundsPart = t('stats.turns', { turns: stats.turns ?? 0, steps: stats.steps ?? 0 });
+  const tps =
+    (stats.decodeMs ?? 0) > 0 ? formatTokensPerSecond((stats.decodeTokens ?? 0) / ((stats.decodeMs ?? 1) / 1000)) : null;
+  const hasTimings =
+    (stats.llmMs ?? 0) > 0 || (stats.toolMs ?? 0) > 0 || (stats.ttftSteps ?? 0) > 0 || (stats.decodeMs ?? 0) > 0;
+  const label = (
+    <span className="dci-stat-label">
+      {roundsPart}
+      {tps !== null ? (
+        <>
+          <span className="dci-stat-sep" aria-hidden="true">·</span>
+          {t('stats.tps', { tps })}
+        </>
+      ) : null}
+    </span>
+  );
+  // 官方：无任何计时数据时胶囊不可点（无面板可看）。
+  if (!hasTimings) {
+    return (
+      <span className="dci-stat-anchor">
+        <span className="dci-stat-pill">
+          <GaugeIcon />
+          {label}
+        </span>
+      </span>
+    );
+  }
   return (
     <span className="dci-stat-anchor">
       <button
@@ -85,27 +112,26 @@ function Pill(props: { stats: SessionStats; open: boolean; onToggle(): void }): 
         className="dci-stat-pill"
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-label={tps !== null ? `${roundsPart} · ${t('stats.tps', { tps })}` : roundsPart}
         onClick={onToggle}
       >
         <GaugeIcon />
-        <span className="dci-stat-label">
-          {roundsPart}
-          {speedPart !== null ? (
-            <>
-              <span className="dci-stat-sep" aria-hidden="true">·</span>
-              {speedPart}
-            </>
-          ) : null}
-        </span>
+        {label}
       </button>
       {open ? (
         <StatPanel
           label={t("stats.session")}
           icon={<GaugeIcon />}
           rows={[
-            [t('stats.modelTime'), modelSec !== null ? `${modelSec.toFixed(1)}s` : '—'],
-            [t('stats.ttft'), ttftSec !== null ? `${ttftSec.toFixed(1)}s` : '—'],
-            [t('stats.tpsLabel'), speedPart ?? '—'],
+            [t('stats.modelTime'), (stats.llmMs ?? 0) > 0 ? formatDuration(stats.llmMs!) : '—'],
+            [t('stats.toolTime'), (stats.toolMs ?? 0) > 0 ? formatDuration(stats.toolMs!) : '—'],
+            [t('stats.ttft'), (stats.ttftSteps ?? 0) > 0 ? formatDuration(stats.ttftMs! / stats.ttftSteps!) : '—'],
+            [
+              t('stats.tpsLabel'),
+              (stats.decodeMs ?? 0) > 0
+                ? t('stats.tps', { tps: formatTokensPerSecond((stats.decodeTokens ?? 0) / ((stats.decodeMs ?? 1) / 1000)) })
+                : '—',
+            ],
           ]}
         />
       ) : null}
@@ -113,10 +139,17 @@ function Pill(props: { stats: SessionStats; open: boolean; onToggle(): void }): 
   );
 }
 
+/** 官方 UsagePill：总量 · 缓存命中（缓存命中用官方百分比精度规则）。 */
 function TokenPill(props: { stats: SessionStats; open: boolean; onToggle(): void }): JSX.Element | null {
   const { stats, open, onToggle } = props;
   if (stats.totalTokens === undefined) return null;
-  const comma = (n: number): string => Math.round(n).toLocaleString('en-US');
+  const total = stats.totalTokens;
+  const cacheHitText =
+    stats.cacheHitText ??
+    formatCacheHitPercent(
+      stats.cacheReadTokens ?? 0,
+      (stats.cacheReadTokens ?? 0) + (stats.cacheWriteTokens ?? 0) + (stats.uncachedInputTokens ?? 0),
+    );
   return (
     <span className="dci-stat-anchor">
       <button
@@ -124,15 +157,20 @@ function TokenPill(props: { stats: SessionStats; open: boolean; onToggle(): void
         className="dci-stat-pill"
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-label={
+          cacheHitText !== null
+            ? `${formatTokens(total)} · ${t('stats.cacheHit', { percent: cacheHitText })}`
+            : formatTokens(total)
+        }
         onClick={onToggle}
       >
         <DatabaseIcon />
         <span className="dci-stat-label">
-          {formatTokens(stats.totalTokens)}
-          {stats.cacheHitPct !== undefined ? (
+          {formatTokens(total)}
+          {cacheHitText !== null ? (
             <>
               <span className="dci-stat-sep" aria-hidden="true">·</span>
-              缓存命中 {Math.round(stats.cacheHitPct)}%
+              {t('stats.cacheHit', { percent: cacheHitText })}
             </>
           ) : null}
         </span>
@@ -141,12 +179,15 @@ function TokenPill(props: { stats: SessionStats; open: boolean; onToggle(): void
         <StatPanel
           label={t("stats.usage")}
           icon={<DatabaseIcon />}
-          titleValue={`${comma(stats.totalTokens)} tok`}
+          titleValue={exactCount(total)}
           rows={[
-            [t('stats.cacheHitLabel'), stats.cacheHitPct !== undefined ? `${Math.round(stats.cacheHitPct)}%` : '—'],
-            [t('stats.uncached'), `${comma(stats.uncachedInputTokens ?? 0)} tok`],
-            [t('stats.cacheRead'), `${comma(stats.cacheReadTokens ?? 0)} tok`],
-            [t('stats.output'), `${comma(stats.outputTokens ?? 0)} tok`],
+            [t('stats.cacheHitLabel'), cacheHitText !== null ? `${cacheHitText}%` : '—'],
+            [t('stats.uncached'), exactCount(stats.uncachedInputTokens)],
+            [t('stats.cacheRead'), exactCount(stats.cacheReadTokens)],
+            ...(stats.cacheWriteTokens
+              ? [[t('stats.cacheWrite'), exactCount(stats.cacheWriteTokens)] as [string, string]]
+              : []),
+            [t('stats.output'), exactCount(stats.outputTokens)],
           ]}
         />
       ) : null}
@@ -155,18 +196,10 @@ function TokenPill(props: { stats: SessionStats; open: boolean; onToggle(): void
 }
 
 export function StatsRow(props: StatsRowProps): JSX.Element | null {
-  const { useProjection, sessionId, chatTimings } = props;
+  const { useProjection, sessionId, chatNodes } = props;
   const [open, setOpen] = useState<'rounds' | 'tokens' | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const sampled = useSessionStats(useProjection, sessionId);
-  // chat 树计时优先（历史会话也有值），采样值兜底。
-  const stats = sampled
-    ? {
-        ...sampled,
-        ...(chatTimings?.modelMs !== undefined ? { modelMs: chatTimings.modelMs } : {}),
-        ...(chatTimings?.ttftMs !== undefined ? { ttftMs: chatTimings.ttftMs } : {}),
-      }
-    : sampled;
+  const stats = useSessionStats(useProjection, sessionId, chatNodes);
 
   // 点外面关闭（面板内/胶囊上不关）。
   useEffect(() => {

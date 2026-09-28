@@ -324,5 +324,10 @@ export interface SettingsSectionProps {
  */
 export interface SidebarTabInfo {
   readonly sidebar: { readonly expanded: boolean; readonly fullscreen: boolean };
-  readonly tab: { readonly visible: boolean };
+  readonly tab: {
+    readonly visible: boolean;
+    readonly id?: string;
+    /** tab 域动作面（occurrence held）：close() 关闭本标签。 */
+    readonly actions?: { readonly close?: () => void };
+  };
 }
