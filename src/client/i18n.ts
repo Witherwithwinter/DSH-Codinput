@@ -232,9 +232,11 @@ interface LocaleFaceLike {
   getSnapshot?(): { active?: string };
 }
 
+let hostFace: LocaleFaceLike | null = null;
 let bound: ((key: string, params?: TranslateParams) => string) | null = null;
 let activeLocale = 'zh';
 const listeners = new Set<() => void>();
+const foreignBinds = new Map<string, ((key: string, params?: TranslateParams) => string) | null>();
 
 function emit(): void {
   for (const fn of listeners) fn();
@@ -257,6 +259,7 @@ function builtinDict(): Dict {
 export function installI18n(locale: unknown): void {
   const face = locale as LocaleFaceLike | undefined;
   if (!face) return;
+  hostFace = face;
   try {
     face.register?.(NS, 'zh', ZH);
     face.register?.(NS, 'en', EN);
@@ -280,6 +283,24 @@ export function installI18n(locale: unknown): void {
   } catch {
     /* 快照不可用：语言切换不重渲染，但不影响首屏文案 */
   }
+}
+
+/**
+ * 绑定其他命名空间的宿主词典（如语音插件注册的 voice-input——渲染官方条目
+ * 组件时，官方 renderer 传的就是 locale.bind(entry.locale)）。返回引用稳定
+ * 的翻译函数；宿主 face 未就绪或 bind 失败返回 null。结果按 ns 缓存。
+ */
+export function bindForeign(ns: string): ((key: string, params?: TranslateParams) => string) | null {
+  if (!foreignBinds.has(ns)) {
+    let bound: ((key: string, params?: TranslateParams) => string) | null = null;
+    try {
+      bound = hostFace?.bind?.(ns) ?? null;
+    } catch {
+      bound = null;
+    }
+    foreignBinds.set(ns, bound);
+  }
+  return foreignBinds.get(ns) ?? null;
 }
 
 export function subscribeI18n(fn: () => void): () => void {

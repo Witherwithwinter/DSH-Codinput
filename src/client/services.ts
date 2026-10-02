@@ -10,11 +10,13 @@ import type {
   ModelDirectoriesFace,
   SessionsFace,
   SidebarRightFace,
+  SlotsService,
 } from './host-types';
 import { diagError, runGuarded } from './diag';
 import { installI18n } from './i18n';
 
 export interface ServiceStash {
+  slots?: SlotsService;
   conversation?: ConversationFace;
   sessions?: SessionsFace;
   commandUi?: CommandUiFace;
@@ -33,8 +35,11 @@ export function installServices(ctx: ClientContext): void {
   });
 
   // sessions / commandUi：被消费服务自身的 static inject 链由宿主装配。
+  // slots 一并取入 stash：语音按钮要检视 conversation.input.activity 槽位
+  // 条目（见 components/VoiceActivity）。
   runGuarded('stash.services', () => {
     ctx.inject(['slots', 'sessions', 'commandUi'], (scope: Record<string, unknown>) => {
+      stash.slots = scope['slots'] as SlotsService;
       stash.sessions = scope['sessions'] as SessionsFace;
       stash.commandUi = scope['commandUi'] as CommandUiFace;
     });

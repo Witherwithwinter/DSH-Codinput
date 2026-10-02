@@ -79,6 +79,16 @@ const CSS = `
 .dci-tools { align-items: center; min-width: 0; gap: 12px; display: flex; }
 .dci-trailing { align-items: center; flex: none; min-width: 0; gap: 12px; margin-left: auto; display: flex; }
 
+/* ===== 语音输入座位（官方 .standardControls / .activity / .activityExpanded）=====
+   按钮本体是官方 activity 槽位条目组件（Gyyz9a_* 样式由语音插件自带注入）；
+   这里只负责座位：展开时 capture 行接管整行、左侧工具与模型控件让位。 */
+.dci-standard-controls { align-items: center; min-width: 0; gap: 12px; display: flex; }
+.dci-voice-seat { flex: none; align-items: center; display: flex; }
+.dci-voice-seat:empty { display: none; }
+.dci-row[data-voice-active] .dci-tools, .dci-row[data-voice-active] .dci-standard-controls { display: none; }
+.dci-row[data-voice-active] .dci-trailing { flex: 1; margin-left: 0; }
+.dci-row[data-voice-active] .dci-voice-seat { flex: 1; min-width: 0; }
+
 /* 圆形图标按钮（官方 .add）*/
 .dci-add { background: var(--dsw-specific-selector, color-mix(in srgb, currentColor 8%, transparent));
   width: 28px; height: 28px; color: var(--dsw-alias-label-primary, currentColor); cursor: pointer; border: none;

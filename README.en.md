@@ -48,6 +48,7 @@
 - **`/` `@`**: entirely the official trigger pipeline (track → official menu store → a faithful MenuView replica): candidate menu, drill-down, crumbs and skeletons match the official UI; `/codinput` slots into the head of the commands section alphabetically; everything else keeps the official usage order.
 - **Model & reasoning effort**: read from the official shared directory (the same state source as `/model`). **Permissions**: the three official presets plus the RiskConfirmation modal for full access.
 - **Attachments**: slash Add · File (the takeover surface binds the shell's file-picker contract, so the entry keeps working while Codinput owns the composer), **paste images directly**, or **drop files onto the card** (clicking an image thumbnail opens the original-image lightbox, an ImageLightbox replica; the rail is a faithful replica of the official one: 64×64 image thumbnails, file cards with type glyph/name/size, upload spinner, progress bar, retry on failure).
+- **Voice input sync (official desktop app)**: when the official desktop composer ships a voice button, Codinput renders **the very same button in the very same place** — it renders the official voice component itself (mic trigger, recording waveform, transcription, setup prompt and all copy are official code); hosts without the native voice button (all web channels) render none.
 - **Performance & usage**: a replica of the official stats dock — turns/steps · tok/s, total tok · cache hit, plus the context-usage dial — with value-for-value parity in data and formatting, each opening a detail panel; available in all three modes.
 - **Settings**: Settings → Codinput (takeover on/off, line numbers, font, **fully custom send / line-break shortcuts** via a recorder, default view); with the takeover off, **opening the Codinput tab in the right sidebar enables it directly**.
 
@@ -94,7 +95,7 @@ To pin a version or maintain the profile by hand, the manual equivalent of **Met
 ```jsonc
 {
   "dependencies": {
-    "dsh-codinput": "^0.1.1"          // for local development: "link:/abs/path/to/DSH-Codinput"
+    "dsh-codinput": "^0.3.0"          // for local development: "link:/abs/path/to/DSH-Codinput"
   },
   "dsh": {
     "profile": {
@@ -117,6 +118,7 @@ The host publishes **rc** builds on npm (`latest` is the current stable rc, `nex
 
 | Host version | Status |
 | --- | --- |
+| Desktop app (Electron, `0.2.0-rc.2`) | ✅ Verified on a real instance (official voice-input button synced — mic permission → recording → transcription verified end to end; the button hides itself when the voice plugin is absent or off) |
 | `0.1.7-rc.2` | ✅ Verified on a real instance (current `next`; the acrylic candidate menu, the relocated context meter and the dock row layout are aligned to this build) |
 | `0.1.5-rc.2` | ✅ Verified on a real instance |
 | `0.1.6-alpha.2` | ✅ Current development baseline; every feature verified end to end |

@@ -44,6 +44,24 @@ export interface SlotsService {
   register(options: SlotRegisterOptions, component: unknown): () => void;
   /** 锚定槽位：当该槽被声明时运行工厂；工厂 yield 掉的可清理返回值统一登记生命周期。 */
   inject(slotName: string, factory: () => Generator<unknown> | (() => unknown)): void;
+  /**
+   * 槽位检视面（0.2.x 起的 SlotCore 公开方法，鸭子探测）：entries 返回条目
+   * 快照（引用在变更之间稳定，可作 uSES getSnapshot 源；未声明槽返回稳定
+   * 空数组）；subscribe 订阅该槽条目变更。
+   */
+  entries?(key: string): readonly unknown[];
+  subscribe?(key: string, fn: () => void): () => void;
+}
+
+/** 槽位条目记录（SlotCore.register 产物）里我们消费的切面。 */
+export interface SlotEntryLike {
+  /** 条目 React 组件（官方 renderer 以 {...kit,...injected,...ownerProps} 渲染）。 */
+  readonly component?: unknown;
+  /** 注入工厂：session 槽位以 binding.key（sessionId）调用，返回 props 面。 */
+  readonly inject?: (...args: unknown[]) => Record<string, unknown>;
+  /** 条目词典命名空间（locale.bind(ns) 即官方传给组件的 t）。 */
+  readonly locale?: string;
+  readonly registrant?: string;
 }
 
 // ---------- input machine ----------
