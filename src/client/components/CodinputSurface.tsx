@@ -73,6 +73,7 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const caretRef = useRef<number | null>(null);
+  const previewRef = useRef<HTMLDivElement | null>(null);
 
   // 高度调节：仅顶边把手，1:1 跟手（顶边上移多少、编辑区就高多少），松手持久化。
   // 宽度不做自有调节——沿用官方聊天宽度调节器（wSkVaW_widthHandle）：
@@ -245,6 +246,34 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
     [state?.draft, previewOn],
   );
 
+  // ---- 分屏同步滚动：两侧按滚动比例互随（内容高度不同，比例映射） ----
+  // scroll 不冒泡但走捕获相位，挂在 body 上的 onScrollCapture 能收到两栏的
+  // 滚动，且 CM 视图随会话重建（scrollDOM 换新）也无需重挂监听；epsilon 防
+  // 两侧事件互馈成回环。预览栏不显示滚动条（编辑栏为主），滚轮仍可反向带动。
+  const syncSplitScroll = (event: React.SyntheticEvent<HTMLDivElement>): void => {
+    if (!editOn || !previewOn) return;
+    const src = event.target as HTMLElement;
+    const editorScroll = viewRef.current?.scrollDOM;
+    const previewScroll = previewRef.current;
+    if (!editorScroll || !previewScroll) return;
+    const dst = src === editorScroll ? previewScroll : src === previewScroll ? editorScroll : null;
+    if (!dst) return;
+    const srcMax = src.scrollHeight - src.clientHeight;
+    if (srcMax <= 0) return;
+    const top = (src.scrollTop / srcMax) * (dst.scrollHeight - dst.clientHeight);
+    if (Math.abs(dst.scrollTop - top) > 1) dst.scrollTop = top;
+  };
+  // 进入分屏 / 草稿更新 / 切会话后，预览按编辑器当前比例对齐。
+  useEffect(() => {
+    if (!editOn || !previewOn) return;
+    const editorScroll = viewRef.current?.scrollDOM;
+    const previewScroll = previewRef.current;
+    if (!editorScroll || !previewScroll) return;
+    const editorMax = editorScroll.scrollHeight - editorScroll.clientHeight;
+    if (editorMax <= 0) return;
+    previewScroll.scrollTop = (editorScroll.scrollTop / editorMax) * (previewScroll.scrollHeight - previewScroll.clientHeight);
+  }, [editOn, previewOn, html, sessionId]);
+
   const toggleEdit = (): void => {
     if (!editOn && previewOn) setEditOn(true);
     else if (editOn && previewOn) setEditOn(false);
@@ -329,6 +358,7 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
         <div
           className="dci-body"
           data-split={editOn && previewOn}
+          onScrollCapture={syncSplitScroll}
           style={
             !side && !float && bodyHeight !== null
               ? ({ '--dci-body-h': `${bodyHeight}px`, '--dci-body-max': `${bodyHeight}px` } as React.CSSProperties)
@@ -352,7 +382,7 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
             />
           ) : null}
           {previewOn ? (
-            <div className="dci-preview" data-solo={!editOn}>
+            <div className="dci-preview" data-solo={!editOn} ref={previewRef}>
               {html ? <div dangerouslySetInnerHTML={{ __html: html }} /> : <span style={{ opacity: 0.4 }}>{t("preview.empty")}</span>}
             </div>
           ) : null}

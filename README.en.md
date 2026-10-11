@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/dsh-codinput"><img src="https://img.shields.io/npm/v/dsh-codinput" alt="npm Version" /></a>
-  <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/DSH-0.1.5--rc.2%2B-blue" alt="DSH Version" /></a>
+  <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/DSH-0.2.0--rc.2%2B-blue" alt="DSH Version" /></a>
   <a href="https://www.npmjs.com/package/dsh-codinput"><img src="https://img.shields.io/npm/dm/dsh-codinput" alt="Downloads" /></a>
   <a href="https://github.com/Witherwithwinter/DSH-Codinput/stargazers"><img src="https://img.shields.io/github/stars/Witherwithwinter/DSH-Codinput" alt="GitHub Stars" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/github/license/Witherwithwinter/DSH-Codinput" alt="License" /></a>
@@ -16,22 +16,16 @@
 
 <p align="center">An editor-style input panel, right where the DeepSeek Harness chat composer used to be.</p>
 
-![Default mode](./assets/en/preview-normal.png)
-
 <table>
   <tr>
-    <td width="50%"><img src="./assets/en/preview-split.png" alt="Edit + preview split" /><br /><sub>Edit + preview split (exactly half and half)</sub></td>
-    <td width="50%"><img src="./assets/en/preview-float.png" alt="Floating mode" /><br /><sub>Floating mode (draggable, resizable from all 8 edges/corners)</sub></td>
+    <td width="50%"><img src="./assets/preview-normal.webp" alt="Default mode" /><br /><sub>Default mode (takes over the original composer slot)</sub></td>
+    <td width="50%"><img src="./assets/preview-split.webp" alt="Edit + preview split" /><br /><sub>Edit + preview split (exactly half and half)</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="./assets/en/preview-side.png" alt="Sidebar tab mode" /><br /><sub>Sidebar tab mode (full-height, VS Code panel style)</sub></td>
-    <td width="50%"><img src="./assets/en/preview-ball-detail.png" alt="Recall ball" /><br /><sub>The recall ball shown when the sidebar is collapsed (close-up)</sub></td>
+    <td width="50%"><img src="./assets/preview-float.webp" alt="Floating mode" /><br /><sub>Floating mode (draggable, resizable from all 8 edges/corners)</sub></td>
+    <td width="50%"><img src="./assets/preview-side.webp" alt="Sidebar tab mode" /><br /><sub>Sidebar tab mode (full-height, VS Code panel style)</sub></td>
   </tr>
 </table>
-
-<p align="center">
-  <sub>Every string goes through the host locale service, so the UI follows the host language setting (中文 / English) — the screenshots above are the English UI, the Chinese ones live in the <a href="./README.md">中文 README</a></sub>
-</p>
 
 ## Features
 
@@ -167,7 +161,7 @@ npm run typecheck
 
 Parts of this project **replicate DeepSeek Harness** (`@deepseek-ai/dsh`, MIT License, Copyright (c) 2026 DeepSeek): several SVG icon paths (the permission shield set, plus, paperclip, close, arrow-up, the generic file glyph, …) and CSS values for the composer card, the attachment rail and the original-image lightbox. They are used under the MIT license; the original copyright and permission notice are retained in [NOTICE](./NOTICE) alongside [LICENSE](./LICENSE).
 
-Bundled third-party dependencies: CodeMirror 6 (MIT), marked (MIT), DOMPurify (Apache-2.0 / MPL-2.0 dual licensed).
+Bundled third-party dependencies: CodeMirror 6 (MIT), marked (MIT), DOMPurify (Apache-2.0 / MPL-2.0 dual licensed, used under Apache-2.0) — the minified bundle strips license comments, so their copyright and license notices are retained in [NOTICE](./NOTICE).
 
 ## License
 

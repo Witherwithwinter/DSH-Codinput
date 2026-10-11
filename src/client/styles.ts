@@ -50,8 +50,14 @@ const CSS = `
 .dci-body { position: relative; display: flex; gap: 0; min-height: 60px; max-height: var(--dci-body-max, 46vh); overflow: hidden; }
 .dci-body[style*="--dci-body-h"] { height: var(--dci-body-h); }
 /* 分屏：grid 等宽两栏（fr 计入 padding/border，两栏边界严格居中；flex
- * 会把预览栏的横向 padding 泄漏进空间分配，做不到对半）。 */
-.dci-body[data-split="true"] { display: grid; grid-template-columns: 1fr 1fr; }
+ * 会把预览栏的横向 padding 泄漏进空间分配，做不到对半）。行高必须
+ * minmax(0,1fr)+两栏 min-height:0：隐式 auto 行随内容撑高、不受 max-height
+ * 钳制，内容一高整行溢出被 overflow:hidden 裁掉，两栏都出不了滚动条。 */
+.dci-body[data-split="true"] { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr); }
+.dci-body[data-split="true"] > * { min-height: 0; }
+/* 分屏同步滚动：只留编辑栏一个滚动条，预览栏藏起但滚轮仍可反向带动编辑器。 */
+.dci-body[data-split="true"] .dci-preview { scrollbar-width: none; }
+.dci-body[data-split="true"] .dci-preview::-webkit-scrollbar { display: none; }
 .dci-body[data-split="true"] .dci-editor-wrap { border-right: 1px solid var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 12%, transparent)); }
 .dci-editor-wrap { position: relative; flex: 1 1 100%; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; }
 .dci-editor-wrap[data-solo="true"] { flex-basis: 100%; }

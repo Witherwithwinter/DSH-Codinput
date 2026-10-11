@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/dsh-codinput"><img src="https://img.shields.io/npm/v/dsh-codinput" alt="npm Version" /></a>
-  <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/DSH-0.1.5--rc.2%2B-blue" alt="DSH Version" /></a>
+  <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/DSH-0.2.0--rc.2%2B-blue" alt="DSH Version" /></a>
   <a href="https://www.npmjs.com/package/dsh-codinput"><img src="https://img.shields.io/npm/dm/dsh-codinput" alt="Downloads" /></a>
   <a href="https://github.com/Witherwithwinter/DSH-Codinput/stargazers"><img src="https://img.shields.io/github/stars/Witherwithwinter/DSH-Codinput" alt="GitHub Stars" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/github/license/Witherwithwinter/DSH-Codinput" alt="License" /></a>
@@ -16,22 +16,16 @@
 
 <p align="center">把 DeepSeek Harness 的聊天输入框，换成编辑器式的输入面板。</p>
 
-![普通模式](./assets/preview-normal.png)
-
 <table>
   <tr>
-    <td width="50%"><img src="./assets/preview-split.png" alt="编辑 + 预览分屏" /><br /><sub>编辑 + 预览分屏（严格对半）</sub></td>
-    <td width="50%"><img src="./assets/preview-float.png" alt="悬浮模式" /><br /><sub>悬浮模式（可拖动位置、八向缩放）</sub></td>
+    <td width="50%"><img src="./assets/preview-normal.webp" alt="普通模式" /><br /><sub>普通模式（接管原输入位）</sub></td>
+    <td width="50%"><img src="./assets/preview-split.webp" alt="编辑 + 预览分屏" /><br /><sub>编辑 + 预览分屏（严格对半）</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="./assets/preview-side.png" alt="侧栏标签模式" /><br /><sub>侧栏标签模式（VS Code 面板式全高）</sub></td>
-    <td width="50%"><img src="./assets/preview-ball-detail.png" alt="右上角小球" /><br /><sub>侧栏收起时的唤出小球（特写）</sub></td>
+    <td width="50%"><img src="./assets/preview-float.webp" alt="悬浮模式" /><br /><sub>悬浮模式（可拖动位置、八向缩放）</sub></td>
+    <td width="50%"><img src="./assets/preview-side.webp" alt="侧栏标签模式" /><br /><sub>侧栏标签模式（VS Code 面板式全高）</sub></td>
   </tr>
 </table>
-
-<p align="center">
-  <sub>界面语言跟随宿主设置（中文 / English）—— 文案全部走宿主 locale 服务，上图为中文界面；英文界面见 <a href="./README.en.md">English README</a></sub>
-</p>
 
 ## 特性
 
@@ -165,7 +159,7 @@ npm run typecheck
 
 本项目的部分视觉素材与样式取值**复刻自 DeepSeek Harness**（`@deepseek-ai/dsh`，MIT License，Copyright (c) 2026 DeepSeek），包括若干 SVG 图标路径（权限盾牌系列、plus / paperclip / close / arrow-up 等）与输入框卡片、原图预览层的 CSS 取值。依 MIT 许可使用，原始版权与许可声明见仓库根目录 [NOTICE](./NOTICE) 与 [LICENSE](./LICENSE)。
 
-内置第三方依赖：CodeMirror 6（MIT）、marked（MIT）、DOMPurify（Apache-2.0 / MPL-2.0 双许可）。
+内置第三方依赖：CodeMirror 6（MIT）、marked（MIT）、DOMPurify（Apache-2.0 / MPL-2.0 双许可，按 Apache-2.0 使用）——压缩产物不保留许可注释，其版权与许可声明集中保留在 [NOTICE](./NOTICE)。
 
 ## 许可
 

@@ -16,3 +16,22 @@ Portions of this project replicate DeepSeek Harness (`@deepseek-ai/dsh`, MIT
 License, Copyright (c) 2026 DeepSeek), as detailed above. They are used under
 the MIT license, and the original copyright and permission notice are retained
 alongside this repository's LICENSE file.
+
+内置第三方依赖的版权与许可声明 / Bundled third-party dependencies
+=====================================================================
+
+发布产物 `lib/client.js` 内置以下第三方库（压缩构建剥离了许可注释，故在此
+集中保留其版权行；许可全文见各上游仓库 / npm 包）：
+
+  - CodeMirror 6（@codemirror/state / view / language / commands）
+    MIT License
+    Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
+
+  - marked
+    MIT License
+    Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)
+    Copyright (c) 2011-2018, Christopher Jeffrey (https://github.com/chjj/)
+
+  - DOMPurify
+    (MPL-2.0 OR Apache-2.0) 双许可，本项目按 Apache-2.0 条款使用
+    Copyright (c) Cure53 and contributors (https://cure53.de/)
