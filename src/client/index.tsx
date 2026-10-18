@@ -17,7 +17,7 @@ import { diagError, diagWindow, runGuarded } from './diag';
 import { loadPrefs, subscribePrefs } from './prefs';
 import { isAnySidebarInputCarried, subscribeSidebarInput } from './sideinput';
 import { barRegistration, CodinputBar } from './components/CodinputBar';
-import { sidebarBodyRegistration, sidebarTabDefinition } from './sidebar';
+import { sidebarBodyRegistration, sidebarTabDefinition, sidebarTitleRegistration } from './sidebar';
 import { settingsRegistration } from './settings';
 import { registerCodinputCommand } from './command';
 
@@ -135,6 +135,11 @@ export function apply(ctx: ClientContext): void {
       tryRegister(() => {
         ctx.slots.register(body.options, body.component);
       }, 'sidebar.body');
+      // chip 标题（品牌标 + 标签名）：官方 FilesTitle 同构的 keyed 注册。
+      const title = sidebarTitleRegistration();
+      tryRegister(() => {
+        ctx.slots.register(title.options, title.component);
+      }, 'sidebar.title');
     });
   });
 

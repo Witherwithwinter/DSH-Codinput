@@ -7,7 +7,7 @@ interface IconProps {
   className?: string;
 }
 
-function svg(paths: JSX.Element, size: number | undefined, className: string | undefined): JSX.Element {
+function svg(paths: JSX.Element, size: number | undefined, className: string | undefined, stroke = 'currentColor'): JSX.Element {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -15,7 +15,7 @@ function svg(paths: JSX.Element, size: number | undefined, className: string | u
       height={size ?? 16}
       viewBox="0 0 24 24"
       fill="none"
-      stroke="currentColor"
+      stroke={stroke}
       strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -45,6 +45,15 @@ const BRAND_MARK = (
 /** 品牌：DSH-Codinput 机型标（悬浮小球 / 侧栏唤回球）。 */
 export function IconBrand({ size, className }: IconProps): JSX.Element {
   return svg(BRAND_MARK, size, className);
+}
+
+/**
+ * 品牌彩色标：同一机型标固定鲸鱼蓝（assets/icon.svg 同源 #3964FE），不随
+ * currentColor——侧栏标签 chip 与指南页条目用（官方在该两处画的是彩色
+ * artwork 同位：FileTypeIcon 文件夹黄、GuideArtworkFiles 彩绘）。
+ */
+export function IconBrandLogo({ size, className }: IconProps): JSX.Element {
+  return svg(BRAND_MARK, size, className, '#3964FE');
 }
 
 export function IconEdit({ size, className }: IconProps): JSX.Element {

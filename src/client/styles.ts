@@ -102,10 +102,13 @@ const CSS = `
 .dci-add:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover-solid, color-mix(in srgb, currentColor 14%, transparent)); }
 .dci-add:disabled { opacity: 0.5; cursor: default; }
 
-/* 下拉触发（官方 PermissionSelect / ModelSelection .trigger）*/
+/* 下拉触发（官方 PermissionSelect / ModelSelect .trigger）。radius 官方走
+ * --dsw-radius-sm，无 token 的旧宿主（0.1.5-rc.3）回退原 24px 视觉；
+ * 模型触发器官方 font-weight 400（权限 500），经 [data-model] 区分。*/
 .dci-trigger { min-width: 0; max-width: 220px; height: 28px; color: var(--dsw-alias-label-secondary, currentColor); cursor: pointer;
-  background: transparent; border: none; border-radius: 24px; outline: none; align-items: center; gap: 4px;
+  background: transparent; border: none; border-radius: var(--dsw-radius-sm, 24px); outline: none; align-items: center; gap: 4px;
   padding: 0 4px 0 8px; font-size: 13px; font-weight: 500; line-height: 20px; display: inline-flex; }
+.dci-trigger[data-model] { font-weight: 400; }
 .dci-trigger:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 8%, transparent)); }
 .dci-trigger:focus-visible { box-shadow: 0 0 0 2px var(--dsw-alias-border-l3, transparent); }
 .dci-trigger:disabled { color: var(--dsw-alias-label-dimmed, currentColor); cursor: default; opacity: 0.5; }

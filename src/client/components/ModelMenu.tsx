@@ -1,15 +1,24 @@
 /**
- * 模型与思考强度菜单：官方 ModelSelection 的触发器与两级 cell 菜单。
+ * 模型与思考强度菜单：官方 ModelSelect 座位（conversation.input.model 槽位）
+ * 的触发器与两级 cell 菜单复刻。
  * 数据来自官方 per-session 目录（ctx.modelDirectories.directoryFor(id).store：
  * { current, groups, status, error }），写入走官方 select（selectModel RPC）。
  * 服务缺席时触发器禁用。
+ *
+ * 0.2.1 同步：模型名的显示名经官方 `conversation.input.model.label` 子槽位
+ * 渲染（ModelLabel）——桌面版宿主的 deepseek-model-label-1017 插件会给
+ * deepseek-flash 追加「1017」发布徽章，web 宿主无条目回退纯名；思考强度
+ * 显示对齐官方公式（selection 未显式指定时回落模型 defaultEffort，模型无
+ * reasoning 元数据时显示会话 retainedEffort，均无才显示 Default），推理
+ * 等级菜单在模型未声明默认强度时补官方的 Default（跟随提供方默认）行。
  */
 
 import { useEffect, useRef, useState } from 'react';
-import type { InputActions, ModelCatalogModel, ModelProviderGroup, ModelSelection } from '../host-types';
+import type { ModelCatalogModel, ModelProviderGroup, ModelSelection } from '../host-types';
 import { getSessionDirectory, type DirectorySnapshot } from '../modeldir';
 import { stash } from '../services';
 import { IconChevronOfficial } from '../icons';
+import { ModelLabel } from './ModelLabel';
 import { MenuCheck, MenuSurface } from './MenuSurface';
 import { useSnapshot } from './useSnapshot';
 import { t } from '../i18n';
@@ -41,13 +50,24 @@ function modelLabel(selection: ModelSelection | null, groups: readonly ModelProv
   return findCurrent(selection, groups)?.model.name ?? selection.model;
 }
 
-/** 推理等级显示名（目录 efforts[].name，如 High；未热时退回首字母大写 id）。 */
-function effortLabel(selection: ModelSelection | null, groups: readonly ModelProviderGroup[]): string {
-  const effortId = selection?.reasoningEffort;
-  if (!effortId) return 'Default';
-  const named = findCurrent(selection, groups)?.model.reasoning?.efforts.find((e) => e.id === effortId);
-  if (named) return named.name;
-  return effortId.charAt(0).toUpperCase() + effortId.slice(1);
+/**
+ * 思考强度显示（官方 ModelSelect 的 effortLabel 公式）：目录里找不到当前
+ * 模型 → 无强度段；模型无 reasoning 元数据 → 会话 retainedEffort（官方
+ * 已折成显示名）；selection 未显式指定 → 模型 defaultEffort 的名字；再
+ * 无才显示 Default（effort.providerDefault，官方中英同为「Default」）。
+ */
+function effortLabel(
+  selection: ModelSelection | null,
+  groups: readonly ModelProviderGroup[],
+  snapshot: DirectorySnapshot | undefined,
+): string | undefined {
+  const found = findCurrent(selection, groups);
+  if (!found) return undefined;
+  const reasoning = found.model.reasoning;
+  if (!reasoning) return snapshot?.retainedEffort;
+  const effective = selection?.reasoningEffort ?? reasoning.defaultEffort;
+  if (effective === undefined) return 'Default';
+  return reasoning.efforts.find((level) => level.id === effective)?.name ?? effective;
 }
 
 export function ModelMenu(props: ModelMenuProps): JSX.Element {
@@ -97,8 +117,20 @@ export function ModelMenu(props: ModelMenuProps): JSX.Element {
 
   const current = snap?.current ?? null;
   const groups = snap?.groups ?? [];
+  const found = findCurrent(current, groups);
   const currentModelName = modelLabel(current, groups);
-  const currentEffort = effortLabel(current, groups);
+  const currentEffort = effortLabel(current, groups, snap);
+  const triggerTitle = currentEffort === undefined ? currentModelName : `${currentModelName} · ${currentEffort}`;
+  /** 官方 renderModelLabel：触发器/根菜单 cell 位置的当前模型显示名。 */
+  const renderCurrentName = (placement: 'trigger' | 'menu', target: NonNullable<typeof found>): JSX.Element => (
+    <ModelLabel
+      provider={{ id: target.group.id, name: target.group.name }}
+      model={target.model}
+      placement={placement}
+      selected={true}
+      fallback={currentModelName}
+    />
+  );
 
   const pick = async (group: ModelProviderGroup, model: ModelCatalogModel, effortId: string | undefined): Promise<void> => {
     if (!directory || busy) return;
@@ -127,15 +159,18 @@ export function ModelMenu(props: ModelMenuProps): JSX.Element {
         ref={triggerRef}
         type="button"
         className="dci-trigger"
+        data-model=""
         style={{ maxWidth: 'min(360px, 45cqw)' }}
         data-open={open}
         onMouseDown={(e) => e.preventDefault()}
         disabled={!directory}
         onClick={() => (open ? close() : openMenu())}
-        aria-label={t("tool.model", { name: `${currentModelName} · ${currentEffort}` })}
-        title={t("tool.model", { name: `${currentModelName} · ${currentEffort}` })}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={t("tool.model", { name: triggerTitle })}
+        title={t("tool.model", { name: triggerTitle })}
       >
-        <span className="dci-triggerLabel">{currentModelName}</span>
+        <span className="dci-triggerLabel">{found ? renderCurrentName('trigger', found) : currentModelName}</span>
         {currentEffort ? <span className="dci-triggerEffort">{currentEffort}</span> : null}
         <span className="dci-chev" data-open={open}>
           <IconChevronOfficial size={14} />
@@ -149,18 +184,22 @@ export function ModelMenu(props: ModelMenuProps): JSX.Element {
               <>
                 <button type="button" className="dci-cell" onClick={() => setView('models')}>
                   <span className="dci-cellLabel">{t("menu.model")}</span>
-                  <span className="dci-cellValue">{currentModelName}</span>
+                  <span className="dci-cellValue">
+                    {found ? renderCurrentName('menu', found) : currentModelName}
+                  </span>
                   <span className="dci-cellChevron" style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
                     <IconChevronOfficial size={14} />
                   </span>
                 </button>
-                <button type="button" className="dci-cell" onClick={() => setView('efforts')}>
-                  <span className="dci-cellLabel">{t("menu.reasoning")}</span>
-                  <span className="dci-cellValue">{currentEffort}</span>
-                  <span className="dci-cellChevron" style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
-                    <IconChevronOfficial size={14} />
-                  </span>
-                </button>
+                {found?.model.reasoning ? (
+                  <button type="button" className="dci-cell" onClick={() => setView('efforts')}>
+                    <span className="dci-cellLabel">{t("menu.reasoning")}</span>
+                    <span className="dci-cellValue">{currentEffort}</span>
+                    <span className="dci-cellChevron" style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
+                      <IconChevronOfficial size={14} />
+                    </span>
+                  </button>
+                ) : null}
               </>
             ) : null}
 
@@ -181,7 +220,15 @@ export function ModelMenu(props: ModelMenuProps): JSX.Element {
                           title={model.description}
                           onClick={() => void pick(group, model, model.reasoning?.defaultEffort)}
                         >
-                          <span className="dci-itemLabel">{model.name}</span>
+                          <span className="dci-itemLabel">
+                            <ModelLabel
+                              provider={{ id: group.id, name: group.name }}
+                              model={model}
+                              placement="option"
+                              selected={active}
+                              fallback={model.name}
+                            />
+                          </span>
                           {active ? (
                             <span className="dci-check" aria-hidden="true">
                               <MenuCheck size={16} />
@@ -200,21 +247,34 @@ export function ModelMenu(props: ModelMenuProps): JSX.Element {
               <>
                 <div className="dci-menuLabel">{t("menu.reasoning")}</div>
                 {(() => {
-                  const found = findCurrent(current, groups);
-                  const efforts = found?.model.reasoning?.efforts ?? [];
-                  if (efforts.length === 0) return <div className="dci-empty">{t("menu.reasoningNone")}</div>;
-                  return efforts.map((eff) => {
-                    const active = current?.reasoningEffort === eff.id;
+                  const reasoning = found?.model.reasoning;
+                  if (!reasoning) return <div className="dci-empty">{t("menu.reasoningNone")}</div>;
+                  const effectiveEffort = current?.reasoningEffort ?? reasoning.defaultEffort;
+                  // 官方 effortChoices：模型未声明默认强度时补一行 Default
+                  // （写回时省略 reasoningEffort = 跟随提供方默认）。
+                  const rows: { key: string; effort: string | undefined; label: string }[] = [
+                    ...(reasoning.defaultEffort === undefined
+                      ? [{ key: 'provider-default', effort: undefined as string | undefined, label: 'Default' }]
+                      : []),
+                    ...reasoning.efforts.map((eff) => ({
+                      key: `effort:${eff.id}`,
+                      effort: eff.id,
+                      label: eff.name,
+                    })),
+                  ];
+                  return rows.map((row) => {
+                    const active = effectiveEffort === row.effort;
+                    const named = row.effort === undefined ? undefined : reasoning.efforts.find((e) => e.id === row.effort);
                     return (
                       <button
-                        key={eff.id}
+                        key={row.key}
                         type="button"
                         className="dci-item"
                         disabled={busy}
-                        title={eff.description}
-                        onClick={() => found && void pick(found.group, found.model, eff.id)}
+                        title={named?.description}
+                        onClick={() => found && void pick(found.group, found.model, row.effort)}
                       >
-                        <span className="dci-itemLabel">{eff.name}</span>
+                        <span className="dci-itemLabel">{row.label}</span>
                         {active ? (
                           <span className="dci-check" aria-hidden="true">
                             <MenuCheck size={16} />

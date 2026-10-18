@@ -345,6 +345,8 @@ export interface SidebarTabInfo {
   readonly tab: {
     readonly visible: boolean;
     readonly id?: string;
+    /** 打开时捕获的标签名（dockkit tab 记录；chip 标题组件显示它）。 */
+    readonly title?: string;
     /** tab 域动作面（occurrence held）：close() 关闭本标签。 */
     readonly actions?: { readonly close?: () => void };
   };

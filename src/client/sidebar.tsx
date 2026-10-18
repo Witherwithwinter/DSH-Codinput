@@ -1,8 +1,11 @@
 /**
  * 侧边模式：官方 Sidebar（dockkit）标签页承载，入口与标签芯片同名
- * 「Codinput」。两段式注册——sidebarRightTabs.register（类型定义）+
- * sidebar.right.pane.tab（keyed，key = 定义 id）。停靠、分栏、全屏、
- * 浮动由官方 dockkit 承担；侧栏与主输入读写同一台输入机，草稿天然同源。
+ * 「Codinput」。三段式注册——sidebarRightTabs.register（类型定义，guide
+ * 条目带品牌标）+ sidebar.right.pane.tab（keyed，key = 定义 id，body）+
+ * sidebar.right.pane.tab.title（keyed 同 key，chip 标题：品牌标 + tab.title，
+ * 官方 FilesTitle 同构——不注册时 chip 退化为打开时捕获的纯文本）。
+ * 停靠、分栏、全屏、浮动由官方 dockkit 承担；侧栏与主输入读写同一台
+ * 输入机，草稿天然同源。
  *
  * 唯一输入组件约定：body **挂载**期间经 sideinput 总线声明承载本会话
  * 输入（形态 = side），主输入遮蔽条目随之隐藏——收起侧栏不让位（可见性
@@ -18,6 +21,7 @@ import { claimSidebarInput, subscribeSidebarTabClose, useSidebarCarryOwner, type
 import { loadPrefs, savePrefs, subscribePrefs } from './prefs';
 import { diagError, diagWindow } from './diag';
 import { CodinputSurface } from './components/CodinputSurface';
+import { IconBrandLogo } from './icons';
 import { t, useT } from './i18n';
 
 export const SIDEBAR_TAB_ID = 'dsh-codinput';
@@ -39,6 +43,9 @@ export function sidebarTabDefinition(): Record<string, unknown> {
         order: 0,
         title: () => 'Codinput',
         description: () => t('side.guideDesc'),
+        // 指南页条目图标：官方 EntryBox 渲染 <Icon size={22|26}/>，缺席
+        // 退灰色立方体（placeholderInk）——给品牌彩色标。
+        icon: IconBrandLogo,
       },
     ],
   };
@@ -54,6 +61,32 @@ export function sidebarBodyRegistration(): { options: SlotRegisterOptions; compo
     },
     component: SidebarCodinputBody,
   };
+}
+
+/**
+ * 第三段：标签 chip 标题（keyed 同 key）。官方同位组件（FilesTitle/
+ * GuideTitle）= 彩色图标 + useTabInfo().tab.title；title 座位声明了
+ * tabInfo 注入 hook，宿主按 use<Name> 约定下发。缺席时退回静态名。
+ */
+export function sidebarTitleRegistration(): { options: SlotRegisterOptions; component: unknown } {
+  return {
+    options: {
+      name: 'sidebar.right.pane.tab.title',
+      key: SIDEBAR_TAB_ID,
+      registrant: 'dsh-codinput',
+    },
+    component: SidebarCodinputTitle,
+  };
+}
+
+export function SidebarCodinputTitle(props: { useTabInfo?: () => SidebarTabInfo }): JSX.Element {
+  const title = props.useTabInfo?.().tab.title ?? 'Codinput';
+  return (
+    <>
+      <IconBrandLogo size={16} />
+      {title}
+    </>
+  );
 }
 
 /**

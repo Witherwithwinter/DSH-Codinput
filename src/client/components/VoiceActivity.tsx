@@ -17,51 +17,21 @@
  * locale 缺席）一律不渲染，绝不半组装。
  */
 
-import { createElement, useCallback, useMemo, useSyncExternalStore, Component } from 'react';
+import { createElement, useMemo, useSyncExternalStore } from 'react';
 import type { HostObservable, SlotEntryLike } from '../host-types';
-import { stash } from '../services';
-import { bindForeign } from '../i18n';
 import { diagError } from '../diag';
+import { EntryBoundary, firstComponentEntry, translatorFor, useSlotEntries } from './slotEntry';
 
 const ACTIVITY_SLOT = 'conversation.input.activity';
 const VOICE_NS_FALLBACK = 'voice-input';
 
-type Translator = (key: string, params?: Record<string, string | number>) => string;
 type ReadinessSelector = (value: unknown) => unknown;
 type ReadinessHook = (selector: ReadinessSelector) => unknown;
-
-const EMPTY_ENTRIES: readonly unknown[] = [];
 
 /** observableHook 同款缓存轴：钩子身份按 readiness store 稳定，不逐渲染重订。 */
 const readinessHookCache = new WeakMap<object, ReadinessHook>();
 /** 官方 renderer 的 inject 缓存轴：条目 × 会话绑定。 */
 const injectCache = new WeakMap<object, Map<string, Record<string, unknown> | null>>();
-const translatorCache = new Map<string, Translator | null>();
-
-/** 槽位条目快照：entries 引用在变更之间稳定（官方契约），直接作 uSES 源。 */
-function useSlotEntries(key: string): readonly unknown[] {
-  const slots = stash.slots;
-  const subscribe = useCallback(
-    (fn: () => void) => {
-      if (typeof slots?.subscribe !== 'function') return () => {};
-      try {
-        return slots.subscribe(key, fn) ?? (() => {});
-      } catch {
-        return () => {};
-      }
-    },
-    [slots, key],
-  );
-  const getSnapshot = useCallback(() => {
-    if (typeof slots?.entries !== 'function') return EMPTY_ENTRIES;
-    try {
-      return slots.entries(key) ?? EMPTY_ENTRIES;
-    } catch {
-      return EMPTY_ENTRIES;
-    }
-  }, [slots, key]);
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-}
 
 /** 调条目 inject 工厂取 props 面（session 槽位以 sessionId 调用，官方同参）。 */
 function resolveInjected(entry: SlotEntryLike, sessionId: string): Record<string, unknown> | null {
@@ -84,13 +54,6 @@ function resolveInjected(entry: SlotEntryLike, sessionId: string): Record<string
   return perSession.get(sessionId) ?? null;
 }
 
-/** 官方 renderer 的 locale 座位：locale.bind(entry.locale)，按 ns 缓存。 */
-function translatorFor(entry: SlotEntryLike): Translator | null {
-  const ns = entry.locale ?? VOICE_NS_FALLBACK;
-  if (!translatorCache.has(ns)) translatorCache.set(ns, bindForeign(ns));
-  return translatorCache.get(ns) ?? null;
-}
-
 /** hooks.speechReadiness（快照 store）→ use<Name> 选择器钩子（observableHook 同款）。 */
 function readinessHookFor(source: unknown): ReadinessHook | null {
   const face = source as HostObservable<unknown> | undefined;
@@ -108,20 +71,6 @@ function readinessHookFor(source: unknown): ReadinessHook | null {
   return hook;
 }
 
-/** 条目崩溃只丢语音钮，不连坐 Codinput 的 bar 条目（bar 被废黜 = 全部输入消失）。 */
-class VoiceBoundary extends Component<{ children?: React.ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError(): { failed: boolean } {
-    return { failed: true };
-  }
-  componentDidCatch(error: unknown): void {
-    diagError('voice.entry', error);
-  }
-  render(): React.ReactNode {
-    return this.state.failed ? null : this.props.children;
-  }
-}
-
 export interface VoiceActivityProps {
   sessionId: string | undefined;
   /** 官方输入机动作面（bar 槽位 standard props 里的 inputActions 原样透传）。 */
@@ -137,19 +86,13 @@ export function VoiceActivity(props: VoiceActivityProps): JSX.Element | null {
   const entries = useSlotEntries(ACTIVITY_SLOT);
 
   // single 槽位赢家 = 优先级最低者 = entries 首个（register 即按优先级排序）。
-  const entry = useMemo((): SlotEntryLike | null => {
-    for (const candidate of entries) {
-      const record = candidate as SlotEntryLike | null | undefined;
-      if (record && typeof record === 'object' && typeof record.component === 'function') return record;
-    }
-    return null;
-  }, [entries]);
+  const entry = useMemo(() => firstComponentEntry(entries), [entries]);
 
   const injected = useMemo(
     () => (entry && sessionId ? resolveInjected(entry, sessionId) : null),
     [entry, sessionId],
   );
-  const translator = useMemo(() => (entry ? translatorFor(entry) : null), [entry]);
+  const translator = useMemo(() => (entry ? translatorFor(entry, VOICE_NS_FALLBACK) : null), [entry]);
   const readinessSource = (injected?.['hooks'] as { speechReadiness?: unknown } | undefined)?.speechReadiness;
   const useReadiness = useMemo(() => readinessHookFor(readinessSource), [readinessSource]);
 
@@ -158,7 +101,7 @@ export function VoiceActivity(props: VoiceActivityProps): JSX.Element | null {
   // hooks 子表已折成 use* 钩子（bindInjectSources 同款），其余 props 原样下传。
   const { hooks: _hooks, ...actions } = injected;
   void _hooks;
-  return createElement(VoiceBoundary, {
+  return createElement(EntryBoundary, {
     children: createElement(entry.component as React.ComponentType<Record<string, unknown>>, {
       sessionId,
       inputActions,

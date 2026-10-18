@@ -19,6 +19,8 @@ export interface DirectorySnapshot {
   failures: readonly { id: string; name: string; message: string }[];
   status: 'idle' | 'loading' | 'ready' | 'selecting' | 'error';
   error: string | null;
+  /** 官方 syncInputs 附带：当前强度折算成的显示名（0.2.x 座位触发器在模型无 reasoning 元数据时显示它）。 */
+  retainedEffort?: string;
 }
 
 export interface SessionDirectory {
