@@ -114,7 +114,8 @@ export function PopupSelectView(props: PopupSelectViewProps): JSX.Element | null
           </div>
         </div>
       ) : (
-        <>
+        /* 官方两级结构：卡片 overflow:hidden，列表在 .dci-viewport 内滚 */
+        <div className="dci-viewport">
           {state.status === 'pending' ? <div className="dci-empty">{t('menu.loading')}</div> : null}
           {state.status === 'ready' && filtered.length === 0 ? <div className="dci-empty">{t('menu.empty')}</div> : null}
           {filtered.map((option, index) => (
@@ -132,7 +133,7 @@ export function PopupSelectView(props: PopupSelectViewProps): JSX.Element | null
               </span>
             </button>
           ))}
-        </>
+        </div>
       )}
       {state.error && state.status === 'ready' ? <div className="dci-error">{state.error}</div> : null}
     </div>

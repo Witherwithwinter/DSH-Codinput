@@ -2,6 +2,17 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.4] — 2026-10-22
+
+模型/推理强度弹层恢复官方形态：始终向上弹出，列表内滚带细滚动条。
+
+### 修复
+
+- **菜单钻入子页后向下弹出**：`MenuSurface` 旧实现只在打开瞬间定位一次（尺寸变化不重算），从根菜单点进更长的「模型 / 推理强度」列表时，卡片保持小菜单算好的顶边向下生长、盖住触发器，视觉上变成「向下弹出」。现复刻官方 ModelSelect 的 `place()` 三路监听（ResizeObserver 挂卡片 + 页面 scroll/resize），内容尺寸每次变化即重算上方锚位并夹进视口。
+- **模型选择框无滚动条**：旧 `.dci-menu` 把 `max-height: 100vh - 24px` 与 `overflow-y: auto` 压在卡片本体且未注入官方卡片的 `--dsh-scrollbar-thumb`（l2）变量；叠加上一条后卡片伸出视口被浏览器裁切，列表项既够不着也不出条。现按官方两级结构复刻——卡片 `overflow: hidden` + `max-height: min(360px, 100vh - 96px)`，列表在 `.dci-viewport` 内滚、细滚动条按官方 l2 变量着色；`popupSelect` 壳（命令选项弹层）同步内滚结构。
+
+[0.3.4]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.3...v0.3.4
+
 ## [0.3.3] — 2026-10-22
 
 第三方输入按钮兼容：接管后 dsh-prompt-enhancer 等插件的 ✨/🎤 按钮恢复显示。

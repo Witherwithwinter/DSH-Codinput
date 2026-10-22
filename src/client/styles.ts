@@ -126,14 +126,19 @@ const CSS = `
 .dci-send:hover:not(:disabled) { background: var(--dsw-alias-button-info-hover, color-mix(in srgb, currentColor 70%, transparent)); }
 .dci-send:disabled { opacity: 0.4; cursor: default; }
 
-/* ===== 菜单（官方 primitives Menu：r20 卡片 / item r10 / side-top 弹出）===== */
+/* ===== 菜单（官方 primitives Menu / ModelSelect .menu 逐值复刻：r20 卡片 / item r10 / 上方弹出）
+   卡片 overflow:hidden + max-height:min(360px,100vh-96px)（官方 .menu 同款），
+   列表在 .dci-viewport 内滚；--dsh-scrollbar-thumb(l2) 由卡片注入（官方同款），
+   宿主全局 ::-webkit-scrollbar-thumb{background:var(--dsh-scrollbar-thumb)} 据此出条。 ===== */
 .dci-menu { position: fixed; z-index: 1100; box-sizing: border-box; padding: 4px; display: flex; flex-direction: column;
-  min-width: 218px; max-width: min(360px, 100vw - 24px); max-height: calc(100vh - 24px); overflow-y: auto;
+  min-width: 218px; max-width: min(360px, 100vw - 24px); max-height: min(360px, calc(100vh - 96px)); overflow: hidden;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2, color-mix(in srgb, currentColor 18%, transparent));
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2, color-mix(in srgb, currentColor 26%, transparent));
   background: var(--dsw-menu-surface-fill, var(--dsw-specific-menu, rgba(28, 28, 32, 0.98)));
   backdrop-filter: var(--dsw-menu-backdrop-filter, none); color: var(--dsw-alias-label-primary, #ececf1);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1, transparent);
   box-shadow: var(--dsw-elevation-prominent, 0 10px 34px rgba(0, 0, 0, 0.35)); border: 0; border-radius: var(--dsw-radius-lg, 20px); font-size: 13px; }
-.dci-viewport { display: flex; flex-direction: column; min-height: 0; }
+.dci-viewport { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
 .dci-menuLabel { padding: 8px 10px; font-size: 12px; line-height: 16px; color: var(--dsw-alias-label-tertiary, currentColor);
   user-select: none; text-align: left; }
 .dci-item { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 8px 10px; border: none;
