@@ -21,6 +21,7 @@ import { claimSidebarInput, subscribeSidebarTabClose, useSidebarCarryOwner, type
 import { loadPrefs, savePrefs, subscribePrefs } from './prefs';
 import { diagError, diagWindow } from './diag';
 import { CodinputSurface } from './components/CodinputSurface';
+import { kitFromBarProps } from './components/InputRightSlot';
 import { IconBrandLogo } from './icons';
 import { t, useT } from './i18n';
 
@@ -98,6 +99,9 @@ export function SidebarCodinputTitle(props: { useTabInfo?: () => SidebarTabInfo 
 export function SidebarCodinputBody(props: SessionStandard & { useTabInfo?: () => SidebarTabInfo }): JSX.Element {
   const { sessionId, useInput, inputActions, useProjection, useSession, useTabInfo } = props;
   const state = useInput((s) => s);
+  // conversation.input.right 第三方条目的 standard props 原样面（本条目
+  // kit 减去注入的 useTabInfo；见 components/InputRightSlot）。
+  const inputRightKit = kitFromBarProps(props as unknown as Record<string, unknown>, ['useTabInfo']);
   // 会话运行中：侧栏形态的主按钮同样变停止（官方同款）。
   const running = useSession ? useSession((s: unknown) => (s as { running?: boolean } | undefined)?.running) === true : false;
   useT();
@@ -198,6 +202,7 @@ export function SidebarCodinputBody(props: SessionStandard & { useTabInfo?: () =
         state={state}
         actions={inputActions}
         useProjection={useProjection}
+        inputRightStandard={inputRightKit}
         running={running}
         side={true}
       />
