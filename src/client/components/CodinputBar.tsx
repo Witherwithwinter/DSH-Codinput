@@ -23,6 +23,7 @@ import { loadPrefs, savePrefs, subscribePrefs, type CodinputPrefs } from '../pre
 import { useSidebarInputCarried } from '../sideinput';
 import { CodinputBall } from './ExpandBall';
 import { CodinputSurface } from './CodinputSurface';
+import { kitFromBarProps } from './InputRightSlot';
 
 /** ComposerBarOwnerProps 切面（官方 bar owner）。 */
 interface BarOwner {
@@ -38,6 +39,10 @@ type BarProps = BarOwner & SessionMaybeStandard & { useChat?: <S>(sel: (s: unkno
 export function CodinputBar(props: BarProps): JSX.Element | null {
   const { variant, blocked, disabled, placeholder, sessionId, useInput, inputActions, useProjection, useChat, useSession } = props;
   const state = useInput((s) => s);
+  // conversation.input.right 第三方条目的 standard props 原样面：宿主给本
+  // 条目的 kit（standard 全集）减去 owner props——enhancer ✨/🎤 等按钮
+  // 按官方契约消费（sessionId + useSession/useInput + inputActions + t）。
+  const inputRightStandard = kitFromBarProps(props as unknown as Record<string, unknown>);
   // 官方 StatsPills 同款数据源：chat store 的 legacy 节点数组（选择器只取
   // 数组引用，派生换算在 stats.ts 的 useSessionStats 里做）。
   const chatNodes = useChat ? useChat((s: unknown) => (s as { legacy?: { nodes?: unknown } })?.legacy?.nodes) : undefined;
@@ -56,6 +61,7 @@ export function CodinputBar(props: BarProps): JSX.Element | null {
       state={state}
       actions={inputActions}
       useProjection={useProjection}
+      inputRightStandard={inputRightStandard}
       placeholder={placeholder}
       disabled={disabled === true}
       blocked={blocked !== undefined}

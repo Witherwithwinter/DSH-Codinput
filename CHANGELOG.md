@@ -2,6 +2,22 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.3] — 2026-10-22
+
+第三方输入按钮兼容：接管后 dsh-prompt-enhancer 等插件的 ✨/🎤 按钮恢复显示。
+
+### 新增
+
+- **`conversation.input.right` 槽位转发渲染**：该子槽位由官方 InputBar（`conversation.composer.bar` 缺省条目）声明并在其工具行内渲染；Codinput 以 priority -1 遮蔽官方条目后，槽位渲染点随官方输入框一起消失，注册在此槽位的第三方按钮（如 dsh-prompt-enhancer 的 ✨ 提示词优化 / 🎤 语音识别）无处挂载。接管卡片的工具行现于官方同座位（右侧标准控件区、模型选择之前）复刻官方 renderer 的 list 条目合成（id 首占位去重 + order 升序 + priority 遮蔽序、条目 inject/`use<Name>` 钩子、条目 locale 的 `t`、standard props 原样通道、逐条目崩溃隔离），三形态（普通/悬浮/侧栏标签）同享。
+- **检测即兼容**：槽位无条目或宿主过旧（无该子槽位）时座位不渲染，零样式零行为残留；单个条目崩溃被边界隔离，不连坐输入面。
+
+### 说明
+
+- 官方渲染门槛同款复刻：`input === undefined || sessionId === undefined` 时整个座位不渲染。
+- 条目声明 store 的 `useStore`/`actions` 面依赖宿主私有记账，插件侧不可复现；现网此类条目未出现。
+
+[0.3.3]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.2...v0.3.3
+
 ## [0.3.2] — 2026-10-18
 
 桌面版 0.2.1 模型区同步（官方 1017 发布徽章）；侧栏标签与指南页条目上品牌标。

@@ -18,6 +18,7 @@ import { IconPlusOfficial, IconSendOfficial, IconStopOfficial } from '../icons';
 import { ModelMenu } from './ModelMenu';
 import { PermissionMenu } from './PermissionMenu';
 import { VoiceActivity } from './VoiceActivity';
+import { InputRightSlot } from './InputRightSlot';
 
 export interface ToolbarProps {
   sessionId: string | undefined;
@@ -27,6 +28,12 @@ export interface ToolbarProps {
   /** caret 偏移（指令按钮以当前 caret 构造 synthetic hit）。 */
   caretRef: { current: number | null };
   useProjection: UseProjection | undefined;
+  /**
+   * conversation.input.right 条目的 standard props 原样面（宿主下发给本
+   * 插件 bar/body 条目的 kit 减去 owner props），供第三方按钮转发用；
+   * 缺席时座位不渲染（见 InputRightSlot）。
+   */
+  inputRightStandard?: Record<string, unknown> | undefined;
   /** owner disabled（权限触发器随之锁住，对齐官方 locked）。 */
   disabled?: boolean;
   onNotify?(level: 'info' | 'error', text: string): void;
@@ -45,7 +52,7 @@ function keepFocus(event: React.MouseEvent): void {
 }
 
 export function Toolbar(props: ToolbarProps): JSX.Element {
-  const { sessionId, state, actions, triggers, caretRef, useProjection, disabled, onNotify } = props;
+  const { sessionId, state, actions, triggers, caretRef, useProjection, disabled, onNotify, inputRightStandard } = props;
   useT();
 
   const attachments: readonly DraftAttachmentId[] = state?.attachmentIds ?? [];
@@ -84,6 +91,11 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
       </div>
       <div className="dci-trailing">
         <div className="dci-standard-controls">
+          {/* 官方同款门槛：input === undefined || sessionId === undefined 时
+              整个 input.right 座位不渲染（renderSlot 调用点的三元条件）。 */}
+          {state !== undefined && sessionId !== undefined ? (
+            <InputRightSlot sessionId={sessionId} standard={inputRightStandard} />
+          ) : null}
           <ModelMenu
             sessionId={sessionId}
             onNotify={onNotify}
