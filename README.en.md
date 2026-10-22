@@ -122,6 +122,15 @@ For `0.1.7-rc.2`, on top of the real-instance run, the official CSS for the cand
 
 The plugin leans on host internals (slot shadowing, `useTabInfo`, `sidebarRight`, `--dsw-*` tokens). Every call site guards with `typeof` checks and degrades gracefully, but a major host upgrade can still break it. **After upgrading the host, walk through [TESTING.md](./TESTING.md).**
 
+### Theme / skin plugin compatibility (for skin authors)
+
+Codinput ships no colors of its own: every color comes from the host's `--dsw-*` design tokens (light/dark follows the host). How theme/skin plugins for the host get along with Codinput:
+
+- **Overriding host tokens restyles everything at once** — once you override `--dsw-*` variables, Codinput's card, menus, buttons and badges follow along with the official UI; no per-plugin adaptation needed. Note the host defines its tokens on `body` (`body[data-ds-dark-theme]`), so overrides must live on that same level: ones written on `:root` are shadowed by the `body` definitions.
+- **Values the official UI hardcodes, Codinput hardcodes too** (the white foreground of the send-button icon, the purple of the context meter's tools segment, etc.) — value-for-value parity with how the official UI behaves under a reskin. These do not follow tokens; that is expected.
+- **To target Codinput precisely**: every element uses the stable `dci-` class prefix (card `.dci-card`, send button `.dci-send`, menus `.dci-menu` / `.dci-slash-menu`, stats row `.dci-stat-root`, recall ball `.dci-ball`, …) — use them directly as skin selectors. The plugin injects its styles once as `<style id="dsh-codinput-styles">`; skin styles injected later win by normal CSS specificity.
+- The editor (CodeMirror) font is a user preference (monospace stack by default) and does not follow skin fonts; its colors do follow the tokens.
+
 ## Known limitations
 
 - `/` `@` candidates come from host directories (skills / commands / files / sessions); when the host provides none, the menu is empty — the plugin cannot fill that in.

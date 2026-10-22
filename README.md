@@ -120,6 +120,15 @@ dsh plugin --profile web add link:/abs/path/to/DSH-Codinput
 
 对 `0.1.7-rc.2` 除实机验证外，还从该版本的客户端包（`dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation` / `dsh-client-ui-chat`）逐值提取了候选菜单、上下文小圈与 stats dock 的官方 CSS 核对。插件依赖的契约按版本核对过：用到的 3 个槽位（`conversation.composer.bar`、`sidebar.right.pane.tab`、`settings.section`）、`sidebarRight` / `sidebarRightTabs` / `locale` 服务与 `openTabIn`、侧栏展开规划（dockkit `planSetExpanded`）、文件拾取与 tab 关闭契约（`shell.bindFilePicker` / `tab.actions.close`）、以及复刻所依据的官方原语（`fileSizeText` / `fileExtension` 与附件 glyph 路径，逐字一致）。插件对宿主内部结构的依赖较多（槽位遮蔽、`useTabInfo`、`sidebarRight`、`--dsw-*` 令牌），代码里处处用 `typeof` 守卫 + `try/catch` 降级，但宿主大版本升级仍可能失效。**升级宿主后请按 [TESTING.md](./TESTING.md) 走一遍冒烟清单。**
 
+### 主题 / 皮肤插件兼容（皮肤作者必读）
+
+Codinput 不自带配色：全部颜色取自宿主的 `--dsw-*` 设计 token（亮暗主题随宿主切换）。给宿主做主题/皮肤的插件与 Codinput 的相处方式：
+
+- **改宿主 token 即全盘生效**——覆写 `--dsw-*` 变量后，Codinput 的卡片、菜单、按钮、徽章与官方 UI 一同跟随，无需单独适配。注意宿主把 token 定义在 `body`（`body[data-ds-dark-theme]`）上，覆写要写在同一层：写在 `:root` 会被 `body` 上的定义盖掉。
+- **官方写死的值 Codinput 同样写死**（发送钮图标的前景白、上下文仪表 tools 分段的紫等），与官方在换肤下的表现保持逐值一致——这些不跟 token 变，属预期行为。
+- **要精确点妆 Codinput**：所有元素类名都是稳定的 `dci-` 前缀（卡片 `.dci-card`、发送钮 `.dci-send`、菜单 `.dci-menu` / `.dci-slash-menu`、数据行 `.dci-stat-root`、唤回小球 `.dci-ball` 等），可直接作皮肤选择器；插件样式一次性注入 `<style id="dsh-codinput-styles">`，皮肤在其后注入即可按常规 CSS 权重覆盖。
+- 编辑器（CodeMirror）的字体是用户偏好（默认等宽栈），不跟随皮肤字体；其颜色同样走 token。
+
 ## 已知限制
 
 - `/` `@` 的候选内容来自宿主目录（技能 / 命令 / 文件 / 会话）；宿主不提供时为空，插件侧无法补。

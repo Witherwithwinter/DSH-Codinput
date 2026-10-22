@@ -2,6 +2,21 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.3] — 2026-10-23
+
+主题/皮肤插件兼容：错误色与预览链接逐值对齐官方；README 增补皮肤作者指南。
+
+### 变更
+
+- **错误色回退值逐值对齐官方**：`.dci-error` 与完全权限确认警示图标的错误色回退值由 `#ff6b6b` 改为官方同款 `#d54941`（token 仍走 `--dsw-alias-state-error-primary`，仅无该令牌的宿主回退时可见差异）。
+- **预览链接走官方 alias-link token**：markdown 预览的链接色由写死 `#4c8dff` 改为 `var(--dsw-alias-link, #4c8dff)`，换肤下与官方 markdown 链接同进退。
+
+### 新增
+
+- **README 皮肤作者指南（中英）**：新增「主题 / 皮肤插件兼容」章节——覆写宿主 `--dsw-*` token 即全盘生效（含 token 定义在 body 层、覆写需写同层的注意点）；官方写死的值清单（发送钮图标前景白等，属预期不跟 token）；稳定的 `dci-` 前缀类名契约与注入顺序（皮肤后注入按常规 CSS 权重覆盖）。
+
+[0.3.3]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.2...v0.3.3
+
 ## [0.3.2] — 2026-10-18
 
 桌面版 0.2.1 模型区同步（官方 1017 发布徽章）；侧栏标签与指南页条目上品牌标。

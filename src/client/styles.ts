@@ -3,6 +3,9 @@
  * 工具行/菜单/发送按钮的属性值逐条复刻官方 InputBar.module.css 与
  * PermissionSelect/ModelSelection 的触发器与菜单（含 --dsw-* 主题变量，
  * 随宿主主题自动切换）；编辑器/设置等自有部分用 currentColor 适配。
+ * 主题/皮肤插件兼容约定：官方走 --dsw-* token 的取值这里也走 token（皮肤
+ * 改 token 即全盘跟随）；官方写死的（发送钮前景 #fff、小圈 tools 紫）同样
+ * 写死保持逐值对齐——多跟一分就会在换肤下与官方脱队。
  */
 
 const STYLE_ID = 'dsh-codinput-styles';
@@ -77,7 +80,8 @@ const CSS = `
 .dci-preview blockquote { margin: 0.5em 0; padding: 0.1em 0.9em; border-left: 3px solid color-mix(in srgb, currentColor 22%, transparent); opacity: 0.85; }
 .dci-preview table { border-collapse: collapse; margin: 0.6em 0; }
 .dci-preview th, .dci-preview td { border: 1px solid color-mix(in srgb, currentColor 18%, transparent); padding: 4px 9px; }
-.dci-preview a { color: #4c8dff; } .dci-preview img { max-width: 100%; } .dci-preview hr { border: none;
+/* 预览链接走官方 markdown 同款 alias-link token（官方 _markdown_ a 逐值核对）。 */
+.dci-preview a { color: var(--dsw-alias-link, #4c8dff); } .dci-preview img { max-width: 100%; } .dci-preview hr { border: none;
   border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent); }
 
 /* ===== 工具行（官方 InputBar .row / .tools / .trailing）===== */
@@ -210,7 +214,7 @@ const CSS = `
 .dci-search { width: calc(100% - 8px); margin: 2px 4px 4px; padding: 5px 9px; font-size: 13px;
   border-radius: 8px; border: 1px solid var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 18%, transparent));
   background: transparent; color: inherit; outline: none; }
-.dci-error { padding: 6px 10px; color: var(--dsw-alias-state-error-primary, #ff6b6b); font-size: 12px; }
+.dci-error { padding: 6px 10px; color: var(--dsw-alias-state-error-primary, #d54941); font-size: 12px; }
 
 /* ===== 模型/推理等级 cell 行（官方 ModelSelection .cell）===== */
 .dci-cell { box-sizing: border-box; width: auto; min-width: 100%; height: 40px; color: var(--dsw-alias-label-primary, inherit);
@@ -225,7 +229,7 @@ const CSS = `
 /* ===== 完全权限确认（官方 RiskConfirmation 语义）===== */
 .dci-confirm-warning { display: flex; align-items: flex-start; gap: 10px; color: var(--dsw-alias-label-secondary, currentColor);
   font-size: 14px; line-height: 22px; padding: 6px 8px 0; }
-.dci-confirm-warning svg { flex: none; margin-top: 2px; color: var(--dsw-alias-state-error-primary, #ff6b6b); }
+.dci-confirm-warning svg { flex: none; margin-top: 2px; color: var(--dsw-alias-state-error-primary, #d54941); }
 .dci-confirm-warning p { margin: 0; }
 .dci-confirm-ack { display: flex; align-items: flex-start; gap: 10px; margin: 14px 8px 0; cursor: pointer;
   color: var(--dsw-alias-label-primary, inherit); font-size: 14px; line-height: 22px; }
@@ -237,7 +241,7 @@ const CSS = `
 .dci-btn { border: 1px solid var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 22%, transparent)); border-radius: 10px;
   background: transparent; color: inherit; padding: 6px 14px; cursor: pointer; font-size: 14px; line-height: 20px; }
 .dci-btn[data-primary="true"] { background: var(--dsw-alias-button-primary-fill, color-mix(in srgb, currentColor 85%, transparent));
-  color: #fff; border-color: transparent; }
+  color: var(--dsw-alias-label-primary-foreground, #fff); border-color: transparent; }
 .dci-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* ===== 草稿附件轨（官方 ComposerAttachments/AttachmentRail/FileCard 逐值复刻）=====
@@ -513,7 +517,7 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
 .dci-confirm-warning { display: flex; align-items: flex-start; gap: 10px; color: var(--dsw-alias-label-secondary, inherit);
   font-size: 14px; line-height: 22px; }
 .dci-confirm-warning p { margin: 0; }
-.dci-confirm-warningIcon { flex: none; margin-top: 2px; color: var(--dsw-alias-state-error-primary, #e5484d); }
+.dci-confirm-warningIcon { flex: none; margin-top: 2px; color: var(--dsw-alias-state-error-primary, #d54941); }
 .dci-confirm-ack { display: flex; align-items: flex-start; gap: 10px; margin-top: 20px; cursor: pointer;
   color: var(--dsw-alias-label-primary, inherit); font-size: 14px; line-height: 22px; }
 .dci-confirm-ack input { flex: none; width: 16px; height: 16px; margin: 3px 0 0; cursor: pointer;
