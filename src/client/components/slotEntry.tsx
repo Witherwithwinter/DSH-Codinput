@@ -42,11 +42,33 @@ export function useSlotEntries(key: string): readonly unknown[] {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
+/**
+ * React 可作为元素类型使用的「组件包装」符号（memo / forwardRef / lazy）。
+ * 只认这三类，不做「任意 symbol `$$typeof`」放行——element / context / 伪造
+ * 对象都不是可渲染组件类型：放行后 React 会在为子元素创建 Fiber 时抛 #130，
+ * 而该错误发生在 EntryBoundary 自身的工作单元内（边界只捕获后代错误），会
+ * 冒泡到宿主的 SlotErrorBoundary 并废黜 conversation.composer.bar（接管整体
+ * 退回官方输入框）。收紧后这类坏条目回到静默跳过，与 v0.3.5 行为一致。
+ */
+const RENDERABLE_OBJECT_TYPES: readonly symbol[] = [
+  Symbol.for('react.memo'),
+  Symbol.for('react.forward_ref'),
+  Symbol.for('react.lazy'),
+];
+
+/** 组件位是否为 React 可渲染类型（函数组件 / memo / forwardRef / lazy 包装）。 */
+export function isRenderableComponent(value: unknown): boolean {
+  if (typeof value === 'function') return true;
+  if (value === null || typeof value !== 'object') return false;
+  const type = (value as { $$typeof?: unknown }).$$typeof;
+  return typeof type === 'symbol' && RENDERABLE_OBJECT_TYPES.includes(type);
+}
+
 /** single 槽位赢家 = entries 首个带组件的条目（register 即按优先级排序）。 */
 export function firstComponentEntry(entries: readonly unknown[]): SlotEntryLike | null {
   for (const candidate of entries) {
     const record = candidate as SlotEntryLike | null | undefined;
-    if (record && typeof record === 'object' && typeof record.component === 'function') return record;
+    if (record && typeof record === 'object' && isRenderableComponent(record.component)) return record;
   }
   return null;
 }
@@ -61,7 +83,7 @@ export function listRows(entries: readonly unknown[]): SlotEntryLike[] {
   const byId = new Map<unknown, SlotEntryLike>();
   for (const candidate of entries) {
     const record = candidate as (SlotEntryLike & { options?: { id?: unknown } }) | null | undefined;
-    if (!record || typeof record !== 'object' || typeof record.component !== 'function') continue;
+    if (!record || typeof record !== 'object' || !isRenderableComponent(record.component)) continue;
     const id = (record as { options?: { id?: unknown } }).options?.id;
     if (byId.has(id)) continue;
     byId.set(id, record);
