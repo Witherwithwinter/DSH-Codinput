@@ -1,8 +1,10 @@
 /**
  * 工具行：结构与样式逐条对齐官方 InputBar 工具行——
- * 左侧 .dci-tools：指令（plus）、权限（shield 触发器）；
+ * 左侧 .dci-tools：指令（plus）、权限（shield 触发器），其后是官方左区末位
+ * 的 conversation.input.left 座位（第三方条目镜像，见 InputLeftSlot）；
  * 右侧 .dci-trailing：模型与思考强度（触发器）、语音输入（官方 activity 槽位
- * 条目，桌面版宿主才有）、发送（.primary 圆钮）。
+ * 条目，桌面版宿主才有）、发送（.primary 圆钮）；conversation.input.right 座位
+ * 在 .dci-standard-controls 内、模型之前（见 InputRightSlot）。
  * 按钮沿用官方 keepFocus 语义（mousedown 不夺走编辑器焦点）。
  * 附件无独立按钮（官方已并入 slash「添加 · 文件」），粘贴/拖拽路径保留。
  * 0.1.7-rc.2 起官方上下文小圈不再在工具行（挪进卡片下方 dock 行，见 StatsRow）。
@@ -18,6 +20,7 @@ import { IconPlusOfficial, IconSendOfficial, IconStopOfficial } from '../icons';
 import { ModelMenu } from './ModelMenu';
 import { PermissionMenu } from './PermissionMenu';
 import { VoiceActivity } from './VoiceActivity';
+import { InputLeftSlot } from './InputLeftSlot';
 import { InputRightSlot } from './InputRightSlot';
 
 export interface ToolbarProps {
@@ -29,11 +32,12 @@ export interface ToolbarProps {
   caretRef: { current: number | null };
   useProjection: UseProjection | undefined;
   /**
-   * conversation.input.right 条目的 standard props 原样面（宿主下发给本
-   * 插件 bar/body 条目的 kit 减去 owner props），供第三方按钮转发用；
-   * 缺席时座位不渲染（见 InputRightSlot）。
+   * conversation.input.left / .right 条目的 standard props 原样面（宿主下发
+   * 给本插件 bar/body 条目的 kit 减去 owner props），供两座第三方条目转发
+   * 用。它是条目 props 的一部分而非门控：缺席时条目仍按槽位条目渲染，只是
+   * 拿不到这组标准面（见 InputSlotSeat）。
    */
-  inputRightStandard?: Record<string, unknown> | undefined;
+  inputStandard?: Record<string, unknown> | undefined;
   /** owner disabled（权限触发器随之锁住，对齐官方 locked）。 */
   disabled?: boolean;
   onNotify?(level: 'info' | 'error', text: string): void;
@@ -52,7 +56,7 @@ function keepFocus(event: React.MouseEvent): void {
 }
 
 export function Toolbar(props: ToolbarProps): JSX.Element {
-  const { sessionId, state, actions, triggers, caretRef, useProjection, disabled, onNotify, inputRightStandard } = props;
+  const { sessionId, state, actions, triggers, caretRef, useProjection, disabled, onNotify, inputStandard } = props;
   useT();
 
   const attachments: readonly DraftAttachmentId[] = state?.attachmentIds ?? [];
@@ -88,13 +92,18 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
           disabled={disabled}
           onNotify={onNotify}
         />
+        {/* 官方左区同构：`.tools` 内 modes（permission→plan）之后是
+            renderSlot("conversation.input.left") 的末位。 */}
+        {state !== undefined && sessionId !== undefined ? (
+          <InputLeftSlot sessionId={sessionId} standard={inputStandard} />
+        ) : null}
       </div>
       <div className="dci-trailing">
         <div className="dci-standard-controls">
           {/* 官方同款门槛：input === undefined || sessionId === undefined 时
               整个 input.right 座位不渲染（renderSlot 调用点的三元条件）。 */}
           {state !== undefined && sessionId !== undefined ? (
-            <InputRightSlot sessionId={sessionId} standard={inputRightStandard} />
+            <InputRightSlot sessionId={sessionId} standard={inputStandard} />
           ) : null}
           <ModelMenu
             sessionId={sessionId}

@@ -35,10 +35,10 @@ export interface CodinputSurfaceProps {
   actions: InputActions | undefined;
   useProjection: UseProjection | undefined;
   /**
-   * conversation.input.right 第三方条目的 standard props 原样面（宿主
-   * kit − owner props），经 Toolbar 转给 InputRightSlot 转发渲染。
+   * conversation.input.left / .right 条目的 standard props 原样面（宿主
+   * kit − owner props），经 Toolbar 转给输入座位镜像转发渲染。
    */
-  inputRightStandard?: Record<string, unknown> | undefined;
+  inputStandard?: Record<string, unknown> | undefined;
   /** 宿主 bar owner props 透传：占位文案与禁用。 */
   placeholder?: string;
   disabled?: boolean;
@@ -66,7 +66,7 @@ const DOMPurify = ((DOMPurifyModule as unknown as { default?: unknown }).default
   DOMPurifyModule) as unknown as { sanitize(html: string): string };
 
 export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
-  const { sessionId, state, actions, useProjection, inputRightStandard, placeholder, disabled, blocked, running, side, hero, chatNodes, float, onDragZonePointerDown } = props;
+  const { sessionId, state, actions, useProjection, inputStandard, placeholder, disabled, blocked, running, side, hero, chatNodes, float, onDragZonePointerDown } = props;
   // 语言切换时整棵表面重渲染（文案都走 i18n 的 t()）。
   useT();
 
@@ -406,7 +406,7 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
           onNotify={notifyFor(sessionId)}
           onSend={sendGesture}
           sendDisabled={sendDisabled}
-          inputRightStandard={inputRightStandard}
+          inputStandard={inputStandard}
         />
 
         {/* 数据行：悬浮形态收进卡片（工具行下方，随卡片圆角一体）。 */}

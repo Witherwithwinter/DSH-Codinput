@@ -2,6 +2,24 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.5] — 2026-10-23
+
+第三方输入座位补齐（issue #1 之左座）：`conversation.input.left` 条目恢复显示；v0.3.4 的右座实现泛化为「座位镜像」层。
+
+### 新增
+
+- **左座 `conversation.input.left` 槽位转发渲染**：该子槽位位于官方工具行左区 `.tools` 内 modes（权限→计划）之后——issue 截图里的底栏按钮（如「上传视频」）、dsh-qoder-plugin 的额度读数等第三方条目注册在这里；遮蔽官方输入框后渲染点随条目一起消失。接管卡片工具行现于同位置（`.dci-tools` 内、权限触发器之后）复刻官方 renderer 的 list 合成，三形态（普通/悬浮/侧栏标签）同享。已在真实 web 宿主（`0.2.0-rc.2`）实测：座位条目渲染进左区几何正确位置、三形态一致、无横向溢出，卸载条目后零残留。
+- **座位镜像通用引擎**：v0.3.4 的右座实现抽成 `InputSlotSeat`（座位名 + standard props 面参数化），左右两座共用同一套 list 合成（id 首占位去重 + order 升序）、条目 inject/`use<Name>` 钩子、条目 locale 的 `t`、standard props 原样通道与逐条目崩溃隔离；后续座位接入只需再加一片薄壳。
+
+### 说明
+
+- 检测即兼容：槽位无条目或宿主过旧（无该子槽位）时座位不渲染，零样式零行为残留；单个条目崩溃被边界隔离，不连坐输入面。
+- 左右两座的 standard props 面同源：宿主下发给 bar/侧栏 body 条目的 kit 减去 owner props（侧栏再剔除注入的 `useTabInfo`）。
+- **已知限制（本版边界）**：`conversation.input.model` 单座（如 dsh-model-accordion 类替换模型选择器的插件）与自绘模型芯片 UX 冲突，本版不镜像；`conversation.input.attachments` / `overlay` / `dock` 生态暂无租客，留扩展位。
+- **覆盖边界（措辞分界）**：左座转发在真实 web 宿主（`0.2.0-rc.2`）上以确定性探针条目实测通过（渲染位置/三形态/卸载零残留）；dsh-qoder-plugin 的左额度读数与右探针双座条目实测注册成功、无报错，但其组件按官方契约在未选中 Qoder provider 时返回 `null`，可见读数属机制推断、未实测；左座席位的「上传视频」类插件真身未在本环境出现，同属机制覆盖（其注册形态与已实测样本同轴）。右座既有租客（dsh-prompt-enhancer）端到端回归实测不受影响。
+
+[0.3.5]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.4...v0.3.5
+
 ## [0.3.3] — 2026-10-23
 
 主题/皮肤插件兼容：错误色与预览链接逐值对齐官方；README 增补皮肤作者指南。

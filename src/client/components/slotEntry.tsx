@@ -1,8 +1,8 @@
 /**
  * 槽位条目渲染的共享件：检视任意槽位的条目快照（检测即兼容）、按条目 locale
- * 绑定官方词典、快照 store 的选择器钩子合成、以及条目崩溃兜底边界。
- * 语音输入（VoiceActivity）、模型名标签（ModelLabel）与第三方输入按钮
- * （InputRightSlot）共用同一套合成公式，抽到这里避免多份漂移。
+ * 绑定官方词典、快照 store 的选择器钩子合成、条目崩溃兜底边界，以及宿主 kit
+ * 减去 owner props 的 standard 面（座位镜像 InputSlotSeat 与语音/模型标签
+ * 共用同一套合成公式，抽到这里避免多份漂移）。
  */
 
 import { useCallback, useSyncExternalStore, Component } from 'react';
@@ -169,4 +169,37 @@ export class EntryBoundary extends Component<
   render(): React.ReactNode {
     return this.state.failed ? this.props.fallback ?? null : this.props.children;
   }
+}
+
+/**
+ * 宿主 kit 减去 owner props 的原样面：供槽位条目按官方契约消费
+ * （sessionId + 选择器 hook + inputActions 等）。bar 条目的 kit 里 owner
+ * 专属字段（variant/blocked/disabled/placeholder/…）不该下发给子槽位条目；
+ * 侧栏 body 再额外剔除注入的 useTabInfo。
+ */
+export function kitFromBarProps(
+  props: Record<string, unknown>,
+  extraOmit: readonly string[] = [],
+): Record<string, unknown> {
+  const {
+    variant: _variant,
+    blocked: _blocked,
+    disabled: _disabled,
+    placeholder: _placeholder,
+    workspacePickerOpen: _workspacePickerOpen,
+    onRequestWorkspace: _onRequestWorkspace,
+    accessory: _accessory,
+    hero: _hero,
+    ...kit
+  } = props;
+  void _variant;
+  void _blocked;
+  void _disabled;
+  void _placeholder;
+  void _workspacePickerOpen;
+  void _onRequestWorkspace;
+  void _accessory;
+  void _hero;
+  for (const key of extraOmit) delete kit[key];
+  return kit;
 }
