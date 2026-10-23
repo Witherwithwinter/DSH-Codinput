@@ -42,11 +42,18 @@ export function useSlotEntries(key: string): readonly unknown[] {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
+/** 组件位是否为 React 可渲染类型。 */
+export function isRenderableComponent(value: unknown): boolean {
+  if (typeof value === 'function') return true;
+  if (value === null || typeof value !== 'object') return false;
+  return typeof (value as { $$typeof?: unknown }).$$typeof === 'symbol';
+}
+
 /** single 槽位赢家 = entries 首个带组件的条目（register 即按优先级排序）。 */
 export function firstComponentEntry(entries: readonly unknown[]): SlotEntryLike | null {
   for (const candidate of entries) {
     const record = candidate as SlotEntryLike | null | undefined;
-    if (record && typeof record === 'object' && typeof record.component === 'function') return record;
+    if (record && typeof record === 'object' && isRenderableComponent(record.component)) return record;
   }
   return null;
 }
@@ -61,7 +68,7 @@ export function listRows(entries: readonly unknown[]): SlotEntryLike[] {
   const byId = new Map<unknown, SlotEntryLike>();
   for (const candidate of entries) {
     const record = candidate as (SlotEntryLike & { options?: { id?: unknown } }) | null | undefined;
-    if (!record || typeof record !== 'object' || typeof record.component !== 'function') continue;
+    if (!record || typeof record !== 'object' || !isRenderableComponent(record.component)) continue;
     const id = (record as { options?: { id?: unknown } }).options?.id;
     if (byId.has(id)) continue;
     byId.set(id, record);
