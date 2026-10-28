@@ -25,9 +25,8 @@
  * 私有），现网无此类条目；如出现则降级为无 store props 渲染。
  */
 
-import { createElement, useMemo } from 'react';
-import { diagError } from '../diag';
-import { EntryBoundary, entryId, entryInjectProps, listRows, translatorFor, useSlotEntries } from './slotEntry';
+import { useMemo } from 'react';
+import { entryId, listRows, renderSlotEntry, useSlotEntries } from './slotEntry';
 
 export interface InputSlotSeatProps {
   /** 官方子槽位全名（如 conversation.input.left）。 */
@@ -46,35 +45,5 @@ export function InputSlotSeat(props: InputSlotSeatProps): JSX.Element | null {
   // 官方同款门槛：无会话不渲染（input.left / input.right 都是 strict session 槽位）。
   if (sessionId === undefined || rows.length === 0) return null;
 
-  return (
-    <>
-      {rows.map((entry, index) => {
-        const Comp = entry.component as React.ComponentType<Record<string, unknown>>;
-        // 条目词典的 t（官方 localeSeat 同款）；无 locale 或绑定失败 → 不下发，
-        // 组件按各自回退（enhancer 回退内置中文词典）。
-        let t: unknown;
-        try {
-          t = translatorFor(entry) ?? undefined;
-        } catch {
-          t = undefined;
-        }
-        let injected: Record<string, unknown> | null = null;
-        try {
-          injected = entryInjectProps(entry, sessionId);
-        } catch (error) {
-          diagError('slot.seat.inject', error);
-        }
-        return createElement(
-          EntryBoundary,
-          { key: entryId(entry, index) },
-          createElement(Comp, {
-            ...(standard ?? {}),
-            sessionId,
-            ...(injected ?? {}),
-            ...(t !== undefined ? { t } : {}),
-          }),
-        );
-      })}
-    </>
-  );
+  return <>{rows.map((entry, index) => renderSlotEntry(entry, entryId(entry, index), { sessionId, standard }))}</>;
 }

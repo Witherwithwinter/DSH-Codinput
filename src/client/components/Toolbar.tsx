@@ -18,6 +18,7 @@ import { openCommandMenu } from '../triggers';
 import { t, useT } from '../i18n';
 import { IconPlusOfficial, IconSendOfficial, IconStopOfficial } from '../icons';
 import { ModelMenu } from './ModelMenu';
+import { ModelSlot } from './ModelSlot';
 import { PermissionMenu } from './PermissionMenu';
 import { VoiceActivity } from './VoiceActivity';
 import { InputLeftSlot } from './InputLeftSlot';
@@ -105,9 +106,14 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
           {state !== undefined && sessionId !== undefined ? (
             <InputRightSlot sessionId={sessionId} standard={inputStandard} />
           ) : null}
-          <ModelMenu
+          {/* 官方右区顺序：input.right → input.model。模型座单值槽的第三方
+              遮蔽者（如 reasoning-slider / dsh-model-accordion / effort-dial）
+              由 ModelSlot 镜像并让位；无遮蔽者时回退自绘模型芯片（issue #4）。 */}
+          <ModelSlot
             sessionId={sessionId}
-            onNotify={onNotify}
+            standard={inputStandard}
+            locked={disabled === true}
+            fallback={<ModelMenu sessionId={sessionId} onNotify={onNotify} />}
           />
         </div>
         <div className="dci-voice-seat">

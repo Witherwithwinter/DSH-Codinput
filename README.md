@@ -134,6 +134,7 @@ Codinput 不自带配色：全部颜色取自宿主的 `--dsw-*` 设计 token（
 - `/` `@` 的候选内容来自宿主目录（技能 / 命令 / 文件 / 会话）；宿主不提供时为空，插件侧无法补。
 - **没有语法高亮**、**没有 Esc 功能**——产品决策（输入面板不是代码阅读器）。
 - **Codinput 标签存在期间主输入整体隐藏**（唯一输入入口约定，浏览同栏其他标签也不恢复）；官方 stats dock 与上下文小圈都渲染在官方输入框内部，因此随之消失、由本插件的复刻数据行接管。
+- **第三方子座位的镜像边界**：左右座（list）与模型座（single）已镜像；`input.attachments` / `overlay` / `dock` 生态暂无租客，留扩展位。模型座上**带 `inject` 面且依赖宿主 ctx 服务**的插件（如 dsh-model-accordion）在插件侧无法复现其 inject 绑定，会降级回自绘模型芯片（不空、不崩，`__dshCodinputErrs` 记一条 `slot.inject` 诊断）；纯 UI 替换类（reasoning-slider、dsh-effort-dial）已实测可正常显示与交互。
 - 同一 pane 复制出第二个「Codinput」标签时，第二个面板只出提示、不渲染第二个编辑面（输入入口唯一）。
 - 悬浮模式的手势只保留「拖回底部输入区 = 普通」；「拖入右侧栏 = 侧栏模式」已按产品决策舍弃。
 - 页面重载后，若侧栏布局恢复了 Codinput 标签但尚未被点开过，主输入会先出现——dockkit 对重载恢复的标签是惰性挂载，点一次标签即恢复侧栏承载。
@@ -156,6 +157,9 @@ npm run typecheck
 ### 改代码前值得先知道的宿主事实
 
 - **接管点**：`conversation.composer.bar`（single 槽位，`priority:-1` 遮蔽官方条目）。卸载条目即官方输入框原样恢复。
+- **遮蔽 ≠ 渲染**：官方 InputBar 条目在自己的条身体内声明并渲染 `conversation.input.*` 子座位（`left` / `right` / `model` / `activity` / `permission` / `plan` / …）。Codinput 遮蔽 bar 条目后，这些座位**声明还在、第三方注册照常成功、条目还是赢家**，但没有任何 `renderSlot` 会读它们——表现是「插件装了、不报错、永不上屏」。解法是在自绘工具行的**对应位置**按官方语义复刻合成（`InputLeftSlot` / `InputRightSlot` 走 list 座，`ModelSlot` 走 single 座）。
+- **单值座让位判据**：宿主动态包守卫对非 chain 槽位的第三方 register **强制**分配页内遮蔽秩（`options.priority` 为唯一负数）并给 fiber 名打 `dyn/` 前缀；出厂占用者（如 client-ui-model-selection 的 ModelSelect）不带 priority（≡0）。`ModelSlot` 只镜像「第三方遮蔽者」，出厂占位继续由自绘模型芯片代表。
+- **第三方 inject 的 ctx 边界**：条目的 `inject(sessionId)` 必须在宿主 fiber 上下文里调用；插件侧直接调会丢条目所属插件的 ctx 绑定，依赖 `ctx.*` 服务面的 inject 会抛 `without inject`（实测 dsh-model-accordion 的 `directoryFor`）。单值座据此走 `entryInjectFailed` 预检，失败即降级回自绘芯片。
 - **唯一输入入口**：侧栏标签 body **挂载即承载**（不是按可见性——收起侧栏是 CSS 隐藏 + translate，body 仍挂载），主条目据此渲染 `null`；形态由 `承载 ? 'side' : prefs.mode` 派生，构造上不可能并存。承载声明挂在 body 生命周期上，因此标签定义必须 `keepMounted: true`：dockkit 默认会把非激活标签的 body 卸载，一旦切到同栏其他标签声明就消失、主输入回来（官方浏览器标签同款开关；注意重载后恢复的标签要**激活过一次** body 才挂载）。
 - **撤销历史**：三态切换会重挂载编辑器，故按会话暂存 `EditorState`（`take/putEditorSnapshot`）；扩展回调走模块级 hooks 槽，避免复用旧 state 时调到已卸载实例的 props。
 - **官方侧灌入**（pick/claim/提交清空）用 `externalAnnotation` + `Transaction.addToHistory.of(false)`：不进撤销栈，撤销只记用户自己敲的内容。

@@ -61,7 +61,15 @@ export interface SlotEntryLike {
   readonly inject?: (...args: unknown[]) => Record<string, unknown>;
   /** 条目词典命名空间（locale.bind(ns) 即官方传给组件的 t）。 */
   readonly locale?: string;
+  /** 归属（options.registrant ?? fiber.name；动态包为 dyn/<pluginId>）。 */
   readonly registrant?: string;
+  /** 注册选项切面：priority 负数 = 动态包被守卫分配的页内遮蔽秩（见 slotEntry）。 */
+  readonly options?: {
+    readonly id?: string;
+    readonly order?: number;
+    readonly priority?: number;
+    readonly registrant?: string;
+  };
 }
 
 // ---------- input machine ----------

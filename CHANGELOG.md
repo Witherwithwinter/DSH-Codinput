@@ -2,6 +2,25 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.6] — 2026-10-28
+
+模型座让位（issue #4）：`conversation.input.model` 单值座上的第三方遮蔽者恢复显示；出厂 ModelSelect 不镜像，继续由自绘模型芯片代表。
+
+### 新增
+
+- **`conversation.input.model` 单值座让位镜像**（`ModelSlot`）：以 priority 遮蔽宿主模型座的插件（reasoning-slider / dsh-effort-dial 一类）注册会成功、条目确实是单值座赢家，但官方 InputBar 被遮蔽后该座唯一的 `renderSlot` 调用点随之消失——「不报错、永不上屏」（issue #4）。接管工具行现于官方同位（`.dci-standard-controls` 内、`input.right` 之后）镜像该座赢家，并把官方 `InputControlOwnerProps` 的 owner prop `locked` 原样下发。有第三方遮蔽者时让位并隐藏自绘模型芯片（同座只留一个控件，与官方单值座语义一致）；无遮蔽者时保持既有自绘芯片（普通/悬浮/侧栏三形态同享）。
+- **单值座「第三方遮蔽者」判据**（`isShadowingOccupant`）：宿主动态包守卫对非 chain 槽位的 register **强制**分配页内遮蔽秩（`options.priority` 为唯一负数）、fiber 名取 `dyn/<pluginId>`；出厂占用者（client-ui-model-selection 的 ModelSelect）不带 priority（≡0）。只镜像前者——镜像出厂条目会与自绘芯片重复成两个模型选择器。
+- **让位失败降级**：条目 `inject(sessionId)` 是宿主 fiber 上下文里的闭包，插件侧调用会丢 ctx 绑定，依赖宿主服务面的 inject 会抛错（实测 dsh-model-accordion 0.2.1 的 `directoryFor` 抛 `cannot get property "remote.session" without inject`）。`entryInjectFailed` 预检 + 条目边界 `fallback` 让单值座在「inject 不可复现 / 组件崩溃」时回退自绘芯片，而不是留空或连坐输入面。
+
+### 说明
+
+- **已实测**（真实 web 宿主 `0.2.0-rc.2`，本地 link 安装本仓库构建产物，Chromium 自动化探针）：reasoning-slider 0.0.7 与 dsh-effort-dial 0.1.0 均在官方模型座原位显示（`.dci-standard-controls` 内 `input.right` 座位之后）、自绘芯片隐藏、弹层可打开并读出真实模型/推理档位；卸载插件后自绘芯片原样恢复；同屏右座（dsh-prompt-enhancer）无回归；`__dshCodinputErrs` 为空、无控制台报错。
+- **降级实测**：dsh-model-accordion 0.2.1（带 inject 面）在模型座降级回自绘芯片——座位不空、无控制台报错，仅 `__dshCodinputErrs` 记一条 `slot.inject` 诊断（其 inject 依赖宿主 ctx，插件侧不可复现）。
+- **机制覆盖未逐一实测**：悬浮 / 侧栏两形态与普通形态共用同一 Toolbar（座位自动同享）；`locked` 置灰只在会话拒绝交互时可见（官方语义 `removed || inert || !live`，Codinput 下发自身 `inert`，含 blocked，口径略严一档）。
+- **边界**：第三方若自行给该座补声明 children 会与宿主已声明冲突（宿主 `already declared`），镜像层不做；多个插件同时遮蔽同一单值座属槽位竞争，由宿主 fail-loud。
+
+[0.3.6]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.5...v0.3.6
+
 ## [0.3.5] — 2026-10-23
 
 第三方输入座位补齐（issue #1 之左座）：`conversation.input.left` 条目恢复显示；v0.3.4 的右座实现泛化为「座位镜像」层。
