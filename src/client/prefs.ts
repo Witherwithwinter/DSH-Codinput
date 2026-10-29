@@ -17,6 +17,8 @@ export type CodinputMode = 'normal' | 'float' | 'side';
 export interface CodinputPrefs {
   /** 启用接管：关闭即恢复官方输入框（卸载遮蔽条目）。 */
   enabled: boolean;
+  /** 用户消息 Markdown 渲染（键控座 conversation.chat.node 的 user/steering 遮蔽）。 */
+  userMarkdown: boolean;
   /** 显示行号（当前行与行号高亮常开）。 */
   lineNumbers: boolean;
   /** 编辑器字体（默认 JetBrains Mono）。 */
@@ -43,6 +45,7 @@ export interface CodinputPrefs {
 
 export const DEFAULT_PREFS: CodinputPrefs = {
   enabled: true,
+  userMarkdown: true,
   lineNumbers: true,
   fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
   sendHotkey: 'mod+enter',

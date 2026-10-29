@@ -197,7 +197,9 @@ function TokenPill(props: { stats: SessionStats; open: boolean; onToggle(): void
 
 export function StatsRow(props: StatsRowProps): JSX.Element | null {
   const { useProjection, sessionId, chatNodes } = props;
-  const [open, setOpen] = useState<'rounds' | 'tokens' | null>(null);
+  // 唯一展开：三枚（轮步/用量/上下文小圈）共用一个 open 态——任意一枚展开
+  // 即收起其余（官方语义：详情面板同时只存在一个）。
+  const [open, setOpen] = useState<'rounds' | 'tokens' | 'gauge' | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stats = useSessionStats(useProjection, sessionId, chatNodes);
 
@@ -226,7 +228,11 @@ export function StatsRow(props: StatsRowProps): JSX.Element | null {
           <TokenPill stats={stats} open={open === 'tokens'} onToggle={() => setOpen(open === 'tokens' ? null : 'tokens')} />
         </>
       ) : null}
-      <ContextGauge useProjection={useProjection} />
+      <ContextGauge
+        useProjection={useProjection}
+        open={open === 'gauge'}
+        onToggle={() => setOpen(open === 'gauge' ? null : 'gauge')}
+      />
     </div>
   );
 }
@@ -252,10 +258,14 @@ function shortTokens(n: number): string {
 }
 
 /** 上下文占用小圈（官方 JObwrW 复刻）：双环仪表 + 百分比，点击展开分段面板。
- * 0.1.7-rc.2 起官方渲染在 dock 行 stats 胶囊之后（原先在工具行 trailing）。 */
-export function ContextGauge(props: { useProjection: UseProjection | undefined }): JSX.Element | null {
-  const { useProjection } = props;
-  const [open, setOpen] = useState(false);
+ * 0.1.7-rc.2 起官方渲染在 dock 行 stats 胶囊之后（原先在工具行 trailing）。
+ * 展开态由 StatsRow 持有（三枚详情面板唯一展开）。 */
+export function ContextGauge(props: {
+  useProjection: UseProjection | undefined;
+  open: boolean;
+  onToggle(): void;
+}): JSX.Element | null {
+  const { useProjection, open, onToggle } = props;
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const pressure = useProjection
     ? (useProjection('contextPressure') as PressureSnapshot | undefined)
@@ -263,16 +273,6 @@ export function ContextGauge(props: { useProjection: UseProjection | undefined }
   const breakdown = useProjection
     ? (useProjection('contextBreakdown') as BreakdownSnapshot | undefined)
     : undefined;
-  // 点外面关闭。
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (event: PointerEvent): void => {
-      if (rootRef.current && event.target instanceof Node && rootRef.current.contains(event.target)) return;
-      setOpen(false);
-    };
-    window.addEventListener('pointerdown', onDown, true);
-    return () => window.removeEventListener('pointerdown', onDown, true);
-  }, [open]);
 
   if (!pressure || !pressure.contextWindow) return null;
   const windowTokens = pressure.contextWindow;
@@ -294,7 +294,7 @@ export function ContextGauge(props: { useProjection: UseProjection | undefined }
         aria-haspopup="dialog"
         aria-expanded={open}
         title={t("tool.context", { percent: Math.round(pct) })}
-        onClick={() => setOpen(!open)}
+        onClick={onToggle}
       >
         <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
           <circle className="dci-gauge-track" cx="7" cy="7" r="5.5" />

@@ -27,7 +27,7 @@ const FILE_FOLD =
   'M26.3909 7.37445L19.0525 0V3.77445C19.0525 4.89271 19.0525 5.45184 19.2352 5.89289C19.4788 6.48096 19.946 6.94818 20.5341 7.19176C20.9751 7.37445 21.5342 7.37445 22.6525 7.37445H26.3909Z';
 
 /** 官方 FileTypeIcon 的通用文件 glyph（28×28 视图框，fill 自带轮廓）。 */
-function FileGlyph({ size = 28 }: { size?: number }): JSX.Element {
+export function FileGlyph({ size = 28 }: { size?: number }): JSX.Element {
   return (
     <svg width={size} height={size} viewBox="0 0 28 28" fill="none" aria-hidden="true">
       <path d={FILE_BODY} fill="currentColor" />
@@ -37,14 +37,14 @@ function FileGlyph({ size = 28 }: { size?: number }): JSX.Element {
 }
 
 /** 官方 fileExtension：取 basename 最后一个点之后的部分。 */
-function fileExtension(name: string): string {
+export function fileExtension(name: string): string {
   const base = name.split(/[\\/]/).pop() ?? name;
   const dot = base.lastIndexOf('.');
   return dot < 0 ? '' : base.slice(dot + 1);
 }
 
 /** 官方 fileSizeText 逐值复刻。 */
-function fileSizeText(bytes: number): string {
+export function fileSizeText(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;
   const kb = bytes / 1024;
   if (kb < 1024) return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)}KB`;

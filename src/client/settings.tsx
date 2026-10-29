@@ -176,6 +176,13 @@ export function CodinputSettingsSection(): JSX.Element {
       <Row title={t("set.enabled")} desc={t("set.enabledDesc")}>
         <Switch on={prefs.enabled} label={t("set.enabled")} onToggle={() => update({ enabled: !prefs.enabled })} />
       </Row>
+      <Row title={t("set.userMarkdown")} desc={t("set.userMarkdownDesc")}>
+        <Switch
+          on={prefs.userMarkdown}
+          label={t("set.userMarkdown")}
+          onToggle={() => update({ userMarkdown: !prefs.userMarkdown })}
+        />
+      </Row>
       <Row title={t("set.lineNumbers")} desc={t("set.lineNumbersDesc")}>
         <Switch on={prefs.lineNumbers} label={t("set.lineNumbers")} onToggle={() => update({ lineNumbers: !prefs.lineNumbers })} />
       </Row>

@@ -537,6 +537,124 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
 .dci-btn-primary:hover:not(:disabled) { background: var(--dsw-alias-button-primary-hover, currentColor); }
 .dci-btn-cancel { min-width: 72px; }
 .dci-btn-confirm { min-width: 136px; }
+
+/* ===== 用户消息 Markdown（chat.node 键控座遮蔽条目）=====
+   气泡/操作行/附件行取值逐条移植官方 MessageItem.module.css 与
+   MessageIconActions.module.css；Markdown 排版逐条移植官方
+   MarkdownText.module.css；引用 chip 逐条移植官方 user-text.module.css。
+   官方走 --dsw-* token 的取值这里同样走 token（换肤全盘跟随）。 */
+.dci-umsg-row { flex-direction: column; align-items: flex-end; gap: 6px; display: flex; }
+.dci-umsg-stack { min-width: 0; max-width: min(calc(var(--dsh-chat-content-width, 748px) * 0.702), 82%);
+  flex-direction: column; align-items: flex-end; gap: 8px; display: flex; }
+.dci-umsg-bubble { background: var(--dsw-specific-bubble); border-radius: var(--dsw-radius-xl); max-width: 100%;
+  font-size: var(--dsh-content-font-size, 14px); line-height: calc(22px + var(--dsh-content-font-delta, 0px));
+  color: var(--dsw-alias-label-primary); white-space: pre-wrap; word-break: break-word; padding: 10px 16px; }
+.dci-umsg-refsum { color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 13px); line-height: calc(18px + var(--dsh-content-font-delta-secondary, 0px)); }
+.dci-umsg-attrow { flex-wrap: wrap; justify-content: flex-end; gap: 8px; max-width: 100%; display: flex; }
+.dci-umsg-file { border: 0.5px solid var(--dsw-alias-border-l2, #0000001f); border-radius: var(--dsw-radius-xl);
+  background: var(--dsw-specific-input-major, transparent); box-sizing: border-box; flex: 0 0 240px;
+  align-items: center; gap: 10px; width: 240px; min-height: 64px; padding: 8px 12px; display: inline-flex; }
+.dci-umsg-fileglyph { flex: none; width: 28px; height: 28px; }
+.dci-umsg-filecontent { flex-direction: column; flex: 1; min-width: 0; display: flex; }
+.dci-umsg-filename { white-space: nowrap; text-overflow: ellipsis; color: var(--dsw-alias-label-primary);
+  font-size: 14px; font-weight: 500; line-height: 22px; overflow: hidden; }
+.dci-umsg-filemeta { white-space: nowrap; text-overflow: ellipsis; color: var(--dsw-alias-label-tertiary, #00000073);
+  font-size: 12px; line-height: 15px; overflow: hidden; }
+.dci-umsg-actions { height: calc(28px + var(--dsh-content-font-delta, 0px)); align-items: center; gap: 8px; display: flex; }
+.dci-umsg-time { font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px)); color: var(--dsw-alias-label-tertiary); white-space: nowrap; padding-right: 12px; }
+.dci-umsg-action { width: calc(28px + var(--dsh-content-font-delta, 0px)); height: calc(28px + var(--dsh-content-font-delta, 0px));
+  border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-tertiary); cursor: pointer; background: 0 0;
+  border: none; justify-content: center; align-items: center; padding: 6px; display: inline-flex; }
+.dci-umsg-action svg { width: calc(15px + var(--dsh-content-font-delta, 0px)); height: calc(15px + var(--dsh-content-font-delta, 0px)); }
+.dci-umsg-action:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }
+/* 悬停显形（官方同款 data 属性面：chat 根的 data-actions-reveal 与 flowItem 的
+   data-chat-flow-kind 都在宿主 DOM 上，这里只换目标类）。 */
+@media (hover: hover) {
+  [data-actions-reveal="hover"] .dci-umsg-actions,
+  :is([data-chat-flow-kind="user"], [data-chat-flow-kind="steering"]):has(~ :is([data-chat-flow-kind="user"], [data-chat-flow-kind="steering"])) .dci-umsg-actions { opacity: 0; transition: opacity 80ms; }
+  [data-actions-reveal="hover"]:hover .dci-umsg-actions,
+  [data-actions-reveal="hover"]:focus-within .dci-umsg-actions,
+  :is([data-chat-flow-kind="user"], [data-chat-flow-kind="steering"]):hover .dci-umsg-actions,
+  :is([data-chat-flow-kind="user"], [data-chat-flow-kind="steering"]):focus-within .dci-umsg-actions { opacity: 1; }
+}
+.dci-umsg-extra { margin: 8px 0 0; padding: 8px; border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm); font-family: var(--ds-font-family-code); font-size: 12px; line-height: 18px;
+  overflow: auto; max-height: 200px; white-space: pre; }
+
+/* Markdown 排版（官方 MarkdownText.module.css 逐条移植，.markdown → 本根）。 */
+.dci-umsg-md { min-width: 0; overflow-wrap: anywhere; font: var(--dsw-font-markdown-base);
+  color: var(--dsw-alias-label-primary); white-space: normal; }
+.dci-umsg-md strong { font-weight: 600; }
+.dci-umsg-md h1 { font: var(--dsw-font-markdown-h1); margin: 32px 0 16px; }
+.dci-umsg-md h2 { font: var(--dsw-font-markdown-h2); margin: 32px 0 16px; }
+.dci-umsg-md h3 { font: var(--dsw-font-markdown-h3); margin: 32px 0 16px; }
+.dci-umsg-md h4 { font: var(--dsw-font-markdown-h4); margin: 16px 0; }
+.dci-umsg-md :where(h5, h6) { font: var(--dsw-font-markdown-base-strong); margin: 16px 0; }
+.dci-umsg-md :where(h1, h2, h3, h4, h5, h6) strong { font-weight: inherit; }
+.dci-umsg-md p { margin: 16px 0; }
+.dci-umsg-md :where(h4, h5, h6) + :where(ul, ol) { margin-top: 8px; }
+.dci-umsg-md :where(h4, h5, h6):has(+ :where(ul, ol)) { margin-bottom: 8px; }
+.dci-umsg-md a { color: var(--dsw-alias-link); font-weight: 500;
+  transition: box-shadow var(--ds-transition-duration) var(--ds-ease-in-out); position: relative; text-decoration: none;
+  border-left: 3px solid rgb(255 255 255 / 0); border-right: 3px solid rgb(255 255 255 / 0);
+  border-top: 2px solid rgb(255 255 255 / 0); border-bottom: 2px solid rgb(255 255 255 / 0);
+  margin-left: -3px; margin-right: -3px; }
+.dci-umsg-md a:hover, .dci-umsg-md a:focus { outline: none; text-decoration: underline dotted var(--dsw-alias-link); text-underline-offset: 3px; }
+.dci-umsg-md a:focus-visible { box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); }
+.dci-umsg-md :where(ul, ol) { margin: 16px 0; padding-left: 18px; }
+.dci-umsg-md li:not(:first-child) { margin-top: 6px; }
+.dci-umsg-md li > :where(ul, ol) { margin-top: 4px; }
+.dci-umsg-md li::marker { line-height: 24px; color: var(--dsw-alias-label-secondary); }
+.dci-umsg-md :where(ul, ol) ol { list-style-position: inside; padding-left: 0; }
+.dci-umsg-md :where(ul, ol) ol li p { display: inline; }
+.dci-umsg-md li > p { margin: 8px 0; }
+.dci-umsg-md li > *:first-child { margin-top: 0; }
+.dci-umsg-md hr { display: block; border: none; height: 0.5px; margin: 32px 0; background: var(--dsw-alias-border-l2); }
+.dci-umsg-md blockquote { border-left: 2px solid var(--dsw-alias-label-caption); margin: 16px 0 0; padding-left: 14px; }
+/* 围栏代码块：官方 CodeBlock.module.css 的 .block :where(pre) 逐值——底色/圆角/
+   字体走官方 token（换肤跟随），气泡内靠底色与气泡面区分。语言横幅仍不做
+   （组件头注释的已知边界）。 */
+.dci-umsg-md pre { margin: 16px 0; padding: 16px; font: var(--dsw-font-markdown-code-block, var(--ds-font-family-code));
+  background: var(--dsw-alias-markdown-code-block, color-mix(in srgb, currentColor 6%, transparent));
+  color: var(--dsw-alias-label-primary); white-space: pre-wrap; word-break: break-all; overflow-x: auto;
+  border-radius: var(--dsw-radius-lg); }
+.dci-umsg-md pre code { font: inherit; background: none; padding: 0; }
+.dci-umsg-md :not(pre) > code { display: inline-flex; align-items: center; box-sizing: border-box;
+  font: var(--dsw-font-markdown-code); font-family: var(--ds-font-family-code); font-size: 0.875em !important;
+  /* 底色与围栏代码块同一 token（--dsw-alias-markdown-code-block，产品决策 2026-10-29：
+     两种代码面同色）。官方 --dsw-alias-markdown-inline-code 对页面底设计（深色
+     rgb(41,41,41)），进用户气泡（深色 rgb(44,44,46)）只差 3/255 不可辨，故不取它。 */
+  background-color: var(--dsw-alias-markdown-code-block, color-mix(in srgb, currentColor 6%, transparent));
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-sm); padding: 0 5px; }
+.dci-umsg-md :where(h1, h2, h3, h4, h5, h6) code { font: inherit; font-family: var(--ds-font-family-code); }
+.dci-umsg-md input[type='checkbox'] { margin: 0 8px 0 0; accent-color: var(--dsw-alias-label-secondary); }
+.dci-umsg-md img { display: block; width: auto; max-width: 100%; height: auto; margin: 0;
+  border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-base); object-fit: contain; }
+.dci-umsg-tscroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.dci-umsg-tscroll table { border-collapse: collapse; width: max-content; max-width: max-content; }
+.dci-umsg-tscroll th { text-align: start; padding: 10px 16px; border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  border-top: none; font: var(--dsw-font-markdown-table-head); max-width: min(30vw, 320px); min-width: 100px; }
+.dci-umsg-tscroll td { padding: 10px 16px; border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  font: var(--dsw-font-markdown-table); max-width: min(30vw, 320px); min-width: 100px; }
+.dci-umsg-tscroll th:first-child, .dci-umsg-tscroll td:first-child { padding-left: 0; }
+.dci-umsg-tscroll td:last-child { padding-right: 0; }
+.dci-umsg-tscroll table code { font-size: 11px; }
+.dci-umsg-md > :first-child, .dci-umsg-md p:first-child { margin-top: 0 !important; }
+.dci-umsg-md > :last-child, .dci-umsg-md p:last-child { margin-bottom: 0 !important; }
+
+/* 引用 chip（官方 user-text.module.css 逐条移植）：inline 走消费方基线，
+   可点 chip 用官方 fileMention 的链接语言。 */
+.dci-umsg-chip { display: inline; max-width: 100%; margin: 0 2px; color: var(--dsw-alias-state-business-primary);
+  font-weight: 500; white-space: inherit; overflow-wrap: anywhere; text-align: inherit; }
+button.dci-umsg-chip { margin: 0; padding: 0; border: none; background: none; font: inherit;
+  color: var(--dsw-alias-link); text-decoration: none; cursor: pointer; }
+button.dci-umsg-chip:hover, button.dci-umsg-chip:focus { outline: none; text-decoration: underline dotted var(--dsw-alias-link); text-underline-offset: 3px; }
+button.dci-umsg-chip:focus-visible { box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); }
+.dci-umsg-chip[data-chip="slash"] { font-family: var(--dsw-font-markdown-code-font-family); }
+.dci-umsg-chipicon { width: 1em; height: 1em; margin-right: 4px; vertical-align: -0.125em; }
 `;
 
 export function injectStyles(): void {

@@ -2,6 +2,26 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.7] — 2026-10-29
+
+用户消息 Markdown 渲染：右侧自己发出的消息按 Markdown 排版（设置可关）；插件页图标接入；数据行三面板唯一展开修复。
+
+### 新增
+
+- **用户消息 Markdown 渲染**（`UserMessageMarkdown`）：`conversation.chat.node` 键控座 user/steering 官方渲染器的 priority 遮蔽条目——气泡文本经 marked（GFM+breaks）+ DOMPurify 渲染，Markdown 样式逐条移植官方 MarkdownText.module.css；官方气泡形态全保留：附件行（图片走官方 `renderMessageImages` 座位 prop、文件卡复刻）、@文件/@会话//技能 引用 chip（官方 `projectUserText` 三组正则逐值复刻，文件/技能可点开）、复制钮与时间戳、引用摘要行、悬停显形（复刻官方 `data-actions-reveal` + `data-chat-flow-kind` 选择器面）。设置 → Codinput「用户消息 Markdown 渲染」开关（默认开）；关闭即卸载条目还原官方纯文本，无需刷新页面。行内代码与围栏代码块统一用 `--dsw-alias-markdown-code-block` 底色（深浅主题同色、随肤跟随）。已知边界：KaTeX 数学式、Shiki 代码高亮、代码块语言横幅不做；发送瞬间的本地回显不经该槽位，落库后即换 Markdown 形态。
+- **插件页图标**：package.json 顶层 `"icon": "./assets/icon.png"`——宿主读取该字段（相对路径、限 SVG/PNG/JPEG/WebP、≤256 KiB）转 data URL，已装插件列表不再落默认图。
+
+### 修复
+
+- **数据行三面板唯一展开**：上下文小圈（`ContextGauge`）原先自持展开态，可与两枚统计胶囊同时展开（同时存在两个详情面板）；现并入 `StatsRow` 单一展开态，任意时刻至多一个面板。
+
+### 说明
+
+- **挂载面事实**：键控座每 key 低 priority 者胜，宿主动态包守卫对插件 register 强制分配唯一负秩——注册即遮蔽、卸载即还座官方（与 `composer.bar` 接管同机制）。
+- **已实测**（真实 web 宿主 `0.2.0-rc.2`，本地 link 安装本仓库构建产物，Chromium 自动化探针）：Markdown 消息渲染语义正确（ARIA 树 paragraph/strong/code/list、截图目检排版）、设置开关不刷新页面即时切换形态、整页重载后持久消息保持 Markdown、复制/时间戳/引用 chip 行为正常、`__dshCodinputErrs` 为空；插件卡图标与 `assets/icon.png` 逐字节一致；轮步/用量/上下文三面板互斥展开（开新关旧、再点收起）实测通过。
+
+[0.3.7]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.6...v0.3.7
+
 ## [0.3.6] — 2026-10-28
 
 模型座让位（issue #4）：`conversation.input.model` 单值座上的第三方遮蔽者恢复显示；出厂 ModelSelect 不镜像，继续由自绘模型芯片代表。
