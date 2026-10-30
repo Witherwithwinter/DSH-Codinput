@@ -1,7 +1,7 @@
 {
   "name": "dsh-codinput",
-  "version": "0.3.7",
-  "description": "DSH WebUI 插件：把聊天输入框变成代码编辑器一样的输入风格（CodeMirror 6 接管 conversation.composer.bar）。",
+  "version": "0.3.8",
+  "description": "DSH 插件：把聊天输入框变成代码编辑器一样的输入风格（CodeMirror 6 接管 conversation.composer.bar），web 与桌面端通用。",
   "license": "MIT",
   "author": "Witherwithwinter",
   "icon": "./assets/icon.png",

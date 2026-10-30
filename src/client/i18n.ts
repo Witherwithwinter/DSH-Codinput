@@ -100,6 +100,7 @@ const ZH: Dict = {
   'umsg.clock.md': '{m}月{d}日',
   'umsg.clock.ymd': '{y}年{m}月{d}日',
   'umsg.extraBlock': '额外内容块',
+  'umsg.image': '图片',
   'set.lineNumbers': '显示行号',
   'set.lineNumbersDesc': '当前行与行号高亮常开',
   'set.font': '编辑器字体',
@@ -212,6 +213,7 @@ const EN: Dict = {
   'umsg.clock.md': '{m}/{d}',
   'umsg.clock.ymd': '{y}/{m}/{d}',
   'umsg.extraBlock': 'Extra content block',
+  'umsg.image': 'Image',
   'set.lineNumbers': 'Show line numbers',
   'set.lineNumbersDesc': 'The current line and its gutter number stay highlighted',
   'set.font': 'Editor font',
@@ -307,16 +309,18 @@ export function installI18n(locale: unknown): void {
  * 的翻译函数；宿主 face 未就绪或 bind 失败返回 null。结果按 ns 缓存。
  */
 export function bindForeign(ns: string): ((key: string, params?: TranslateParams) => string) | null {
-  if (!foreignBinds.has(ns)) {
-    let bound: ((key: string, params?: TranslateParams) => string) | null = null;
-    try {
-      bound = hostFace?.bind?.(ns) ?? null;
-    } catch {
-      bound = null;
-    }
-    foreignBinds.set(ns, bound);
+  const cached = foreignBinds.get(ns);
+  if (cached) return cached;
+  // 只缓存成功的绑定：宿主 locale 服务可能晚于首次调用就绪，null 缓存会让
+  // 之后所有文案永远拿不到官方词典。
+  let bound: ((key: string, params?: TranslateParams) => string) | null = null;
+  try {
+    bound = hostFace?.bind?.(ns) ?? null;
+  } catch {
+    bound = null;
   }
-  return foreignBinds.get(ns) ?? null;
+  if (bound) foreignBinds.set(ns, bound);
+  return bound;
 }
 
 export function subscribeI18n(fn: () => void): () => void {

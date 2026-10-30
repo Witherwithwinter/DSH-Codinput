@@ -43,7 +43,9 @@
 - **模型与权限**：模型与思考强度读官方共享目录（与 `/model` 同一状态源）；权限为官方三预设，含完全权限的风险确认模态。
 - **附件**：slash「添加 · 文件」、**粘贴图片**、**拖文件进卡片**三条路径；点图片缩略图弹**原图预览**（官方 ImageLightbox 同构）；上传中/失败有状态芯片，失败可整卡重试。
 - **语音输入同步（官方桌面版）**：官方桌面版的输入框带语音按钮时，Codinput 在一模一样的位置渲染**一模一样的按钮**——直接渲染官方语音组件本体（麦克风钮、录音波形、转写、未就绪引导与文案全部是官方代码）；原生没有语音按钮的宿主（web 端各版本）同样不渲染。
-- **性能与用量**：复刻官方 stats dock——轮次/步数 · tok/s、累计 tok · 缓存命中、上下文占用小圈，取数与格式化逐值同官方，均可点开详情面板；三形态都有。
+- **性能与用量**：复刻官方 stats dock——轮次/步数 · tok/s、累计 tok · 缓存命中、上下文占用小圈，取数与格式化逐值同官方，均可点开详情面板；三形态都有。三枚详情面板（会话统计 / Token 用量 / 上下文分段）经 portal 定位、滚动与尺寸变化跟随，Escape 与点外关闭，任意时刻至多一个展开。
+- **用户消息 Markdown（0.3.7）**：右侧自己发出的消息按 Markdown 排版（GFM + breaks，marked + DOMPurify 净化），保留官方气泡形态——附件行、@文件/@会话//技能 引用 chip（可点开）、复制钮与时间戳、引用摘要、悬停显形；设置 → Codinput「用户消息 Markdown 渲染」开关默认开，关闭即还原官方纯文本、无需刷新页面。
+- **插件页图标（0.3.7）**：包内 `assets/icon.png` 经 `package.json` 顶层 `icon` 字段接入宿主插件列表（manifest 相对路径、限 SVG/PNG/JPEG/WebP、≤256 KiB），已装插件不再落默认图。
 - **设置**：设置 → Codinput——启用接管、行号、字体、发送/换行快捷键**任意组合录制**、默认视图；未启用时**打开右侧栏的 Codinput 标签即直接启用**。
 
 ## 安装
@@ -89,7 +91,7 @@ dsh plugin --profile web add link:/abs/path/to/DSH-Codinput
 ```jsonc
 {
   "dependencies": {
-    "dsh-codinput": "^0.3.0"          // 本地开发用 "link:/abs/path/to/DSH-Codinput"
+    "dsh-codinput": "^0.3.8"          // 本地开发用 "link:/abs/path/to/DSH-Codinput"
   },
   "dsh": {
     "profile": {
@@ -108,17 +110,18 @@ dsh plugin --profile web add link:/abs/path/to/DSH-Codinput
 
 ## 兼容性
 
-宿主通过 npm 发的是 **rc** 版本（`latest` 是当前稳定 rc，`next` 是下个 rc，`alpha` 是更超前的通道），所以普通用户装到的就是 rc。
+宿主通过 npm 发的是 **rc** 版本：`latest` 是当前稳定 rc、`next` 是下个 rc、`alpha` 更超前（2026-10-30 实测 `latest` / `next` 同指 `0.2.1-rc.5`，`alpha` 为 `0.2.2-alpha.2`），所以普通用户装到的就是 rc。
 
 | 宿主版本 | 状态 |
 | --- | --- |
-| 桌面版（Electron，`0.2.0-rc.2`） | ✅ 实机实测通过（官方语音输入按钮同步——授权 → 录音 → 转写端到端验证；语音插件缺席或关闭时按钮自动隐藏） |
-| `0.1.7-rc.2` | ✅ 实机实测通过（`next` 通道当前版本；候选菜单亚克力、上下文小圈挪位、dock 行布局即为此版对齐） |
+| 桌面版（Electron，`0.2.1-rc.3`） | ✅ 静态对齐（0.3.8 从该版 `app.asar` 取出官方 CSS Modules 与主题 token 逐值核对：Switch 规则、stats 面板 / ContextMeter 面板的 portal+fixed 与背景/圆角、`--dsh-frame-top-clearance` 均一致；macOS 的毛玻璃/不透明度差异未实机目检）。0.3.2 记录的 `0.2.1-rc.2` 实机实测仍有效（官方语音输入按钮同步——授权 → 录音 → 转写端到端验证；语音插件缺席或关闭时按钮自动隐藏） |
+| web `0.2.0-rc.2` | ✅ 实机实测通过（本机当前 web 宿主；0.3.5–0.3.7 的座位镜像、模型座让位、用户消息 Markdown 与三面板互斥均在此版本以 Chromium 自动化探针实测；0.3.8 的 portal 面板定位/Escape/点外关闭与 Markdown 安全硬化另在隔离宿主以无头 Edge 探针复核，见 CHANGELOG） |
+| `0.1.7-rc.2` | ✅ 实机实测通过（候选菜单亚克力、上下文小圈挪位、dock 行布局即为此版对齐） |
 | `0.1.5-rc.2` | ✅ 实机实测通过 |
 | `0.1.6-alpha.2` | ✅ 开发基线，全部功能端到端实测通过 |
-| 其它（含 `latest` 现指向的 `0.1.5-rc.3`） | 未实测；旧宿主无 rc.2 新 token，回退链自动保持各版官方原形态 |
+| 其它（含现网 `latest` / `next` = `0.2.1-rc.5`） | 未实测；旧宿主无 rc.2 新 token，回退链自动保持各版官方原形态 |
 
-对 `0.1.7-rc.2` 除实机验证外，还从该版本的客户端包（`dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation` / `dsh-client-ui-chat`）逐值提取了候选菜单、上下文小圈与 stats dock 的官方 CSS 核对。插件依赖的契约按版本核对过：用到的 3 个槽位（`conversation.composer.bar`、`sidebar.right.pane.tab`、`settings.section`）、`sidebarRight` / `sidebarRightTabs` / `locale` 服务与 `openTabIn`、侧栏展开规划（dockkit `planSetExpanded`）、文件拾取与 tab 关闭契约（`shell.bindFilePicker` / `tab.actions.close`）、以及复刻所依据的官方原语（`fileSizeText` / `fileExtension` 与附件 glyph 路径，逐字一致）。插件对宿主内部结构的依赖较多（槽位遮蔽、`useTabInfo`、`sidebarRight`、`--dsw-*` 令牌），代码里处处用 `typeof` 守卫 + `try/catch` 降级，但宿主大版本升级仍可能失效。**升级宿主后请按 [TESTING.md](./TESTING.md) 走一遍冒烟清单。**
+对 `0.1.7-rc.2` / web `0.2.0-rc.2`，除实机验证外，还从对应版本的客户端包（`dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation` / `dsh-client-ui-chat`）逐值提取了候选菜单、上下文小圈、stats dock 与用户消息气泡的官方 CSS 核对；桌面 `0.2.1-rc.3` 另从该版 `app.asar` 取出官方 CSS Modules 与主题 token 做静态逐值核对。插件依赖的契约按版本核对过：用到的槽位（`conversation.composer.bar`、`sidebar.right.pane.tab`、`settings.section`，以及 `conversation.chat.node` 与 `conversation.input.*` 子座）、`sidebarRight` / `sidebarRightTabs` / `locale` 服务与 `openTabIn`、侧栏展开规划（dockkit `planSetExpanded`）、文件拾取与 tab 关闭契约（`shell.bindFilePicker` / `tab.actions.close`）、以及复刻所依据的官方原语（`fileSizeText` / `fileExtension` 与附件 glyph 路径，逐字一致）。插件对宿主内部结构的依赖较多（槽位遮蔽、`useTabInfo`、`sidebarRight`、`--dsw-*` 令牌），代码里处处用 `typeof` 守卫 + `try/catch` 降级，但宿主大版本升级仍可能失效。**升级宿主后请按 [TESTING.md](./TESTING.md) 走一遍冒烟清单。**
 
 ### 主题 / 皮肤插件兼容（皮肤作者必读）
 

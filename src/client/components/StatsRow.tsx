@@ -1,9 +1,14 @@
 /** 数据行（卡片下方）：官方 composer dock 复刻——两枚胶囊（仪表盘「轮/步 · tok/s」、
  * 数据库「累计 tok · 缓存命中」）+ 上下文小圈（0.1.7-rc.2 起官方把它挪进本行，圈+百分比
- * 药丸），点击弹出官方同构详情面板（会话统计 / Token 用量 / 上下文分段），锚点上方弹出、
- * 点外关闭。 */
+ * 药丸），点击弹出官方同构详情面板（会话统计 / Token 用量 / 上下文分段）。面板照官方
+ * ContextMeter / useStatDialog 机制：portal 到 body + fixed，经 useAnchoredPanel（官方
+ * useAnchoredPosition 插件侧移植）按锚点视口矩形定位（side top / align start、gap 8、
+ * 视口 margin 12 夹取，滚动（捕获）/resize/面板尺寸变化重算）；每枚面板一个
+ * useStatDialogSeat（锚点/面板 ref + 定位 + 点外与 Escape 关闭），三枚共用 StatsRow 的
+ * 单一展开态互斥（与官方 chat StatsPills 的 openPill 同语义）。 */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSessionStats, formatTokens, formatTokensPerSecond, formatCacheHitPercent, formatDuration, type SessionStats } from '../stats';
 import type { UseProjection } from '../host-types';
 import { t } from '../i18n';
@@ -37,16 +42,114 @@ export function DatabaseIcon({ size = 14 }: { size?: number }): JSX.Element {
   );
 }
 
-/** 官方详情面板（bRhRbq：标题行 + 发丝线 + dt/dd 栅格）。 */
+/** 官方 useAnchoredPosition 的插件侧移植（primitives 不可 import）：fixed 面板按锚点
+ * 视口矩形定位（side top / align start：面板左缘对齐锚点左缘、底距锚点顶 gap），
+ * 两侧按 margin 夹取（顶边用官方 overlayTopMargin：帧顶 clearance+20 与 margin 取大），
+ * 滚动（捕获相位）/resize/面板自身尺寸变化重算。返回 null = 尚未量得（面板隐藏）。 */
+function useAnchoredPanel(
+  open: boolean,
+  anchorRef: React.RefObject<HTMLElement | null>,
+  panelRef: React.RefObject<HTMLElement | null>,
+  gap: number,
+  margin: number,
+): { left: number; top: number } | null {
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!open) {
+      setPosition(null);
+      return;
+    }
+    // 官方 overlayTopMargin：帧顶 clearance（data-fullscreen 归零）+20，与 margin 取大。
+    const topMargin = (): number => {
+      const clearance = Number.parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue('--dsh-frame-top-clearance'),
+      );
+      if (Number.isNaN(clearance)) return margin;
+      return Math.max(margin, (document.documentElement.hasAttribute('data-fullscreen') ? 0 : clearance) + 20);
+    };
+    // 与官方 place() 同构：rect 存在就落位，宽/高为 0 时只跳过对应轴的夹取。
+    const place = (): void => {
+      const rect = anchorRef.current?.getBoundingClientRect();
+      if (rect === undefined) return;
+      const panel = panelRef.current;
+      const width = panel?.offsetWidth ?? 0;
+      const height = panel?.offsetHeight ?? 0;
+      let left = rect.left;
+      let top = rect.top - gap - height;
+      if (width > 0) left = Math.min(Math.max(left, margin), window.innerWidth - width - margin);
+      if (height > 0) top = Math.min(Math.max(top, topMargin()), window.innerHeight - height - margin);
+      setPosition((prev) => (prev && prev.left === left && prev.top === top ? prev : { left, top }));
+    };
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    const panel = panelRef.current;
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && panel !== null) {
+      observer = new ResizeObserver(place);
+      observer.observe(panel);
+    }
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [open, anchorRef, panelRef, gap, margin]);
+  return position;
+}
+
+/** 官方 useStatDialog 的插件侧等价 seat（primitives/chat 的 useStatDialog 不可 import）：
+ * 每枚面板自持锚点/面板 ref + 定位，并在打开期间挂「点外关闭 + Escape 关闭」（官方语义：
+ * 锚点或 portal 面板内的 pointerdown 算「内」；Escape 走 document 冒泡）。父级用受控
+ * open 维持三枚面板互斥，与官方 chat StatsPills 的 openPill 同构。 */
+interface StatDialogSeat {
+  rootRef: React.MutableRefObject<HTMLSpanElement | null>;
+  panelRef: React.MutableRefObject<HTMLDivElement | null>;
+  position: { left: number; top: number } | null;
+}
+
+function useStatDialogSeat(open: boolean, onClose: () => void): StatDialogSeat {
+  const rootRef = useRef<HTMLSpanElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const position = useAnchoredPanel(open, rootRef, panelRef, 8, 12);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: PointerEvent): void => {
+      if (!(event.target instanceof Node)) return;
+      if (rootRef.current?.contains(event.target) === true) return;
+      if (panelRef.current?.contains(event.target) === true) return;
+      onClose();
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open, onClose]);
+  return { rootRef, panelRef, position };
+}
+
+/** 面板定位样式（未量得前官方同款：隐藏在原点）。 */
+function panelStyle(position: { left: number; top: number } | null): React.CSSProperties {
+  return position ?? { visibility: 'hidden', left: 0, top: 0 };
+}
+
+/** 官方详情面板（bRhRbq：标题行 + 发丝线 + dt/dd 栅格）。portal 到 body，fixed 定位。 */
 function StatPanel(props: {
   label: string;
   icon: JSX.Element;
   titleValue?: string;
   rows: readonly [string, string][];
+  panelRef: React.MutableRefObject<HTMLDivElement | null>;
+  position: { left: number; top: number } | null;
 }): JSX.Element {
-  const { label, icon, titleValue, rows } = props;
-  return (
-    <div className="dci-stat-panel" role="dialog" aria-label={label}>
+  const { label, icon, titleValue, rows, panelRef, position } = props;
+  return createPortal(
+    <div className="dci-stat-panel" role="dialog" aria-label={label} ref={panelRef} style={panelStyle(position)}>
       <div className="dci-stat-panelTitle">
         <span className="dci-stat-panelLabel">
           {icon}
@@ -63,7 +166,8 @@ function StatPanel(props: {
           </div>
         ))}
       </dl>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -76,8 +180,9 @@ function exactCount(value: number | undefined): string {
 }
 
 /** 官方 TimePill：轮/步 + · tok/s（decodeMs>0 才出），面板 = 模型/工具用时、TTFT 均值、TPS。 */
-function Pill(props: { stats: SessionStats; open: boolean; onToggle(): void }): JSX.Element {
-  const { stats, open, onToggle } = props;
+function Pill(props: { stats: SessionStats; open: boolean; onToggle(): void; onClose(): void }): JSX.Element {
+  const { stats, open, onToggle, onClose } = props;
+  const { rootRef, panelRef, position } = useStatDialogSeat(open, onClose);
   const roundsPart = t('stats.turns', { turns: stats.turns ?? 0, steps: stats.steps ?? 0 });
   const tps =
     (stats.decodeMs ?? 0) > 0 ? formatTokensPerSecond((stats.decodeTokens ?? 0) / ((stats.decodeMs ?? 1) / 1000)) : null;
@@ -97,7 +202,7 @@ function Pill(props: { stats: SessionStats; open: boolean; onToggle(): void }): 
   // 官方：无任何计时数据时胶囊不可点（无面板可看）。
   if (!hasTimings) {
     return (
-      <span className="dci-stat-anchor">
+      <span className="dci-stat-anchor" ref={rootRef}>
         <span className="dci-stat-pill">
           <GaugeIcon />
           {label}
@@ -106,7 +211,7 @@ function Pill(props: { stats: SessionStats; open: boolean; onToggle(): void }): 
     );
   }
   return (
-    <span className="dci-stat-anchor">
+    <span className="dci-stat-anchor" ref={rootRef}>
       <button
         type="button"
         className="dci-stat-pill"
@@ -122,6 +227,8 @@ function Pill(props: { stats: SessionStats; open: boolean; onToggle(): void }): 
         <StatPanel
           label={t("stats.session")}
           icon={<GaugeIcon />}
+          panelRef={panelRef}
+          position={position}
           rows={[
             [t('stats.modelTime'), (stats.llmMs ?? 0) > 0 ? formatDuration(stats.llmMs!) : '—'],
             [t('stats.toolTime'), (stats.toolMs ?? 0) > 0 ? formatDuration(stats.toolMs!) : '—'],
@@ -140,8 +247,9 @@ function Pill(props: { stats: SessionStats; open: boolean; onToggle(): void }): 
 }
 
 /** 官方 UsagePill：总量 · 缓存命中（缓存命中用官方百分比精度规则）。 */
-function TokenPill(props: { stats: SessionStats; open: boolean; onToggle(): void }): JSX.Element | null {
-  const { stats, open, onToggle } = props;
+function TokenPill(props: { stats: SessionStats; open: boolean; onToggle(): void; onClose(): void }): JSX.Element | null {
+  const { stats, open, onToggle, onClose } = props;
+  const { rootRef, panelRef, position } = useStatDialogSeat(open, onClose);
   if (stats.totalTokens === undefined) return null;
   const total = stats.totalTokens;
   const cacheHitText =
@@ -151,7 +259,7 @@ function TokenPill(props: { stats: SessionStats; open: boolean; onToggle(): void
       (stats.cacheReadTokens ?? 0) + (stats.cacheWriteTokens ?? 0) + (stats.uncachedInputTokens ?? 0),
     );
   return (
-    <span className="dci-stat-anchor">
+    <span className="dci-stat-anchor" ref={rootRef}>
       <button
         type="button"
         className="dci-stat-pill"
@@ -180,6 +288,8 @@ function TokenPill(props: { stats: SessionStats; open: boolean; onToggle(): void
           label={t("stats.usage")}
           icon={<DatabaseIcon />}
           titleValue={exactCount(total)}
+          panelRef={panelRef}
+          position={position}
           rows={[
             [t('stats.cacheHitLabel'), cacheHitText !== null ? `${cacheHitText}%` : '—'],
             [t('stats.uncached'), exactCount(stats.uncachedInputTokens)],
@@ -198,40 +308,40 @@ function TokenPill(props: { stats: SessionStats; open: boolean; onToggle(): void
 export function StatsRow(props: StatsRowProps): JSX.Element | null {
   const { useProjection, sessionId, chatNodes } = props;
   // 唯一展开：三枚（轮步/用量/上下文小圈）共用一个 open 态——任意一枚展开
-  // 即收起其余（官方语义：详情面板同时只存在一个）。
+  // 即收起其余（官方 chat StatsPills 的 openPill 同语义：详情面板同时只存在一个）。
   const [open, setOpen] = useState<'rounds' | 'tokens' | 'gauge' | null>(null);
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  const close = useCallback(() => setOpen(null), []);
+  const toggle = useCallback((key: 'rounds' | 'tokens' | 'gauge') => {
+    setOpen((current) => (current === key ? null : key));
+  }, []);
   const stats = useSessionStats(useProjection, sessionId, chatNodes);
-
-  // 点外面关闭（面板内/胶囊上不关）。
-  useEffect(() => {
-    if (open === null) return;
-    const onDown = (event: PointerEvent): void => {
-      if (rootRef.current && event.target instanceof Node && rootRef.current.contains(event.target)) return;
-      setOpen(null);
-    };
-    window.addEventListener('pointerdown', onDown, true);
-    return () => window.removeEventListener('pointerdown', onDown, true);
-  }, [open]);
 
   // 官方 rc.2：上下文小圈独立于 stats 胶囊渲染（无 stats 也要出圈）。
   const pressure = useProjection
     ? (useProjection('contextPressure') as PressureSnapshot | undefined)
     : undefined;
   const hasGauge = pressure !== undefined && !!pressure.contextWindow;
+  // 面板打开期间其数据源消失（切换会话 / 投影短暂缺席）时自动收起，避免恢复后「自己重开」。
+  useEffect(() => {
+    if (open === null) return;
+    const valid = open === 'gauge' ? hasGauge : stats !== null && stats !== undefined;
+    if (!valid) setOpen(null);
+  }, [open, hasGauge, stats]);
+
   if (!stats && !hasGauge) return null;
   return (
-    <div className="dci-stat-root" data-composer-stats="codinput" ref={rootRef}>
+    <div className="dci-stat-root" data-composer-stats="codinput">
       {stats ? (
         <>
-          <Pill stats={stats} open={open === 'rounds'} onToggle={() => setOpen(open === 'rounds' ? null : 'rounds')} />
-          <TokenPill stats={stats} open={open === 'tokens'} onToggle={() => setOpen(open === 'tokens' ? null : 'tokens')} />
+          <Pill stats={stats} open={open === 'rounds'} onToggle={() => toggle('rounds')} onClose={close} />
+          <TokenPill stats={stats} open={open === 'tokens'} onToggle={() => toggle('tokens')} onClose={close} />
         </>
       ) : null}
       <ContextGauge
         useProjection={useProjection}
         open={open === 'gauge'}
-        onToggle={() => setOpen(open === 'gauge' ? null : 'gauge')}
+        onToggle={() => toggle('gauge')}
+        onClose={close}
       />
     </div>
   );
@@ -259,14 +369,16 @@ function shortTokens(n: number): string {
 
 /** 上下文占用小圈（官方 JObwrW 复刻）：双环仪表 + 百分比，点击展开分段面板。
  * 0.1.7-rc.2 起官方渲染在 dock 行 stats 胶囊之后（原先在工具行 trailing）。
- * 展开态由 StatsRow 持有（三枚详情面板唯一展开）。 */
+ * 展开态由 StatsRow 持有（三枚详情面板唯一展开）；面板 portal 到 body +
+ * useAnchoredPanel 定位（官方 ContextMeter：side top / align start / gap 8 / margin 12）。 */
 export function ContextGauge(props: {
   useProjection: UseProjection | undefined;
   open: boolean;
   onToggle(): void;
+  onClose(): void;
 }): JSX.Element | null {
-  const { useProjection, open, onToggle } = props;
-  const rootRef = useRef<HTMLSpanElement | null>(null);
+  const { useProjection, open, onToggle, onClose } = props;
+  const { rootRef, panelRef, position } = useStatDialogSeat(open, onClose);
   const pressure = useProjection
     ? (useProjection('contextPressure') as PressureSnapshot | undefined)
     : undefined;
@@ -307,49 +419,58 @@ export function ContextGauge(props: {
         </svg>
         <span>{Math.round(pct)}%</span>
       </button>
-      {open ? (
-        <div className="dci-gauge-panel" role="dialog" aria-label={t("tool.contextTitle")}>
-          <div className="dci-gauge-header">
-            <span className="dci-gauge-headline">{t("tool.contextTitle")}</span>
-            <span className="dci-gauge-percent">{Math.round(pct)}%</span>
-            <span className="dci-gauge-figures">
-              ~{shortTokens(usedTokens)} / {shortTokens(windowTokens)}
-            </span>
-          </div>
-          <div className="dci-gauge-bar">
-            {segments.map(([cls, tokens]) => (
-              <div
-                key={cls}
-                className={`dci-gauge-segment ${cls}`}
-                style={{ width: `${(tokens / windowTokens) * 100}%` }}
-              />
-            ))}
-          </div>
-          <dl className="dci-gauge-rows">
-            <div className="dci-gauge-row">
-              <dt>
-                <span className={`dci-gauge-swatch dci-gauge-colorSystem`} aria-hidden="true" />
-                {t("stats.prompt")}
-              </dt>
-              <dd>~{shortTokens(breakdown?.systemTokens ?? 0)}</dd>
-            </div>
-            <div className="dci-gauge-row">
-              <dt>
-                <span className={`dci-gauge-swatch dci-gauge-colorTools`} aria-hidden="true" />
-                {t("stats.tools")}
-              </dt>
-              <dd>~{shortTokens(breakdown?.toolsTokens ?? 0)}</dd>
-            </div>
-            <div className="dci-gauge-row">
-              <dt>
-                <span className={`dci-gauge-swatch dci-gauge-colorMessages`} aria-hidden="true" />
-                {t("stats.messages")}
-              </dt>
-              <dd>~{shortTokens(breakdown?.messageTokens ?? 0)}</dd>
-            </div>
-          </dl>
-        </div>
-      ) : null}
+      {open
+        ? createPortal(
+            <div
+              className="dci-gauge-panel"
+              role="dialog"
+              aria-label={t("tool.contextTitle")}
+              ref={panelRef}
+              style={panelStyle(position)}
+            >
+              <div className="dci-gauge-header">
+                <span className="dci-gauge-headline">{t("tool.contextTitle")}</span>
+                <span className="dci-gauge-percent">{Math.round(pct)}%</span>
+                <span className="dci-gauge-figures">
+                  ~{shortTokens(usedTokens)} / {shortTokens(windowTokens)}
+                </span>
+              </div>
+              <div className="dci-gauge-bar">
+                {segments.map(([cls, tokens]) => (
+                  <div
+                    key={cls}
+                    className={`dci-gauge-segment ${cls}`}
+                    style={{ width: `${(tokens / windowTokens) * 100}%` }}
+                  />
+                ))}
+              </div>
+              <dl className="dci-gauge-rows">
+                <div className="dci-gauge-row">
+                  <dt>
+                    <span className={`dci-gauge-swatch dci-gauge-colorSystem`} aria-hidden="true" />
+                    {t("stats.prompt")}
+                  </dt>
+                  <dd>~{shortTokens(breakdown?.systemTokens ?? 0)}</dd>
+                </div>
+                <div className="dci-gauge-row">
+                  <dt>
+                    <span className={`dci-gauge-swatch dci-gauge-colorTools`} aria-hidden="true" />
+                    {t("stats.tools")}
+                  </dt>
+                  <dd>~{shortTokens(breakdown?.toolsTokens ?? 0)}</dd>
+                </div>
+                <div className="dci-gauge-row">
+                  <dt>
+                    <span className={`dci-gauge-swatch dci-gauge-colorMessages`} aria-hidden="true" />
+                    {t("stats.messages")}
+                  </dt>
+                  <dd>~{shortTokens(breakdown?.messageTokens ?? 0)}</dd>
+                </div>
+              </dl>
+            </div>,
+            document.body,
+          )
+        : null}
     </span>
   );
 }

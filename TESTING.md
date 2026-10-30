@@ -13,7 +13,7 @@
 ## 0. 载入与健康
 
 - [ ] 页面刷新后无报错：`window.__dshCodinputErrs.length === 0`
-- [ ] `window.__dshCodinputShell` 含 `apply: 'done'`、`bar: 'registered'`、`settings: 'registered'`、`sidebar.body: 'registered'`
+- [ ] `window.__dshCodinputShell` 含 `apply: 'done'`、`bar: 'registered'`、`settings: 'registered'`、`sidebar.body: 'registered'`、`md.user: 'mounted'`、`md.steering: 'mounted'`（用户消息 Markdown 开关关闭时为 `unmounted`）
 - [ ] `__dshCodinputShell` 里没有 `failed` 项（槽位废黜会记 `slot.entry` 错误）
 
 ## 1. 三态单实例（核心不变式）
@@ -65,10 +65,14 @@
 - [ ] **停止形态**：流式回复期间主按钮变停止（停止方块 glyph、aria「停止」，含 blocked 审批等待），点击即中断（会话尾部出官方「已停止」状态）；回复结束/中断后恢复发送；运行中草稿非空时按钮保持发送（提交走 steer/queue）
 - [ ] 数据行与官方逐值一致：`{turns} 轮 {steps} 步 · {tps} tok/s`（tok/s = decodeTokens÷decodeMs，历史会话也有值）+ `{total} · 缓存命中 {pct}%` + 小圈；统计面板四行（模型用时/工具调用用时/TTFT 均值/TPS）与用量面板（缓存命中/未缓存输入/缓存读取/缓存写入(≠0)/输出）同官方语义
 - [ ] 上下文小圈：百分比与分段面板数据合理
+- [ ] **三枚详情面板互斥**：会话统计 / Token 用量 / 上下文分段任意时刻至多一个展开；开新面板关旧面板，再点同一枚收起
+- [ ] **面板 portal 定位**：戳开面板后滚动页面、改窗口尺寸 → 面板跟随锚点、夹在视口内（margin 12 / 帧顶 clearance），不被输入卡片或 overflow 容器裁剪；点面板内部不关闭，Escape / 点外关闭；面板背景走 `--dsw-specific-menu`（旧宿主回退 `--dsw-menu-surface-fill`）、圆角 `--dsw-radius-lg`
 
 ## 5. 设置
 
 - [ ] 设置 → Codinput：启用接管（关闭后官方输入框原样恢复、草稿不丢）、行号、字体、发送/换行快捷键录制（任意组合、冲突拒绝）
+- [ ] **用户消息 Markdown 开关**：设置 → Codinput 打开/关闭「用户消息 Markdown 渲染」→ 已落库的用户消息即时在 Markdown / 官方纯文本间切换（不刷新页面），关闭状态刷新后保持
+- [ ] **设置页开关样式**：36×20、999px 圆角；ON 轨道颜色随宿主 `--dsw-alias-brand-primary`（浅/深主题各自跟随）、滑块走 `--dsw-alias-switch-thumb`；disabled 半透明、键盘 focus-visible 出官方 focus ring
 - [ ] 偏好刷新后保持（`localStorage['dsh-codinput.prefs.v2']`）
 
 ## 6. 回归提示
@@ -81,19 +85,19 @@
 宿主在 npm 上有三个通道，**普通用户拿到的不是 alpha**：
 
 ```bash
-npm view @deepseek-ai/dsh dist-tags   # latest = 最新 rc；next = 下一个 rc；alpha = 更超前
+npm view @deepseek-ai/dsh dist-tags   # latest / next = 当前 rc（2026-10-30 同指 0.2.1-rc.5）；alpha = 更超前
 dsh --version                         # 你本机实际跑的那个
 ```
 
-`latest` 通道发的是 rc，所以「装了 dsh 插件却跑不起来」的报障大概率发生在 rc 上。开发机可以待在 alpha，但**对外声称的兼容范围应当以 rc 为准**，至少在 rc 上跑一遍第 1、3 节。
+`latest` 通道发的是 rc（当前 `latest` / `next` 同指 `0.2.1-rc.5`），所以「装了 dsh 插件却跑不起来」的报障大概率发生在 rc 上。开发机可以待在 alpha，但**对外声称的兼容范围应当以 rc 为准**，至少在 rc 上跑一遍第 1、3 节。
 
-> **已验记录**：`0.1.5-rc.2` 于 2026-09-23 在另一台机器上实机跑通（README 兼容表据此标为实测通过）。换宿主版本后请重新走一遍下面这节。
+> **已验记录**：web 宿主 `0.2.0-rc.2` 为当前实机验证基线（0.3.5–0.3.7 均在本机 link 安装下以 Chromium 自动化探针实测，见 CHANGELOG）；桌面版 `0.2.1-rc.2` 的语音同步于 0.3.2 实测通过；现网 `latest` / `next` = `0.2.1-rc.5`（2026-10-30 实测）。换宿主版本后请重新走一遍下面这节。
 
 不动现有安装的验证方式（独立 prefix + 独立 `DSH_HOME`，不碰你在用的 profile 与会话）：
 
 ```bash
 # 1) 把另一个通道装到临时 prefix，不覆盖全局安装
-npm i --prefix /tmp/dsh-rc @deepseek-ai/dsh@0.1.5-rc.2
+npm i --prefix /tmp/dsh-rc @deepseek-ai/dsh@0.2.1-rc.5
 
 # 2) 复制一份独立 home（含带 codinput 的 profile）
 cp -r ~/.dsh /tmp/dsh-rc-home
@@ -103,4 +107,14 @@ DSH_HOME=/tmp/dsh-rc-home /tmp/dsh-rc/node_modules/.bin/dsh web --port 3081 --no
 ```
 
 重点复验：第 1 节**三态与侧栏承载**（`conversation.composer.bar` 遮蔽、`sidebar.right.pane.tab` 承载判定、收起后的唤回小球）与第 3 节**触发管线与菜单**——宿主契约变化最先断在这两处，其余功能是自绘的，跨通道风险低。
+
+## 8. 0.3.7 / 0.3.8 新功能与回归
+
+- [ ] **用户消息 Markdown**：发送一条含 `**加粗**`、行内代码、围栏代码块、列表的消息 → 落库后右侧气泡按 Markdown 渲染，ARIA 语义（paragraph/strong/code/list）正确；@文件 / @会话 / //技能 引用 chip 显示并可点开；复制钮与时间戳、引用摘要行、悬停显形正常；`__dshCodinputErrs` 为空。设置开关即时切换（见第 5 节）。切换宿主语言后复制钮/引用摘要文案即时更新（不刷新）；连续复制后卸载/切形态无残留定时器报错。
+- [ ] **带图用户消息（0.3.7 P0 回归点）**：发一条带图片附件的消息（或打开历史带图消息）→ 图片经官方 `renderMessageImages` 正常显示、无 `data-slot-error` 崩溃面；此后继续发送的用户/插队消息仍是 Markdown 形态（条目未被废黜）；`__dshCodinputErrs` 为空。
+- [ ] **Markdown 安全基线**：用户消息里输入 `<style>body{display:none}</style>`、`<form><input></form>`、`[x](javascript:alert(1))` → 气泡只显示纯文本/安全元素，页面样式不被改写、无表单/控件、非 http(s)/mailto 链接不可点；`![x](data:image/png;base64,...)` 不渲染为图片（降级为 alt 文本）。
+- [ ] **插件页图标**：宿主插件列表/已装插件卡显示 `assets/icon.png`（与文件逐字节一致），不再落默认图；包的 `package.json` 顶层 `icon` 为相对路径。
+- [ ] **数据行三面板互斥 + portal 定位**：见第 4 节两条新增条目（互斥、滚动跟随 / resize 夹取 / Escape 与点外关闭 / 不被输入卡片裁剪）。
+- [ ] **桌面端开关样式**：桌面版（当前 `0.2.1-rc.3`）设置页开关与官方 primitives Switch 同款（ON 轨道随宿主品牌色，深色主题下为近白）——本项为 0.3.8 静态对齐项；桌面实机回归前按「待验」记录。
+- [ ] **样式热更新（patchReload live）**：替换 `lib/client.js` 后强刷（或宿主原地更新插件）→ 新增的 `dci-` 类样式生效，不出现「旧 `<style>` 仍在、新类永不注入」；无需清缓存或重装插件。
 

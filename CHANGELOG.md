@@ -2,6 +2,33 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.8] — 2026-10-30
+
+数据行三枚详情面板改为官方同构的 portal + fixed 锚定定位（滚动/尺寸变化跟随、Escape 与点外关闭、三面板单一展开）；设置页开关样式与面板背景/圆角 token 对齐官方；修复 patchReload live 热更新后新增样式类不注入；修复 0.3.7 带图用户消息渲染崩溃（P0）并收紧用户消息 Markdown 的安全基线（P1）。
+
+### 变更
+
+- **数据行详情面板 portal 化**（`StatsRow`）：会话统计 / Token 用量 / 上下文分段三枚面板改为 `createPortal(document.body)` + `position: fixed`，插件侧移植官方 `useAnchoredPosition` / `useStatDialog` 语义——side top / align start、gap 8、视口 margin 12、帧顶 clearance（`--dsh-frame-top-clearance`，`data-fullscreen` 归零）、滚动（捕获相位）/窗口 resize/面板尺寸变化重算并夹进视口。三枚面板各有独立 seat；新增 Escape 与点外关闭（点面板内部不关），并保持三枚单一展开态互斥。
+- **设置页开关对齐官方 primitives**：`Switch.module.css` 逐值对齐——`999px` 圆角 + `corner-shape: round`、`disabled` 态、`focus-visible` 走官方 focus ring token、滑块走 `--dsw-alias-switch-thumb`；ON 轨道用 `--dsw-alias-brand-primary`（随宿主主题，与官方 Switch 同款）。
+- **面板与数据行 token 对齐官方**：面板背景优先 `--dsw-specific-menu`、保留 `--dsw-menu-surface-fill` 旧宿主回退链；圆角改 `var(--dsw-radius-lg)`；数据行胶囊 expanded 态、上下文仪表条 `corner-shape`、trigger 字号 token 与官方对齐。
+- **npm 包描述**：`package.json` description 扩为「DSH 插件……web 与桌面端通用」。
+
+### 修复
+
+- **样式热更新失效**（`injectStyles`）：宿主 `patchReload: live` 原地更新插件后，旧 `<style id="dsh-codinput-styles">` 仍在、原实现「已存在即 return」导致新版新增类名（如 `.dci-umsg-*`）永不注入；现改为已存在时按内容原位刷新 `textContent`。
+- **带图用户消息渲染崩溃（0.3.7 发布回归，P0）**：`contentParts` 把 `ImageAttachmentRef` 裸传给官方 `renderMessageImages`，官方 `ImageGallery` 计算 React key 时读 `image.attachment.attachmentId` 抛错；宿主 `SlotErrorBoundary` 捕获后**废黜**该键控条目，该页此后所有用户/插队消息退回官方纯文本（静默失效）。现按官方形状包成 `{ attachment }`；并补图片降级卡——宿主缺 `renderMessageImages` 座位 prop 时不再静默丢图。
+- **用户消息 Markdown 安全基线收紧（P1）**：marked 透传的原始 HTML 经 DOMPurify 白名单收敛（禁 `style` / `form` / 控件 / 媒体 / 行内 style 等原始 HTML），链接与图片 URI 只放行 http(s)/mailto（非白名单链接拆成纯文本、破图降级为 alt 文本），与官方 `MarkdownText` 的 `sanitizeUrl` / `remoteImageUrl` 口径对齐；http(s) 链接统一新开页。
+- **用户消息 Markdown 细节**：补 `useT` 订阅（宿主语言切换后复制钮/引用摘要等文案即时更新）；复制成功态定时器在卸载时清理；文件夹 chip 与官方一致不可点；chip 点击实时读取最新 `openFile`/`openSkill`（晚到不再失效）；组件加 `memo`；0 字节文件卡显示 `0B`；`bindForeign` 不再缓存 null（宿主 locale 晚到仍能绑定）。
+
+### 说明
+
+- 本版发布材料确认范围：`npm run typecheck` 通过、两次发布构建字节一致（sha256 可复现）。
+- 已在隔离 web 宿主 `0.2.0-rc.2`（独立 `DSH_HOME` + 无头 Edge + `link:` 安装本仓库构建产物）实测：三枚面板均为 `body` 直接子节点、`position: fixed`，几何逐像素吻合（面板底距锚点顶 8px、左缘对齐锚点）；互斥、点外关闭、点面板内不关、Escape 关闭、窗口 resize 后跟随且不出视口均通过。用户消息 Markdown（strong/code/pre/list/link、@引用 chip、复制态）正常，XSS 探针（`<img onerror>`、`<script>`）被净化且未执行，`__dshCodinputErrs` 为空。未单独覆盖：滚动跟随、面板自身 ResizeObserver 分支、macOS 桌面实机目检。
+- 桌面 `0.2.1-rc.3` 取证：从该版 `app.asar` 提取官方 CSS Modules 与主题 token，逐值核对 Switch 规则、stats / ContextMeter 面板的 portal+fixed 与背景/圆角、`--dsh-frame-top-clearance`，与 0.3.8 实现一致；macOS 毛玻璃/不透明度差异未实机目检。
+- 0.3.7 已发布的三项功能（用户消息 Markdown、插件页图标、数据行三面板互斥）机制不变；本版修正其带图崩溃与安全基线，以及交互/样式细节。
+
+[0.3.8]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.7...v0.3.8
+
 ## [0.3.7] — 2026-10-29
 
 用户消息 Markdown 渲染：右侧自己发出的消息按 Markdown 排版（设置可关）；插件页图标接入；数据行三面板唯一展开修复。
@@ -59,19 +86,6 @@
 
 [0.3.5]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.4...v0.3.5
 
-## [0.3.3] — 2026-10-23
-
-主题/皮肤插件兼容：错误色与预览链接逐值对齐官方；README 增补皮肤作者指南。
-
-### 变更
-
-- **错误色回退值逐值对齐官方**：`.dci-error` 与完全权限确认警示图标的错误色回退值由 `#ff6b6b` 改为官方同款 `#d54941`（token 仍走 `--dsw-alias-state-error-primary`，仅无该令牌的宿主回退时可见差异）。
-- **预览链接走官方 alias-link token**：markdown 预览的链接色由写死 `#4c8dff` 改为 `var(--dsw-alias-link, #4c8dff)`，换肤下与官方 markdown 链接同进退。
-
-### 新增
-
-- **README 皮肤作者指南（中英）**：新增「主题 / 皮肤插件兼容」章节——覆写宿主 `--dsw-*` token 即全盘生效（含 token 定义在 body 层、覆写需写同层的注意点）；官方写死的值清单（发送钮图标前景白等，属预期不跟 token）；稳定的 `dci-` 前缀类名契约与注入顺序（皮肤后注入按常规 CSS 权重覆盖）。
-
 ## [0.3.4] — 2026-10-23
 
 第三方输入条目兼容（issue #1 之右座）：接管后 `conversation.input.right` 座条目恢复显示（已实测 dsh-prompt-enhancer 的 ✨/🎤）；模型/推理强度弹层恢复官方形态。
@@ -94,6 +108,19 @@
 - **右座覆盖面**：同座其他条目（如各 Qoder 渠道插件的积分/余额读数）按同一合成机制恢复显示——推断自各包源码的槽位注册（五家 Qoder 桥接包均注册于 right 座），未逐一实测。
 
 [0.3.4]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.3...v0.3.4
+
+## [0.3.3] — 2026-10-23
+
+主题/皮肤插件兼容：错误色与预览链接逐值对齐官方；README 增补皮肤作者指南。
+
+### 变更
+
+- **错误色回退值逐值对齐官方**：`.dci-error` 与完全权限确认警示图标的错误色回退值由 `#ff6b6b` 改为官方同款 `#d54941`（token 仍走 `--dsw-alias-state-error-primary`，仅无该令牌的宿主回退时可见差异）。
+- **预览链接走官方 alias-link token**：markdown 预览的链接色由写死 `#4c8dff` 改为 `var(--dsw-alias-link, #4c8dff)`，换肤下与官方 markdown 链接同进退。
+
+### 新增
+
+- **README 皮肤作者指南（中英）**：新增「主题 / 皮肤插件兼容」章节——覆写宿主 `--dsw-*` token 即全盘生效（含 token 定义在 body 层、覆写需写同层的注意点）；官方写死的值清单（发送钮图标前景白等，属预期不跟 token）；稳定的 `dci-` 前缀类名契约与注入顺序（皮肤后注入按常规 CSS 权重覆盖）。
 
 [0.3.3]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.2...v0.3.3
 

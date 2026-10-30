@@ -23,15 +23,30 @@ alongside this repository's LICENSE file.
 发布产物 `lib/client.js` 内置以下第三方库（压缩构建剥离了许可注释，故在此
 集中保留其版权行；许可全文见各上游仓库 / npm 包）：
 
-  - CodeMirror 6（@codemirror/state / view / language / commands）
+  - CodeMirror 6（@codemirror/state 6.7.5 / @codemirror/view 6.43.12 /
+    @codemirror/language 6.12.4 / @codemirror/commands 6.11.1）
     MIT License
     Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
 
-  - marked
+  - marked 15.0.12
     MIT License
     Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)
     Copyright (c) 2011-2018, Christopher Jeffrey (https://github.com/chjj/)
 
-  - DOMPurify
+  - DOMPurify 3.4.15
     (MPL-2.0 OR Apache-2.0) 双许可，本项目按 Apache-2.0 条款使用
     Copyright (c) Cure53 and contributors (https://cure53.de/)
+
+  - CodeMirror 6 的传递依赖（随 bundle 内置，均 MIT License）
+    @lezer/common 1.5.2 / @lezer/highlight 1.2.3 / @lezer/lr 1.4.10
+    Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
+    style-mod 4.1.3
+    Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
+    w3c-keyname 2.2.8
+    Copyright (C) 2016 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
+    crelt 1.0.7
+    Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin>
+
+  以上版本为本仓库 v0.3.8 的 package-lock.json 锁定值。react / react-dom 为宿主平台
+  模块（bundle external，未随本包分发），esbuild / typescript 仅为构建期开发依赖，
+  均不在内置清单内。

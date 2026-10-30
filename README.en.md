@@ -43,7 +43,9 @@
 - **Model & reasoning effort**: read from the official shared directory (the same state source as `/model`). **Permissions**: the three official presets plus the RiskConfirmation modal for full access.
 - **Attachments**: slash Add · File (the takeover surface binds the shell's file-picker contract, so the entry keeps working while Codinput owns the composer), **paste images directly**, or **drop files onto the card** (clicking an image thumbnail opens the original-image lightbox, an ImageLightbox replica; the rail is a faithful replica of the official one: 64×64 image thumbnails, file cards with type glyph/name/size, upload spinner, progress bar, retry on failure).
 - **Voice input sync (official desktop app)**: when the official desktop composer ships a voice button, Codinput renders **the very same button in the very same place** — it renders the official voice component itself (mic trigger, recording waveform, transcription, setup prompt and all copy are official code); hosts without the native voice button (all web channels) render none.
-- **Performance & usage**: a replica of the official stats dock — turns/steps · tok/s, total tok · cache hit, plus the context-usage dial — with value-for-value parity in data and formatting, each opening a detail panel; available in all three modes.
+- **Performance & usage**: a replica of the official stats dock — turns/steps · tok/s, total tok · cache hit, plus the context-usage dial — with value-for-value parity in data and formatting, each opening a detail panel; available in all three modes. The three detail panels (session stats / token usage / context segments) are portal-positioned, follow scrolling and size changes, close on Escape or outside click, and only one is open at a time.
+- **User-message Markdown (0.3.7)**: messages sent by the user render as Markdown (GFM + breaks via marked, sanitised with DOMPurify) while keeping the official bubble chrome — attachment rows, @file/@session//skill reference chips (clickable), copy button and timestamp, reference summary and hover reveal. Settings → Codinput → User-message Markdown rendering (on by default); turning it off restores official plain text without a reload.
+- **Plugin-page icon (0.3.7)**: the packaged `assets/icon.png` is exposed through the `package.json` top-level `icon` field (manifest-relative path, SVG/PNG/JPEG/WebP, 256 KiB max), so the installed-plugins list no longer falls back to the default image.
 - **Settings**: Settings → Codinput (takeover on/off, line numbers, font, **fully custom send / line-break shortcuts** via a recorder, default view); with the takeover off, **opening the Codinput tab in the right sidebar enables it directly**.
 
 ## Installation
@@ -89,7 +91,7 @@ To pin a version or maintain the profile by hand, the manual equivalent of **Met
 ```jsonc
 {
   "dependencies": {
-    "dsh-codinput": "^0.3.0"          // for local development: "link:/abs/path/to/DSH-Codinput"
+    "dsh-codinput": "^0.3.8"          // for local development: "link:/abs/path/to/DSH-Codinput"
   },
   "dsh": {
     "profile": {
@@ -108,17 +110,18 @@ After editing the profile by hand, run `pnpm install` inside the profile directo
 
 ## Compatibility
 
-The host publishes **rc** builds on npm (`latest` is the current stable rc, `next` is the following rc, `alpha` is the further-ahead channel), so a plain install gives you an rc.
+The host publishes **rc** builds on npm: `latest` is the current stable rc, `next` the following rc, `alpha` further ahead (as of 2026-10-30, `latest` / `next` both point at `0.2.1-rc.5`, `alpha` is `0.2.2-alpha.2`), so a plain install gives you an rc.
 
 | Host version | Status |
 | --- | --- |
-| Desktop app (Electron, `0.2.0-rc.2`) | ✅ Verified on a real instance (official voice-input button synced — mic permission → recording → transcription verified end to end; the button hides itself when the voice plugin is absent or off) |
-| `0.1.7-rc.2` | ✅ Verified on a real instance (current `next`; the acrylic candidate menu, the relocated context meter and the dock row layout are aligned to this build) |
+| Desktop app (Electron, `0.2.1-rc.3`) | ✅ Static alignment (0.3.8 extracts this build's official CSS Modules and theme tokens from `app.asar` and checks them value by value: Switch rules, the stats / ContextMeter panels' portal+fixed placement, background and radius, and `--dsh-frame-top-clearance` all match; the macOS vibrancy/opacity difference was not eyeballed on a real desktop). The `0.2.1-rc.2` real-instance run recorded in 0.3.2 still holds (official voice-input button synced — mic permission → recording → transcription verified end to end; the button hides itself when the voice plugin is absent or off) |
+| web `0.2.0-rc.2` | ✅ Verified on a real instance (this machine's current web host; the slot mirrors, model-seat delegation, user-message Markdown and three-panel exclusivity from 0.3.5–0.3.7 were verified on this build with Chromium automation probes; the 0.3.8 portal-panel placement/Escape/outside-close and Markdown hardening were additionally re-checked in an isolated host with headless Edge — see CHANGELOG) |
+| `0.1.7-rc.2` | ✅ Verified on a real instance (the acrylic candidate menu, the relocated context meter and the dock row layout are aligned to this build) |
 | `0.1.5-rc.2` | ✅ Verified on a real instance |
 | `0.1.6-alpha.2` | ✅ Current development baseline; every feature verified end to end |
-| others (incl. `0.1.5-rc.3`, the current `latest`) | untested; older hosts lack the rc.2 tokens, so the fallback chain keeps each host's official look |
+| others (incl. current `latest` / `next` = `0.2.1-rc.5`) | untested; older hosts lack the rc.2 tokens, so the fallback chain keeps each host's official look |
 
-For `0.1.7-rc.2`, on top of the real-instance run, the official CSS for the candidate menu, the context meter and the stats dock was extracted value by value from that version's client packages (`dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation` / `dsh-client-ui-chat`) and checked against the replicas. The contracts this plugin relies on were verified per version: the three slots it uses (`conversation.composer.bar`, `sidebar.right.pane.tab`, `settings.section`), the `sidebarRight` / `sidebarRightTabs` / `locale` services and `openTabIn`, the sidebar expansion planner (dockkit `planSetExpanded`), the file-picker and tab-close contracts (`shell.bindFilePicker` / `tab.actions.close`), and the official primitives the replicas are copied from (`fileSizeText` / `fileExtension` and the attachment glyph paths, byte for byte). For how to re-run this on another channel, see the “Verifying on another channel” section of [TESTING.md](./TESTING.md).
+For `0.1.7-rc.2` / web `0.2.0-rc.2`, on top of the real-instance run, the official CSS for the candidate menu, the context meter, the stats dock and the user-message bubble were extracted value by value from the corresponding version's client packages (`dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation` / `dsh-client-ui-chat`) and checked against the replicas. The contracts this plugin relies on were verified per version: the slots it uses (`conversation.composer.bar`, `sidebar.right.pane.tab`, `settings.section`, plus `conversation.chat.node` and the `conversation.input.*` sub-seats), the `sidebarRight` / `sidebarRightTabs` / `locale` services and `openTabIn`, the sidebar expansion planner (dockkit `planSetExpanded`), the file-picker and tab-close contracts (`shell.bindFilePicker` / `tab.actions.close`), and the official primitives the replicas are copied from (`fileSizeText` / `fileExtension` and the attachment glyph paths, byte for byte); the desktop `0.2.1-rc.3` build was additionally checked statically against the official CSS Modules and theme tokens extracted from its `app.asar`. For how to re-run this on another channel, see the “Verifying on another channel” section of [TESTING.md](./TESTING.md).
 
 The plugin leans on host internals (slot shadowing, `useTabInfo`, `sidebarRight`, `--dsw-*` tokens). Every call site guards with `typeof` checks and degrades gracefully, but a major host upgrade can still break it. **After upgrading the host, walk through [TESTING.md](./TESTING.md).**
 

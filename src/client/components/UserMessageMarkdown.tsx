@@ -20,12 +20,12 @@
  * 出极简 JSON 块（官方 JsonBlock 的降级形态）。
  */
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Marked, type MarkedExtension } from 'marked';
 import * as DOMPurifyModule from 'dompurify';
 import type { SlotRegisterOptions } from '../host-types';
 import { diagError } from '../diag';
-import { bindForeign, t, type TranslateParams } from '../i18n';
+import { bindForeign, t, useT, type TranslateParams } from '../i18n';
 import { FileGlyph, fileExtension, fileSizeText } from './AttachmentRail';
 
 /* ---------- 注册 ---------- */
@@ -75,7 +75,9 @@ export interface UserMessageMarkdownProps {
 
 interface ContentParts {
   text: string;
-  attachments: ({ type: 'image'; image: unknown } | { type: 'file'; file: { name?: string; bytes?: number } })[];
+  /** 图片：官方 contentParts 把它包成 { attachment: ImageAttachmentRef }——官方 ImageGallery
+   * 的 React key 读 image.attachment.attachmentId；裸 ref 会让 key 计算访问 preview.url 崩。 */
+  attachments: ({ type: 'image'; image: { attachment: unknown } } | { type: 'file'; file: { name?: string; bytes?: number } })[];
   rest: unknown[];
 }
 
@@ -87,7 +89,7 @@ function contentParts(content: readonly unknown[] | undefined): ContentParts {
   for (const block of content) {
     const b = block as Partial<TextBlock> | Partial<ImageBlock> | Partial<FileBlock> | null;
     if (b && b.type === 'text' && typeof b.text === 'string') texts.push(b.text);
-    else if (b && b.type === 'image' && b.attachment !== undefined) parts.attachments.push({ type: 'image', image: b.attachment });
+    else if (b && b.type === 'image' && b.attachment !== undefined) parts.attachments.push({ type: 'image', image: { attachment: b.attachment } });
     else if (b && b.type === 'file' && b.attachment !== undefined) parts.attachments.push({ type: 'file', file: (b.attachment ?? {}) as { name?: string; bytes?: number } });
     else parts.rest.push(block);
   }
@@ -99,7 +101,24 @@ function contentParts(content: readonly unknown[] | undefined): ContentParts {
 
 /** dompurify 的导出形状随打包条件漂移：默认导出与命名空间都兼容。 */
 const DOMPurify = ((DOMPurifyModule as unknown as { default?: unknown }).default ??
-  DOMPurifyModule) as unknown as { sanitize(html: string): string };
+  DOMPurifyModule) as unknown as { sanitize(html: string, options?: Record<string, unknown>): string };
+
+/** 用户消息是「不可信 Markdown」面：marked 会原样透传原始 HTML，官方 MarkdownText 则是
+ * mdast→React 逐节点渲染且链接/图片只放行 http(s)/mailto。这里用 DOMPurify 白名单收敛到
+ * Markdown 产出面——禁 style/form/控件/媒体等原始 HTML（<style> 一旦进 DOM 会全局生效），
+ * URI 只留 http(s)/mailto，行内 style 一律去掉。 */
+const SANITIZE_OPTIONS = {
+  ALLOWED_TAGS: [
+    'p', 'br', 'strong', 'em', 'del', 'code', 'pre', 'blockquote', 'ul', 'ol', 'li', 'a', 'img',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'input', 'span',
+  ],
+  ALLOWED_ATTR: [
+    'href', 'src', 'alt', 'title', 'target', 'rel', 'type', 'checked', 'disabled', 'start',
+    'colspan', 'rowspan', 'align', 'data-dci-wire',
+  ],
+  ALLOWED_URI_REGEXP: /^(?:https?:|mailto:)/i,
+  FORBID_ATTR: ['style'],
+};
 
 function escapeHtml(text: string): string {
   return text.replace(
@@ -135,7 +154,7 @@ const mdParser = new Marked({ gfm: true, breaks: true, extensions: [sessionWireE
 
 function renderMarkdown(text: string): string {
   try {
-    return DOMPurify.sanitize(mdParser.parse(text) as string);
+    return DOMPurify.sanitize(mdParser.parse(text) as string, SANITIZE_OPTIONS);
   } catch (error) {
     diagError('umsg.markdown', error);
     return `<p>${escapeHtml(text).replace(/\n/g, '<br>')}</p>`;
@@ -284,12 +303,15 @@ function chipClickGuard(event: MouseEvent): boolean {
   return false;
 }
 
-function chipElement(range: ChipRange, actions: ChipActions): HTMLElement {
+function chipElement(range: ChipRange, actionsRef: React.MutableRefObject<ChipActions>): HTMLElement {
+  const actions = actionsRef.current;
+  // 官方 projectUserText：只有 file 与 /skill 可点（folder / session 是纯 span）；
+  // 点击时读 actionsRef.current，回调后到时无需重新装饰 DOM。
   const clickable =
     range.clickable &&
-    (range.kind === 'file' || range.kind === 'folder'
+    (range.kind === 'file'
       ? typeof actions.openFile === 'function'
-      : typeof actions.openSkill === 'function');
+      : range.kind === 'slash' && typeof actions.openSkill === 'function');
   const chip = document.createElement(clickable ? 'button' : 'span');
   if (clickable) chip.setAttribute('type', 'button');
   chip.className = 'dci-umsg-chip';
@@ -301,8 +323,9 @@ function chipElement(range: ChipRange, actions: ChipActions): HTMLElement {
   if (clickable) {
     chip.addEventListener('click', (event: Event) => {
       if (chipClickGuard(event as MouseEvent)) return;
-      if (range.kind === 'file' || range.kind === 'folder') actions.openFile?.(range.label.slice(1).replace(/^"|"$/gu, ''));
-      else actions.openSkill?.(range.display.slice(1));
+      const live = actionsRef.current;
+      if (range.kind === 'slash') live.openSkill?.(range.display.slice(1));
+      else live.openFile?.(range.label.slice(1).replace(/^"|"$/gu, ''));
     });
   }
   return chip;
@@ -314,19 +337,19 @@ function rangeRank(range: ChipRange): number {
 }
 
 /** 把一段文本按 ranges 切开，plain 部分留原文本节点，token 位换成 chip 元素。 */
-function splitTextNode(node: Text, ranges: ChipRange[], actions: ChipActions): void {
+function splitTextNode(node: Text, ranges: ChipRange[], actionsRef: React.MutableRefObject<ChipActions>): void {
   const fragment = document.createDocumentFragment();
   let cursor = 0;
   for (const range of ranges) {
     if (range.start > cursor) fragment.appendChild(document.createTextNode(node.data.slice(cursor, range.start)));
-    fragment.appendChild(chipElement(range, actions));
+    fragment.appendChild(chipElement(range, actionsRef));
     cursor = range.end;
   }
   if (cursor < node.data.length) fragment.appendChild(document.createTextNode(node.data.slice(cursor)));
   node.parentNode?.replaceChild(fragment, node);
 }
 
-function chipTextNodes(root: HTMLElement, actions: ChipActions): void {
+function chipTextNodes(root: HTMLElement, actionsRef: React.MutableRefObject<ChipActions>): void {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node: Node): number {
       const parent = (node as Text).parentElement;
@@ -342,11 +365,12 @@ function chipTextNodes(root: HTMLElement, actions: ChipActions): void {
     nodes.push(current as Text);
     current = walker.nextNode();
   }
+  const { skillNames, referenceLabels } = actionsRef.current;
   for (const node of nodes) {
     const ranges = [
       ...sessionWireRanges(node.data),
-      ...sessionLabelRanges(node.data, actions.referenceLabels),
-      ...genericTokenRanges(node.data, actions.skillNames),
+      ...sessionLabelRanges(node.data, referenceLabels),
+      ...genericTokenRanges(node.data, skillNames),
     ];
     if (ranges.length === 0) continue;
     ranges.sort((a, b) => a.start - b.start || rangeRank(a) - rangeRank(b) || b.end - a.end);
@@ -358,19 +382,43 @@ function chipTextNodes(root: HTMLElement, actions: ChipActions): void {
       cursor = range.end;
     }
     if (picked.length === 0) continue;
-    splitTextNode(node, picked, actions);
+    splitTextNode(node, picked, actionsRef);
   }
 }
 
 /** innerHTML 落地后的整备：链接新开页、表格出滚动壳、线格式与 @/// token 换 chip。 */
-function decorateMarkdownRoot(root: HTMLElement | null, actions: ChipActions): void {
+function decorateMarkdownRoot(root: HTMLElement | null, actionsRef: React.MutableRefObject<ChipActions>): void {
   if (!root) return;
   try {
-    for (const anchor of Array.from(root.querySelectorAll('a[href]'))) {
+    // 官方 sanitizeUrl 只放行 http(s)/mailto：其余链接（含 DOMPurify 已剥掉 href 的残链）
+    // 没有可点面，拆回纯文本；http(s) 统一新开页。
+    for (const anchor of Array.from(root.querySelectorAll('a'))) {
       const href = anchor.getAttribute('href') ?? '';
-      if (!/^https?:/i.test(href)) continue;
-      anchor.setAttribute('target', '_blank');
-      anchor.setAttribute('rel', 'noreferrer noopener');
+      if (/^https?:/i.test(href)) {
+        anchor.setAttribute('target', '_blank');
+        anchor.setAttribute('rel', 'noreferrer noopener');
+        continue;
+      }
+      if (/^mailto:/i.test(href)) {
+        anchor.setAttribute('rel', 'noreferrer noopener');
+        continue;
+      }
+      anchor.replaceWith(...Array.from(anchor.childNodes));
+    }
+    // 官方 remoteImageUrl 只放行 http(s)；相对/data: 图片降级成 alt 文本，不留破图。
+    for (const img of Array.from(root.querySelectorAll('img'))) {
+      if (/^https?:/i.test(img.getAttribute('src') ?? '')) continue;
+      img.replaceWith(document.createTextNode(img.getAttribute('alt') ?? ''));
+    }
+    // 只保留 GFM 任务清单的只读复选框（marked 产出 checked/disabled，type 可能被
+    // sanitize 剥掉），其余 <input> 一律移除——不让用户消息里出现可编辑表单控件。
+    for (const input of Array.from(root.querySelectorAll('input'))) {
+      if (!input.hasAttribute('disabled')) {
+        input.remove();
+        continue;
+      }
+      input.setAttribute('type', 'checkbox');
+      input.setAttribute('disabled', '');
     }
     for (const table of Array.from(root.querySelectorAll('table'))) {
       const parent = table.parentElement;
@@ -382,9 +430,9 @@ function decorateMarkdownRoot(root: HTMLElement | null, actions: ChipActions): v
     }
     for (const placeholder of Array.from(root.querySelectorAll('span[data-dci-wire]'))) {
       const label = placeholder.getAttribute('data-dci-wire') ?? '';
-      placeholder.replaceWith(chipElement({ start: 0, end: 0, kind: 'session', label, display: label, clickable: false }, actions));
+      placeholder.replaceWith(chipElement({ start: 0, end: 0, kind: 'session', label, display: label, clickable: false }, actionsRef));
     }
-    chipTextNodes(root, actions);
+    chipTextNodes(root, actionsRef);
   } catch (error) {
     diagError('umsg.decorate', error);
   }
@@ -487,7 +535,7 @@ function CheckGlyph(): JSX.Element {
 function MessageFileCard({ file }: { file: { name?: string; bytes?: number } }): JSX.Element {
   const name = typeof file.name === 'string' ? file.name : '';
   const bytes = typeof file.bytes === 'number' ? file.bytes : 0;
-  const meta = [fileExtension(name).toUpperCase().slice(0, 8), bytes > 0 ? fileSizeText(bytes) : ''].filter(Boolean).join(' ');
+  const meta = [fileExtension(name).toUpperCase().slice(0, 8), fileSizeText(bytes)].filter(Boolean).join(' ');
   return (
     <span className="dci-umsg-file" title={name}>
       <span className="dci-umsg-fileglyph">
@@ -501,8 +549,29 @@ function MessageFileCard({ file }: { file: { name?: string; bytes?: number } }):
   );
 }
 
-export function UserMessageMarkdown(props: UserMessageMarkdownProps): JSX.Element | null {
+/** 旧/异形宿主缺 renderMessageImages 座位 prop 时的图片降级卡（不静默丢内容）。 */
+function MessageImageFallback({ image }: { image: { attachment: unknown } }): JSX.Element {
+  const att = (image.attachment ?? {}) as { name?: unknown; mediaType?: unknown; bytes?: unknown };
+  const name = typeof att.name === 'string' && att.name !== '' ? att.name : t('umsg.image');
+  const media = typeof att.mediaType === 'string' ? att.mediaType.replace(/^image\//i, '').toUpperCase() : '';
+  const meta = [media, typeof att.bytes === 'number' ? fileSizeText(att.bytes) : ''].filter(Boolean).join(' ');
+  return (
+    <span className="dci-umsg-file" data-image-fallback="true" title={name}>
+      <span className="dci-umsg-fileglyph">
+        <FileGlyph />
+      </span>
+      <span className="dci-umsg-filecontent">
+        <span className="dci-umsg-filename">{name}</span>
+        <span className="dci-umsg-filemeta">{meta}</span>
+      </span>
+    </span>
+  );
+}
+
+function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element | null {
   const { node, renderMessageImages, openFile, openSkill } = props;
+  // 订阅宿主 locale 快照：语言切换时复制钮/引用摘要等文案即时刷新（其它组件同款）。
+  useT();
   const data = (node?.data ?? {}) as UserMessageData;
   const content = data.content;
   const referenceLabels = useMemo(() => (Array.isArray(data.referenceLabels) ? data.referenceLabels : []), [data.referenceLabels]);
@@ -515,17 +584,30 @@ export function UserMessageMarkdown(props: UserMessageMarkdownProps): JSX.Elemen
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const actionsRef = useRef<ChipActions>({ openFile, openSkill, skillNames, referenceLabels });
   actionsRef.current = { openFile, openSkill, skillNames, referenceLabels };
+  // 引用标签 / 技能名单后到（投影刷新）时重跑装饰，补齐 @引用与 /技能 chip。
   useEffect(() => {
-    decorateMarkdownRoot(bodyRef.current, actionsRef.current);
-  }, [html]);
+    decorateMarkdownRoot(bodyRef.current, actionsRef);
+  }, [html, referenceLabels, skillNames]);
 
   const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<number | null>(null);
+  // 卸载时清掉「已复制」回退定时器，避免卸载后的 setState。
+  useEffect(
+    () => () => {
+      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+    },
+    [],
+  );
   const onCopy = useCallback(() => {
     if (copied || text === '') return;
     void writeClipboard(text).then((ok) => {
       if (!ok) return;
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1000);
+      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+      copyTimer.current = window.setTimeout(() => {
+        copyTimer.current = null;
+        setCopied(false);
+      }, 1000);
     });
   }, [copied, text]);
 
@@ -544,7 +626,7 @@ export function UserMessageMarkdown(props: UserMessageMarkdownProps): JSX.Elemen
                 <Fragment key={`image:${index}`}>
                   {renderMessageImages
                     ? renderMessageImages({ images: [att.image], align: 'end', compact: compactImages })
-                    : null}
+                    : <MessageImageFallback image={att.image} />}
                 </Fragment>
               ) : (
                 <MessageFileCard key={`file:${index}`} file={att.file} />
@@ -589,3 +671,6 @@ export function UserMessageMarkdown(props: UserMessageMarkdownProps): JSX.Elemen
     </div>
   );
 }
+
+/** 与官方 UserMessageNodeView 一致用 memo 包裹：历史节点快照重建时不连坐重渲染。 */
+export const UserMessageMarkdown = memo(UserMessageMarkdownView);

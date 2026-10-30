@@ -412,13 +412,19 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
   height: 36px; color: var(--dsw-alias-label-primary, inherit); border: none; border-radius: 18px; outline: none;
   padding: 0 14px; font-size: 13px; min-width: 260px; max-width: 320px; }
 .dci-set-input:focus { outline: 2px solid var(--dsw-alias-border-l3, transparent); }
+/* 开关：官方 primitives Switch 逐值（Switch.module.css）。ON 轨道走
+   --dsw-alias-brand-primary——该 token 自 0.2.0-rc.2 起浅色主题即近黑（#0f1115）、
+   深色主题近白（#f9fafb），桌面 rc.3 同款；同 token 跟随宿主主题，就是官方样式的来源。 */
 .dci-switch { box-sizing: border-box; position: relative; flex: none; width: 36px; height: 20px; padding: 2px;
-  border: 0; border-radius: 10px; background: var(--dsw-alias-border-l3, color-mix(in srgb, currentColor 30%, transparent));
+  border: 0; border-radius: 999px; corner-shape: round;
+  background: var(--dsw-alias-border-l3, color-mix(in srgb, currentColor 30%, transparent));
   cursor: pointer; }
 .dci-switch[aria-checked="true"] { background: var(--dsw-alias-brand-primary, color-mix(in srgb, currentColor 70%, transparent)); }
-.dci-switch:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, currentColor); outline-offset: 2px; }
-.dci-switch::after { content: ''; display: block; width: 16px; height: 16px; border-radius: 50%;
+.dci-switch:disabled { cursor: default; opacity: 0.5; }
+.dci-switch:focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, currentColor)); outline-offset: 2px; }
+.dci-switch::after { content: ''; display: block; width: 16px; height: 16px; border-radius: 50%; corner-shape: round;
   background: var(--dsw-alias-label-primary-foreground, #fff); transition: transform 120ms ease; }
+.dci-switch[aria-checked="false"]::after { background: var(--dsw-alias-switch-thumb, #fff); }
 .dci-switch[aria-checked="true"]::after { transform: translateX(16px); }
 
 
@@ -440,15 +446,17 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
   padding: 4px 0 0; font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
   line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
   justify-content: center; gap: 12px; display: flex; }
-.dci-stat-anchor { min-width: 0; display: inline-flex; position: relative; }
+.dci-stat-anchor { min-width: 0; display: inline-flex; }
 
-/* 数据行详情面板（官方 bRhRbq 复刻：锚点上方弹出） */
-.dci-stat-panel { z-index: 1100; box-sizing: border-box; background: var(--dsw-menu-surface-fill, var(--dsw-specific-menu, rgba(30, 30, 34, 0.98)));
+/* 数据行详情面板（官方 bRhRbq 复刻：portal 到 body、fixed、锚点上方弹出）。
+   背景与圆角逐值同官方：--dsw-specific-menu 优先（macOS 桌面上官方把它覆写成不透明），
+   旧宿主/皮肤缺该 token 时回退 --dsw-menu-surface-fill 链，不落到硬编码深色。 */
+.dci-stat-panel { z-index: 1100; box-sizing: border-box; background: var(--dsw-specific-menu, var(--dsw-menu-surface-fill, rgba(30, 30, 34, 0.98)));
   backdrop-filter: var(--dsw-menu-backdrop-filter, none);
   color: var(--dsw-alias-label-secondary, inherit); --dsw-elevation-stroke-color: var(--dsw-alias-border-l1, transparent);
   width: max-content; min-width: min(300px, 100vw - 24px); max-width: min(440px, 100vw - 24px); text-align: left;
   box-shadow: var(--dsw-elevation-prominent, 0 10px 34px rgba(0, 0, 0, 0.35)); cursor: default; border: 0;
-  border-radius: 12px; padding: 16px; font-size: 12px; line-height: 18px; position: absolute; bottom: calc(100% + 8px); left: 0; }
+  border-radius: var(--dsw-radius-lg, 12px); padding: 16px; font-size: 12px; line-height: 18px; position: fixed; }
 .dci-stat-panelTitle { color: var(--dsw-alias-label-primary, inherit); justify-content: space-between; gap: 16px;
   margin-bottom: 8px; font-weight: 500; display: flex; }
 .dci-stat-panelLabel { align-items: center; gap: 6px; min-width: 0; display: inline-flex; }
@@ -460,36 +468,40 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
 .dci-stat-details dt, .dci-stat-details dd { min-width: 0; margin: 0; }
 .dci-stat-details dd { color: var(--dsw-alias-label-secondary, inherit); font-variant-numeric: tabular-nums; text-align: right; }
 .dci-stat-pill { font: inherit; box-sizing: border-box; max-width: 100%; color: var(--dsw-alias-label-tertiary, currentColor);
-  white-space: nowrap; background: transparent; border: none; border-radius: 24px; align-items: center; gap: 6px;
+  white-space: nowrap; background: transparent; border: none; border-radius: 999px; corner-shape: round;
+  line-height: inherit; align-items: center; gap: 6px;
   padding: 1px 8px; display: inline-flex; cursor: pointer; font-variant-numeric: tabular-nums; }
 .dci-stat-pill svg { flex: none; width: 14px; height: 14px; }
-.dci-stat-pill:hover { background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 8%, transparent));
+.dci-stat-pill:hover, .dci-stat-pill[aria-expanded="true"] { background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 8%, transparent));
   color: var(--dsw-alias-label-secondary, inherit); }
 .dci-stat-label { text-overflow: ellipsis; min-width: 0; overflow: hidden; }
 .dci-stat-sep { color: var(--dsw-alias-separator-primary, currentColor); margin: 0 6px; }
 
 /* ===== 上下文小圈（官方 JObwrW 复刻：双环仪表 + 分段面板）
    0.1.7-rc.2 起官方把它挪进卡片下方 dock 行（stats 胶囊之后），trigger 变为「圈+百分比」药丸 ===== */
-.dci-gauge-root { flex: none; display: inline-flex; position: relative; }
+.dci-gauge-root { flex: none; display: inline-flex; }
 .dci-gauge-trigger { border-radius: var(--dsw-radius-sm, 8px); color: var(--dsw-alias-label-tertiary, currentColor);
-  font-family: inherit; font-size: 13px; font-variant-numeric: tabular-nums; line-height: 20px; white-space: nowrap;
+  font-family: inherit; font-size: var(--dsh-content-font-size-secondary, 13px); font-variant-numeric: tabular-nums;
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px)); white-space: nowrap;
   cursor: pointer; background: transparent; border: none; flex: none; align-items: center; gap: 6px; padding: 1px 8px; display: inline-flex; }
 .dci-gauge-trigger:hover, .dci-gauge-trigger[aria-expanded="true"] { background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 8%, transparent));
   color: var(--dsw-alias-label-secondary, inherit); }
 .dci-gauge-track { fill: none; stroke: var(--dsw-alias-border-l3, currentColor); stroke-width: 2px; }
 .dci-gauge-fill { fill: none; stroke: var(--dsw-alias-label-tertiary, currentColor); stroke-width: 2px; stroke-linecap: round; }
-.dci-gauge-panel { z-index: 1100; box-sizing: border-box; background: var(--dsw-menu-surface-fill, var(--dsw-specific-menu, rgba(30, 30, 34, 0.98)));
+/* 面板 portal 到 body + fixed，left/top 由 useAnchoredPanel（官方 useAnchoredPosition
+   移植：面板左缘对齐锚点左缘、面板底距锚点顶 8px、视口 margin 12 夹取）下发。 */
+.dci-gauge-panel { z-index: 1100; box-sizing: border-box; background: var(--dsw-specific-menu, var(--dsw-menu-surface-fill, rgba(30, 30, 34, 0.98)));
   backdrop-filter: var(--dsw-menu-backdrop-filter, none);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1, transparent); width: min(264px, 100vw - 24px);
   box-shadow: var(--dsw-elevation-prominent, 0 10px 34px rgba(0, 0, 0, 0.35));
   color: var(--dsw-alias-label-secondary, inherit); cursor: default; border: 0; border-radius: var(--dsw-radius-lg, 12px); padding: 12px;
-  font-size: 12px; line-height: 20px; position: absolute; bottom: calc(100% + 8px); right: 0; }
+  font-size: 12px; line-height: 20px; position: fixed; }
 .dci-gauge-header { align-items: center; gap: 6px; display: flex; }
 .dci-gauge-figures { font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-primary, inherit); margin-left: auto; font-weight: 500; }
 .dci-gauge-percent { color: var(--dsw-alias-label-primary, inherit); font-weight: 500; }
 .dci-gauge-headline { color: var(--dsw-alias-label-tertiary, currentColor); }
 .dci-gauge-bar { background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 8%, transparent));
-  border-radius: 999px; gap: 1px; height: 4px; margin: 10px 0 12px; display: flex; overflow: hidden; }
+  border-radius: 999px; corner-shape: round; gap: 1px; height: 4px; margin: 10px 0 12px; display: flex; overflow: hidden; }
 .dci-gauge-segment { background: var(--meter-tint, var(--dsw-alias-label-tertiary, currentColor)); border-radius: 1px;
   flex: 0 0 auto; min-width: 2px; height: 100%; }
 .dci-gauge-swatch { background: var(--meter-tint, currentColor); vertical-align: baseline; border-radius: 2px;
@@ -569,13 +581,11 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
   border: none; justify-content: center; align-items: center; padding: 6px; display: inline-flex; }
 .dci-umsg-action svg { width: calc(15px + var(--dsh-content-font-delta, 0px)); height: calc(15px + var(--dsh-content-font-delta, 0px)); }
 .dci-umsg-action:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }
-/* 悬停显形（官方同款 data 属性面：chat 根的 data-actions-reveal 与 flowItem 的
-   data-chat-flow-kind 都在宿主 DOM 上，这里只换目标类）。 */
+/* 悬停显形（官方 MessageItem.module.css 同款）：data-actions-reveal 挂在 assistant 的
+   turn-tail 根上、不在用户消息的祖先链里，用户消息的实际驱动只有 flowItem 的
+   data-chat-flow-kind 兄弟关系（后一条 user/steering 存在即隐藏，悬停/聚焦显形）。 */
 @media (hover: hover) {
-  [data-actions-reveal="hover"] .dci-umsg-actions,
   :is([data-chat-flow-kind="user"], [data-chat-flow-kind="steering"]):has(~ :is([data-chat-flow-kind="user"], [data-chat-flow-kind="steering"])) .dci-umsg-actions { opacity: 0; transition: opacity 80ms; }
-  [data-actions-reveal="hover"]:hover .dci-umsg-actions,
-  [data-actions-reveal="hover"]:focus-within .dci-umsg-actions,
   :is([data-chat-flow-kind="user"], [data-chat-flow-kind="steering"]):hover .dci-umsg-actions,
   :is([data-chat-flow-kind="user"], [data-chat-flow-kind="steering"]):focus-within .dci-umsg-actions { opacity: 1; }
 }
@@ -658,9 +668,15 @@ button.dci-umsg-chip:focus-visible { box-shadow: 0 0 0 2px var(--dsw-focus-ring-
 `;
 
 export function injectStyles(): void {
-  if (document.getElementById(STYLE_ID)) return;
-  const el = document.createElement('style');
-  el.id = STYLE_ID;
-  el.textContent = CSS;
-  document.head.appendChild(el);
+  const el = document.getElementById(STYLE_ID);
+  // 已有本插件样式（宿主热替换/原地更新插件后重 apply）时按内容原位刷新：
+  // 旧 <style> 还挂着会让新版新增的类（如 dci-umsg-*）永远注入不进去。
+  if (el) {
+    if (el.textContent !== CSS) el.textContent = CSS;
+    return;
+  }
+  const tag = document.createElement('style');
+  tag.id = STYLE_ID;
+  tag.textContent = CSS;
+  document.head.appendChild(tag);
 }

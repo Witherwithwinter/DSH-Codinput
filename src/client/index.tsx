@@ -56,7 +56,12 @@ export function apply(ctx: ClientContext): void {
       const orig = w.console.error.bind(w.console);
       w.console.error = (...args: unknown[]): void => {
         const first = args.find((a) => a instanceof Error);
-        if (first) (w.__dshCodinputErrs as unknown as Error[]).push(first as Error);
+        if (first) {
+          // 与 diagError 同口径限长：长会话里 console.error 不应无界堆积。
+          const errs = w.__dshCodinputErrs as unknown as unknown[];
+          errs.push(first);
+          if (errs.length > 200) errs.splice(0, errs.length - 200);
+        }
         orig(...args);
       };
     }
