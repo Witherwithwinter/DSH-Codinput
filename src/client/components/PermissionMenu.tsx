@@ -58,7 +58,8 @@ export function PermissionMenu(props: PermissionMenuProps): JSX.Element | null {
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const [anchor, setAnchor] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null);
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [anchorRect, setAnchorRect] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null);
 
   // locked/无值时收起（官方 useEffect 同语义）。
   useEffect(() => {
@@ -130,7 +131,11 @@ export function PermissionMenu(props: PermissionMenuProps): JSX.Element | null {
         disabled={disabled || busy}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => {
-          if (!open) setAnchor(triggerRef.current?.getBoundingClientRect() ?? null);
+          if (!open) {
+            const el = triggerRef.current ?? null;
+            setAnchor(el);
+            setAnchorRect(el ? el.getBoundingClientRect() : null);
+          }
           setOpen(!open);
         }}
       >
@@ -146,7 +151,7 @@ export function PermissionMenu(props: PermissionMenuProps): JSX.Element | null {
       </button>
 
       {open && anchor ? (
-        <MenuSurface anchor={anchor} onClose={close}>
+        <MenuSurface anchor={anchor} initialRect={anchorRect} onClose={close}>
           {items.map((item) => {
             const active = item.id === currentValue;
             return (

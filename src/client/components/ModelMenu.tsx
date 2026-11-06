@@ -76,7 +76,8 @@ export function ModelMenu(props: ModelMenuProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<MenuView>('root');
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const [anchor, setAnchor] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null);
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [anchorRect, setAnchorRect] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null);
 
   // 服务缺席（installServices 未注入到）时禁用；svcEpoch 轮询兜底见 CodinputSurface。
   const directory = getSessionDirectory(sessionId);
@@ -89,23 +90,13 @@ export function ModelMenu(props: ModelMenuProps): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (event: PointerEvent): void => {
-      if (refContains(rootMenuRef.current, event.target)) return;
-      close();
-    };
-    window.addEventListener('pointerdown', onDown, true);
-    return () => window.removeEventListener('pointerdown', onDown, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
   const rootMenuRef = useRef<HTMLDivElement | null>(null);
 
   const openMenu = (): void => {
     const el = triggerRef.current;
     if (!el) return;
-    setAnchor(el.getBoundingClientRect());
+    setAnchor(el);
+    setAnchorRect(el.getBoundingClientRect());
     setView('root');
     setOpen(true);
   };
@@ -150,9 +141,6 @@ export function ModelMenu(props: ModelMenuProps): JSX.Element {
     }
   };
 
-  const refContains = (el: Element | null, target: EventTarget | null): boolean =>
-    !!el && target instanceof Node && el.contains(target);
-
   return (
     <div style={{ position: 'relative', minWidth: 0 }}>
       <button
@@ -179,7 +167,7 @@ export function ModelMenu(props: ModelMenuProps): JSX.Element {
 
       {open && anchor ? (
         <div ref={rootMenuRef}>
-          <MenuSurface anchor={anchor} onClose={close} alignEnd={true} minWidth={240}>
+          <MenuSurface anchor={anchor} initialRect={anchorRect} onClose={close} alignEnd={true} minWidth={240}>
             {view === 'root' ? (
               <>
                 <button type="button" className="dci-cell" onClick={() => setView('models')}>

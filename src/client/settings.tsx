@@ -109,7 +109,8 @@ function Selector(props: {
   const { value, options, onChange, ariaLabel } = props;
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement | null>(null);
-  const [anchor, setAnchor] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null);
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [anchorRect, setAnchorRect] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null);
   const current = options.find((o) => o.value === value);
   return (
     <>
@@ -121,7 +122,11 @@ function Selector(props: {
         aria-expanded={open}
         aria-label={ariaLabel}
         onClick={() => {
-          if (!open) setAnchor(btnRef.current?.getBoundingClientRect() ?? null);
+          if (!open) {
+            const el = btnRef.current ?? null;
+            setAnchor(el);
+            setAnchorRect(el ? el.getBoundingClientRect() : null);
+          }
           setOpen(!open);
         }}
       >
@@ -129,7 +134,7 @@ function Selector(props: {
         <IconChevronOfficial size={14} />
       </button>
       {open && anchor ? (
-        <MenuSurface anchor={anchor} side="bottom" alignEnd onClose={() => setOpen(false)} minWidth={200}>
+        <MenuSurface anchor={anchor} initialRect={anchorRect} side="bottom" alignEnd onClose={() => setOpen(false)} minWidth={200}>
           {options.map((opt) => (
             <button
               key={opt.value}
