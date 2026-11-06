@@ -47,6 +47,6 @@ alongside this repository's LICENSE file.
     crelt 1.0.7
     Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin>
 
-  以上版本为本仓库 v0.3.8 的 package-lock.json 锁定值。react / react-dom 为宿主平台
+  以上版本为本仓库 v0.3.9 的 package-lock.json 锁定值。react / react-dom 为宿主平台
   模块（bundle external，未随本包分发），esbuild / typescript 仅为构建期开发依赖，
   均不在内置清单内。

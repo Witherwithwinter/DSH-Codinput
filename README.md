@@ -91,7 +91,7 @@ dsh plugin --profile web add link:/abs/path/to/DSH-Codinput
 ```jsonc
 {
   "dependencies": {
-    "dsh-codinput": "^0.3.8"          // 本地开发用 "link:/abs/path/to/DSH-Codinput"
+    "dsh-codinput": "^0.3.9"          // 本地开发用 "link:/abs/path/to/DSH-Codinput"
   },
   "dsh": {
     "profile": {
@@ -110,18 +110,19 @@ dsh plugin --profile web add link:/abs/path/to/DSH-Codinput
 
 ## 兼容性
 
-宿主通过 npm 发的是 **rc** 版本：`latest` 是当前稳定 rc、`next` 是下个 rc、`alpha` 更超前（2026-10-30 实测 `latest` / `next` 同指 `0.2.1-rc.5`，`alpha` 为 `0.2.2-alpha.2`），所以普通用户装到的就是 rc。
+宿主通过 npm 发的是 **rc** 版本：`latest` 是当前稳定 rc、`next` 是下个 rc、`alpha` 更超前（2026-11-06 实测 `latest` / `next` 同指 `0.2.2-rc.1`，`alpha` 为 `0.2.2-alpha.3`），所以普通用户装到的就是 rc。
 
 | 宿主版本 | 状态 |
 | --- | --- |
 | 桌面版（Electron，`0.2.1-rc.3`） | ✅ 静态对齐（0.3.8 从该版 `app.asar` 取出官方 CSS Modules 与主题 token 逐值核对：Switch 规则、stats 面板 / ContextMeter 面板的 portal+fixed 与背景/圆角、`--dsh-frame-top-clearance` 均一致；macOS 的毛玻璃/不透明度差异未实机目检）。0.3.2 记录的 `0.2.1-rc.2` 实机实测仍有效（官方语音输入按钮同步——授权 → 录音 → 转写端到端验证；语音插件缺席或关闭时按钮自动隐藏） |
 | web `0.2.0-rc.2` | ✅ 实机实测通过（本机当前 web 宿主；0.3.5–0.3.7 的座位镜像、模型座让位、用户消息 Markdown 与三面板互斥均在此版本以 Chromium 自动化探针实测；0.3.8 的 portal 面板定位/Escape/点外关闭与 Markdown 安全硬化另在隔离宿主以无头 Edge 探针复核，见 CHANGELOG） |
+| web `0.2.2-rc.1` | ✅ 实机实测通过（0.3.9 菜单修复专项：隔离宿主 + 无头 Edge 自动化探针，33/33 断言通过——菜单 portal 到 body、模型 / 权限 / 设置下拉几何逐像素吻合、祖先 transform 免疫、布局位移 2 帧内跟随、连点开合正常；见 CHANGELOG） |
 | `0.1.7-rc.2` | ✅ 实机实测通过（候选菜单亚克力、上下文小圈挪位、dock 行布局即为此版对齐） |
 | `0.1.5-rc.2` | ✅ 实机实测通过 |
 | `0.1.6-alpha.2` | ✅ 开发基线，全部功能端到端实测通过 |
-| 其它（含现网 `latest` / `next` = `0.2.1-rc.5`） | 未实测；旧宿主无 rc.2 新 token，回退链自动保持各版官方原形态 |
+| 其它（含现网 `latest` / `next` = `0.2.2-rc.1`） | 未实测；旧宿主无 rc.2 新 token，回退链自动保持各版官方原形态 |
 
-对 `0.1.7-rc.2` / web `0.2.0-rc.2`，除实机验证外，还从对应版本的客户端包（`dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation` / `dsh-client-ui-chat`）逐值提取了候选菜单、上下文小圈、stats dock 与用户消息气泡的官方 CSS 核对；桌面 `0.2.1-rc.3` 另从该版 `app.asar` 取出官方 CSS Modules 与主题 token 做静态逐值核对。插件依赖的契约按版本核对过：用到的槽位（`conversation.composer.bar`、`sidebar.right.pane.tab`、`settings.section`，以及 `conversation.chat.node` 与 `conversation.input.*` 子座）、`sidebarRight` / `sidebarRightTabs` / `locale` 服务与 `openTabIn`、侧栏展开规划（dockkit `planSetExpanded`）、文件拾取与 tab 关闭契约（`shell.bindFilePicker` / `tab.actions.close`）、以及复刻所依据的官方原语（`fileSizeText` / `fileExtension` 与附件 glyph 路径，逐字一致）。插件对宿主内部结构的依赖较多（槽位遮蔽、`useTabInfo`、`sidebarRight`、`--dsw-*` 令牌），代码里处处用 `typeof` 守卫 + `try/catch` 降级，但宿主大版本升级仍可能失效。**升级宿主后请按 [TESTING.md](./TESTING.md) 走一遍冒烟清单。**
+对 `0.1.7-rc.2` / web `0.2.0-rc.2`，除实机验证外，还从对应版本的客户端包（`dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation` / `dsh-client-ui-chat`）逐值提取了候选菜单、上下文小圈、stats dock 与用户消息气泡的官方 CSS 核对；桌面 `0.2.1-rc.3` 另从该版 `app.asar` 取出官方 CSS Modules 与主题 token 做静态逐值核对。插件依赖的契约按版本核对过：用到的槽位（`conversation.composer.bar`、`sidebar.right.pane.tab`、`settings.section`，以及 `conversation.chat.node` 与 `conversation.input.*` 子座）、`sidebarRight` / `sidebarRightTabs` / `locale` 服务与 `openTabIn`、侧栏展开规划（dockkit `planSetExpanded`）、文件拾取与 tab 关闭契约（`shell.bindFilePicker` / `tab.actions.close`）、以及复刻所依据的官方原语（`fileSizeText` / `fileExtension` 与附件 glyph 路径，逐字一致）；0.3.9 的菜单修复另在隔离 web `0.2.2-rc.1` 上以无头 Edge 自动化探针验收（33/33 断言通过）。插件对宿主内部结构的依赖较多（槽位遮蔽、`useTabInfo`、`sidebarRight`、`--dsw-*` 令牌），代码里处处用 `typeof` 守卫 + `try/catch` 降级，但宿主大版本升级仍可能失效。**升级宿主后请按 [TESTING.md](./TESTING.md) 走一遍冒烟清单。**
 
 ### 主题 / 皮肤插件兼容（皮肤作者必读）
 

@@ -91,7 +91,7 @@ To pin a version or maintain the profile by hand, the manual equivalent of **Met
 ```jsonc
 {
   "dependencies": {
-    "dsh-codinput": "^0.3.8"          // for local development: "link:/abs/path/to/DSH-Codinput"
+    "dsh-codinput": "^0.3.9"          // for local development: "link:/abs/path/to/DSH-Codinput"
   },
   "dsh": {
     "profile": {
@@ -110,18 +110,19 @@ After editing the profile by hand, run `pnpm install` inside the profile directo
 
 ## Compatibility
 
-The host publishes **rc** builds on npm: `latest` is the current stable rc, `next` the following rc, `alpha` further ahead (as of 2026-10-30, `latest` / `next` both point at `0.2.1-rc.5`, `alpha` is `0.2.2-alpha.2`), so a plain install gives you an rc.
+The host publishes **rc** builds on npm: `latest` is the current stable rc, `next` the following rc, `alpha` further ahead (as of 2026-11-06, `latest` / `next` both point at `0.2.2-rc.1`, `alpha` is `0.2.2-alpha.3`), so a plain install gives you an rc.
 
 | Host version | Status |
 | --- | --- |
 | Desktop app (Electron, `0.2.1-rc.3`) | ✅ Static alignment (0.3.8 extracts this build's official CSS Modules and theme tokens from `app.asar` and checks them value by value: Switch rules, the stats / ContextMeter panels' portal+fixed placement, background and radius, and `--dsh-frame-top-clearance` all match; the macOS vibrancy/opacity difference was not eyeballed on a real desktop). The `0.2.1-rc.2` real-instance run recorded in 0.3.2 still holds (official voice-input button synced — mic permission → recording → transcription verified end to end; the button hides itself when the voice plugin is absent or off) |
 | web `0.2.0-rc.2` | ✅ Verified on a real instance (this machine's current web host; the slot mirrors, model-seat delegation, user-message Markdown and three-panel exclusivity from 0.3.5–0.3.7 were verified on this build with Chromium automation probes; the 0.3.8 portal-panel placement/Escape/outside-close and Markdown hardening were additionally re-checked in an isolated host with headless Edge — see CHANGELOG) |
+| web `0.2.2-rc.1` | ✅ Verified on a real instance (0.3.9 menu-fix pass: isolated host + headless Edge automation, 33/33 assertions — menus portaled to body, pixel-exact model / permission / settings-dropdown geometry, ancestor-transform immunity, layout-shift follow within 2 frames, trigger toggling works; see CHANGELOG) |
 | `0.1.7-rc.2` | ✅ Verified on a real instance (the acrylic candidate menu, the relocated context meter and the dock row layout are aligned to this build) |
 | `0.1.5-rc.2` | ✅ Verified on a real instance |
 | `0.1.6-alpha.2` | ✅ Current development baseline; every feature verified end to end |
-| others (incl. current `latest` / `next` = `0.2.1-rc.5`) | untested; older hosts lack the rc.2 tokens, so the fallback chain keeps each host's official look |
+| others (incl. current `latest` / `next` = `0.2.2-rc.1`) | untested; older hosts lack the rc.2 tokens, so the fallback chain keeps each host's official look |
 
-For `0.1.7-rc.2` / web `0.2.0-rc.2`, on top of the real-instance run, the official CSS for the candidate menu, the context meter, the stats dock and the user-message bubble were extracted value by value from the corresponding version's client packages (`dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation` / `dsh-client-ui-chat`) and checked against the replicas. The contracts this plugin relies on were verified per version: the slots it uses (`conversation.composer.bar`, `sidebar.right.pane.tab`, `settings.section`, plus `conversation.chat.node` and the `conversation.input.*` sub-seats), the `sidebarRight` / `sidebarRightTabs` / `locale` services and `openTabIn`, the sidebar expansion planner (dockkit `planSetExpanded`), the file-picker and tab-close contracts (`shell.bindFilePicker` / `tab.actions.close`), and the official primitives the replicas are copied from (`fileSizeText` / `fileExtension` and the attachment glyph paths, byte for byte); the desktop `0.2.1-rc.3` build was additionally checked statically against the official CSS Modules and theme tokens extracted from its `app.asar`. For how to re-run this on another channel, see the “Verifying on another channel” section of [TESTING.md](./TESTING.md).
+For `0.1.7-rc.2` / web `0.2.0-rc.2`, on top of the real-instance run, the official CSS for the candidate menu, the context meter, the stats dock and the user-message bubble were extracted value by value from the corresponding version's client packages (`dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation` / `dsh-client-ui-chat`) and checked against the replicas. The contracts this plugin relies on were verified per version: the slots it uses (`conversation.composer.bar`, `sidebar.right.pane.tab`, `settings.section`, plus `conversation.chat.node` and the `conversation.input.*` sub-seats), the `sidebarRight` / `sidebarRightTabs` / `locale` services and `openTabIn`, the sidebar expansion planner (dockkit `planSetExpanded`), the file-picker and tab-close contracts (`shell.bindFilePicker` / `tab.actions.close`), and the official primitives the replicas are copied from (`fileSizeText` / `fileExtension` and the attachment glyph paths, byte for byte); the 0.3.9 menu fix was additionally verified on an isolated web `0.2.2-rc.1` host with headless Edge automation (33/33 assertions); the desktop `0.2.1-rc.3` build was additionally checked statically against the official CSS Modules and theme tokens extracted from its `app.asar`. For how to re-run this on another channel, see the “Verifying on another channel” section of [TESTING.md](./TESTING.md).
 
 The plugin leans on host internals (slot shadowing, `useTabInfo`, `sidebarRight`, `--dsw-*` tokens). Every call site guards with `typeof` checks and degrades gracefully, but a major host upgrade can still break it. **After upgrading the host, walk through [TESTING.md](./TESTING.md).**
 

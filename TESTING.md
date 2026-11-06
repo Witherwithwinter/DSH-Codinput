@@ -85,19 +85,19 @@
 宿主在 npm 上有三个通道，**普通用户拿到的不是 alpha**：
 
 ```bash
-npm view @deepseek-ai/dsh dist-tags   # latest / next = 当前 rc（2026-10-30 同指 0.2.1-rc.5）；alpha = 更超前
+npm view @deepseek-ai/dsh dist-tags   # latest / next = 当前 rc（2026-11-06 同指 0.2.2-rc.1）；alpha = 更超前（0.2.2-alpha.3）
 dsh --version                         # 你本机实际跑的那个
 ```
 
-`latest` 通道发的是 rc（当前 `latest` / `next` 同指 `0.2.1-rc.5`），所以「装了 dsh 插件却跑不起来」的报障大概率发生在 rc 上。开发机可以待在 alpha，但**对外声称的兼容范围应当以 rc 为准**，至少在 rc 上跑一遍第 1、3 节。
+`latest` 通道发的是 rc（当前 `latest` / `next` 同指 `0.2.2-rc.1`），所以「装了 dsh 插件却跑不起来」的报障大概率发生在 rc 上。开发机可以待在 alpha，但**对外声称的兼容范围应当以 rc 为准**，至少在 rc 上跑一遍第 1、3 节。
 
-> **已验记录**：web 宿主 `0.2.0-rc.2` 为当前实机验证基线（0.3.5–0.3.7 均在本机 link 安装下以 Chromium 自动化探针实测，见 CHANGELOG）；桌面版 `0.2.1-rc.2` 的语音同步于 0.3.2 实测通过；现网 `latest` / `next` = `0.2.1-rc.5`（2026-10-30 实测）。换宿主版本后请重新走一遍下面这节。
+> **已验记录**：web 宿主 `0.2.0-rc.2` 为当前实机验证基线（0.3.5–0.3.7 均在本机 link 安装下以 Chromium 自动化探针实测，见 CHANGELOG）；桌面版 `0.2.1-rc.2` 的语音同步于 0.3.2 实测通过；现网 `latest` / `next` = `0.2.2-rc.1`（2026-11-06 实测）；web 宿主 `0.2.2-rc.1` 的菜单专项（0.3.9 / PR #5）已在隔离宿主以无头 Edge 自动化探针验收（33/33 断言通过：portal / 几何 / 跟随 / 开合 / resize）。换宿主版本后请重新走一遍下面这节。
 
 不动现有安装的验证方式（独立 prefix + 独立 `DSH_HOME`，不碰你在用的 profile 与会话）：
 
 ```bash
 # 1) 把另一个通道装到临时 prefix，不覆盖全局安装
-npm i --prefix /tmp/dsh-rc @deepseek-ai/dsh@0.2.1-rc.5
+npm i --prefix /tmp/dsh-rc @deepseek-ai/dsh@0.2.2-rc.1
 
 # 2) 复制一份独立 home（含带 codinput 的 profile）
 cp -r ~/.dsh /tmp/dsh-rc-home
@@ -108,7 +108,14 @@ DSH_HOME=/tmp/dsh-rc-home /tmp/dsh-rc/node_modules/.bin/dsh web --port 3081 --no
 
 重点复验：第 1 节**三态与侧栏承载**（`conversation.composer.bar` 遮蔽、`sidebar.right.pane.tab` 承载判定、收起后的唤回小球）与第 3 节**触发管线与菜单**——宿主契约变化最先断在这两处，其余功能是自绘的，跨通道风险低。
 
-## 8. 0.3.7 / 0.3.8 新功能与回归
+## 8. 0.3.8 / 0.3.9 新功能与回归
+
+**0.3.9 菜单定位与开合（PR #5）**
+
+- [ ] **菜单 portal 到 body**：模型 / 权限 / 设置下拉打开后 `.dci-menu` 的父节点为 `body`、`position: fixed`；祖先带 `transform` / `filter` 的布局下（可用 DevTools 给卡片加 `transform: translateY(150px)`）仍与触发器对齐，不再整体偏移。
+- [ ] **锚点实时跟随**：菜单打开时滚动页面 / 让布局发生位移（≥2px）→ 菜单在 2 帧内跟随触发器，上方弹出间距恒 8px、设置下拉间距恒 4px；窗口缩放后重算并夹在视口内（margin 12），不被输入卡片或设置容器裁剪。
+- [ ] **开合（0.3.9 回归点）**：连点触发器两次 = 开→收（不再「点一次收不起来」）；点外部关闭、点菜单内部不关闭；模型菜单钻入子页 / 返回正常；权限菜单与设置页下拉同样开合正常。
+- [ ] **0.2.2-rc.1 换通道**：按 §7 独立 prefix + `DSH_HOME` 起 `dsh@0.2.2-rc.1` → 上述菜单项与第 1、3 节冒烟全过，`__dshCodinputErrs` 为空。
 
 - [ ] **用户消息 Markdown**：发送一条含 `**加粗**`、行内代码、围栏代码块、列表的消息 → 落库后右侧气泡按 Markdown 渲染，ARIA 语义（paragraph/strong/code/list）正确；@文件 / @会话 / //技能 引用 chip 显示并可点开；复制钮与时间戳、引用摘要行、悬停显形正常；`__dshCodinputErrs` 为空。设置开关即时切换（见第 5 节）。切换宿主语言后复制钮/引用摘要文案即时更新（不刷新）；连续复制后卸载/切形态无残留定时器报错。
 - [ ] **带图用户消息（0.3.7 P0 回归点）**：发一条带图片附件的消息（或打开历史带图消息）→ 图片经官方 `renderMessageImages` 正常显示、无 `data-slot-error` 崩溃面；此后继续发送的用户/插队消息仍是 Markdown 形态（条目未被废黜）；`__dshCodinputErrs` 为空。

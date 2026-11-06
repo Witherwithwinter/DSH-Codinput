@@ -2,6 +2,25 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.9] — 2026-11-06
+
+修复 dsh `0.2.2-rc.1` 上模型 / 权限 / 设置下拉的整体错位、布局变化不跟随与开合失效：菜单改为 portal 到 `document.body`，锚点改按元素实时读取。
+
+### 修复
+
+- **菜单包含块被劫持，整体错位**（`MenuSurface`）：`.dci-menu` 虽为 `position: fixed`，但祖先链上的 `transform` / `filter` / `backdrop-filter` / `contain` 会把包含块从视口换成该祖先，`left/top` 按错误坐标系解释（实测可偏出 400px+）。现改为 `createPortal(document.body)`，与官方 ModelSelect 菜单、数据行详情面板同路数。
+- **锚点是矩形快照，布局变化不跟随**（`MenuSurface`）：原实现保存 `getBoundingClientRect()` 快照，`scroll` / `resize` 重算读同一份快照、结果恒等被丢弃。现改为按元素实时读取；打开期间逐帧比对锚点位置（1px 阈值）兜住不产生 scroll/resize 的布局重排；锚点未布局或菜单零尺寸时不落位。
+- **点触发器开合失效**（`MenuSurface` / `ModelMenu`）：全局 `pointerdown` 捕获监听把落在触发器上的点击也当作外部点击先关闭，触发器 `onClick` 随后读到 `open=false` 又开回来（点一次收不起来）。现外部点击判定跳过锚点、开合交给触发器 toggle；`ModelMenu` 移除自管点外关闭。模型 / 权限 / 设置三处调用方同步改为传元素 + 打开瞬间矩形。
+
+### 说明
+
+- 发布材料：`npm run typecheck` 通过；两次发布构建字节一致（`lib/client.js` sha256 `4ef5a5917614b811b7345adbc5166e649014718dbb63929ee3654e8b2656460c`，与入库产物一致）。
+- 兼容验证：隔离 web 宿主 `@deepseek-ai/dsh@0.2.2-rc.1`（临时 prefix + 独立 `DSH_HOME` + 无头 Edge 自动化探针，`link:` 安装本仓库构建产物）33/33 断言通过——菜单为 `body` 直接子节点 / `position: fixed`；模型菜单 top = 触发器 top − 8 − 菜单高（逐像素 0 误差、右对齐）；祖先 `transform: translateY(150px)` 下仍 0 误差；布局位移 120px 后 2 帧内回贴；连点两次 开→收；点外部关闭、点菜单内不关；设置下拉 top = 触发器 bottom + 4（0 误差）且不被设置容器裁剪；窗口 1440×900→1100×760 后重算跟随。全程 console error / pageerror 为 0、`__dshCodinputErrs` 为空。
+- 未覆盖：模型子页长列表滚动（隔离宿主无凭据、目录为空）、视口 12px 夹取分支、真实模型/权限切换提交。
+- 0.3.8 既有功能与行为不变；本版仅调整菜单定位与开合实现（`lib/client.js` 同步重建）。PR #5（@LittleFishStars）。
+
+[0.3.9]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.8...v0.3.9
+
 ## [0.3.8] — 2026-10-30
 
 数据行三枚详情面板改为官方同构的 portal + fixed 锚定定位（滚动/尺寸变化跟随、Escape 与点外关闭、三面板单一展开）；设置页开关样式与面板背景/圆角 token 对齐官方；修复 patchReload live 热更新后新增样式类不注入；修复 0.3.7 带图用户消息渲染崩溃（P0）并收紧用户消息 Markdown 的安全基线（P1）。
