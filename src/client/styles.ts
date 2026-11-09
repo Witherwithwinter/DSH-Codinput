@@ -8,6 +8,9 @@
  * 写死保持逐值对齐——多跟一分就会在换肤下与官方脱队。
  */
 
+import { markdownStyles } from './markdown';
+import { heavyMarkdownStyles } from './markdown/heavy';
+
 const STYLE_ID = 'dsh-codinput-styles';
 
 const CSS = `
@@ -69,40 +72,49 @@ const CSS = `
 .dci-pos { position: absolute; right: 10px; bottom: 6px; font-size: 11px; color: var(--dsw-alias-label-caption, currentColor); opacity: 0.75;
   pointer-events: none; font-variant-numeric: tabular-nums; z-index: 3; }
 
-.dci-preview { flex: 1 1 100%; min-width: 0; box-sizing: border-box; overflow-y: auto; padding: 8px 14px 10px; font-size: 13px; line-height: 1.65; }
-.dci-preview h1, .dci-preview h2, .dci-preview h3, .dci-preview h4 { margin: 0.7em 0 0.35em; line-height: 1.3; }
-.dci-preview h1 { font-size: 1.35em; } .dci-preview h2 { font-size: 1.2em; } .dci-preview h3 { font-size: 1.08em; }
-.dci-preview p { margin: 0.45em 0; } .dci-preview ul, .dci-preview ol { margin: 0.45em 0; padding-left: 1.5em; }
-.dci-preview code { font-family: inherit; background: color-mix(in srgb, currentColor 9%, transparent);
-  border-radius: 4px; padding: 0.1em 0.35em; font-size: 0.92em; }
-.dci-preview pre { background: color-mix(in srgb, currentColor 7%, transparent); border-radius: 8px;
-  padding: 10px 12px; overflow-x: auto; } .dci-preview pre code { background: transparent; padding: 0; }
-.dci-preview blockquote { margin: 0.5em 0; padding: 0.1em 0.9em; border-left: 3px solid color-mix(in srgb, currentColor 22%, transparent); opacity: 0.85; }
-.dci-preview table { border-collapse: collapse; margin: 0.6em 0; }
-.dci-preview th, .dci-preview td { border: 1px solid color-mix(in srgb, currentColor 18%, transparent); padding: 4px 9px; }
-/* 预览链接走官方 markdown 同款 alias-link token（官方 _markdown_ a 逐值核对）。 */
-.dci-preview a { color: var(--dsw-alias-link, #4c8dff); } .dci-preview img { max-width: 100%; } .dci-preview hr { border: none;
-  border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent); }
+/* Markdown 排版（.dci-preview 预览排版 + .dci-md 扩展块）已迁到
+   src/client/markdown/styles.ts，由本文件末尾拼接 markdownStyles 注入。 */
 
-/* ===== 工具行（官方 InputBar .row / .tools / .trailing）===== */
-.dci-row { flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; min-width: 0; padding: 2px 8px 6px; display: flex; }
-.dci-tools { align-items: center; min-width: 0; gap: 12px; display: flex; }
-.dci-trailing { align-items: center; flex: none; min-width: 0; gap: 12px; margin-left: auto; display: flex; }
+/* ===== 工具行（官方 0.2.2 InputBar .row / .tools / .modes / .trailing 逐值）=====
+   row 兼作容器查询容器（官方 container-type:inline-size）：模型紧凑态、权限
+   触发器 @container (width<=460px) 收起标签等官方子组件规则都按行宽求值。
+   --dci-model-icon = 官方 primitives IconDataOutlineRegular（regular 描边 1、
+   viewBox 16、fill+stroke 双 path，逐字取自宿主 app.asar 的 icon 表）。 */
+.dci-row { flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; min-width: 0; padding: 2px 8px 6px;
+  display: flex; container-type: inline-size;
+  --dci-model-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2016%2016'%20fill%3D'none'%20stroke-width%3D'1'%3E%3Cpath%20d%3D'M7.8667%200.349609C8.96906%200.349634%2010.0601%200.481272%2011.0317%200.735352C11.9973%200.987845%2012.8453%201.362%2013.4644%201.84766C14.0744%202.32629%2014.507%202.95539%2014.5161%203.69336H14.5171V8.53516C14.0843%208.32076%2013.6108%208.17679%2013.1108%208.11816C13.1831%207.96848%2013.2162%207.82856%2013.2163%207.70312V5.76758C12.6269%206.16618%2011.8739%206.47995%2011.0317%206.7002C10.0602%206.95423%208.96896%207.08494%207.8667%207.08496C6.76461%207.08493%205.67411%206.95415%204.70264%206.7002C3.85994%206.48006%203.10694%206.1662%202.51709%205.76758V7.70312L2.521%207.78418C2.56374%208.19554%202.93361%208.74414%203.91357%209.23145C4.9281%209.73585%206.35004%2010.0371%207.8667%2010.0371C8.26373%2010.0371%208.6543%2010.0141%209.03271%209.97461C8.75596%2010.3799%208.54664%2010.8349%208.42041%2011.3232C8.23666%2011.3313%208.0518%2011.3369%207.8667%2011.3369C6.20108%2011.3369%204.57025%2011.01%203.33447%2010.3955C3.04163%2010.2499%202.76658%2010.0836%202.51709%209.90039V11.6738C2.51728%2012.1379%202.88589%2012.7556%203.92236%2013.292C4.93457%2013.8157%206.35342%2014.1289%207.8667%2014.1289C8.12318%2014.1289%208.37694%2014.1161%208.62646%2014.0986C8.82021%2014.5535%209.08999%2014.9682%209.41943%2015.3271C8.91285%2015.3934%208.39149%2015.4287%207.8667%2015.4287C6.19761%2015.4287%204.56379%2015.0869%203.32568%2014.4463C2.11244%2013.8185%201.21649%2012.8562%201.21631%2011.6738V3.76367C1.21595%203.74853%201.21438%203.733%201.21436%203.71777C1.21436%202.96917%201.65103%202.33053%202.26807%201.84668C2.88747%201.36112%203.73675%200.987685%204.70264%200.735352C5.67413%200.481376%206.76457%200.349636%207.8667%200.349609ZM7.8667%201.65039C6.86269%201.65042%205.88326%201.77028%205.03076%201.99316C4.17183%202.2176%203.50421%202.52956%203.06982%202.87012C2.65043%203.19909%202.52622%203.48898%202.51709%203.69336V3.74414C2.52719%203.94845%202.65185%204.23772%203.06982%204.56543C3.50425%204.90601%204.17172%205.21795%205.03076%205.44238C5.88326%205.66527%206.8627%205.78513%207.8667%205.78516C8.8707%205.78513%209.85015%205.66525%2010.7026%205.44238C11.5611%205.21787%2012.2286%204.9049%2012.6626%204.56445C13.0982%204.22252%2013.2163%203.9231%2013.2163%203.71777L13.2104%203.63574C13.1818%203.43623%2013.044%203.16941%2012.6626%202.87012C12.2286%202.52957%2011.5614%202.21773%2010.7026%201.99316C9.85009%201.77025%208.8708%201.65041%207.8667%201.65039Z'%20fill%3D'%23fff'%2F%3E%3Cpath%20d%3D'M12.8936%2010.0361L13.2061%2010.5566C13.2296%2010.5959%2013.2651%2010.6562%2013.3027%2010.707C13.3469%2010.7666%2013.4148%2010.8431%2013.5195%2010.9023C13.6244%2010.9617%2013.725%2010.9801%2013.7988%2010.9873C13.8619%2010.9934%2013.9318%2010.9932%2013.9775%2010.9932H14.6162L14.8896%2011.4502L14.5947%2011.9443C14.5698%2011.9859%2014.5312%2012.0483%2014.5029%2012.1084C14.4781%2012.1611%2014.4514%2012.2312%2014.4395%2012.3164L14.4326%2012.4072L14.4395%2012.4971C14.4514%2012.5825%2014.4781%2012.6532%2014.5029%2012.7061C14.5312%2012.7661%2014.5689%2012.8287%2014.5938%2012.8701L14.8896%2013.3633L14.6162%2013.8213H13.9775C13.9318%2013.8213%2013.8619%2013.821%2013.7988%2013.8271C13.7433%2013.8326%2013.6728%2013.8442%2013.5967%2013.875L13.5195%2013.9121C13.4148%2013.9714%2013.3469%2014.0478%2013.3027%2014.1074C13.265%2014.1583%2013.2296%2014.2186%2013.2061%2014.2578L12.8936%2014.7783H12.3115L11.999%2014.2578C11.9755%2014.2186%2011.9401%2014.1583%2011.9023%2014.1074C11.8693%2014.0628%2011.823%2014.0083%2011.7578%2013.959L11.6855%2013.9121L11.6074%2013.875C11.5316%2013.8445%2011.4615%2013.8325%2011.4062%2013.8271C11.3432%2013.821%2011.2733%2013.8213%2011.2275%2013.8213H10.5889L10.3135%2013.3633L10.6104%2012.8701C10.6352%2012.8287%2010.6739%2012.7661%2010.7021%2012.7061C10.7352%2012.6357%2010.7724%2012.534%2010.7725%2012.4072C10.7724%2012.2804%2010.7352%2012.1788%2010.7021%2012.1084C10.6739%2012.0483%2010.6353%2011.9859%2010.6104%2011.9443L10.3135%2011.4502L10.5889%2010.9932H11.2275C11.2733%2010.9932%2011.3432%2010.9934%2011.4062%2010.9873C11.4801%2010.9801%2011.5808%2010.9616%2011.6855%2010.9023C11.7903%2010.843%2011.8582%2010.7666%2011.9023%2010.707C11.94%2010.6562%2011.9755%2010.5959%2011.999%2010.5566L12.3115%2010.0361H12.8936Z'%20stroke%3D'%23fff'%20stroke-miterlimit%3D'10'%2F%3E%3C%2Fsvg%3E"); }
+/* 官方 data-model-compact（observeControlRow）：隐藏模型文字/强度，显示图标。 */
+.dci-row[data-model-compact] .dci-trigger[data-model] .dci-triggerLabel,
+.dci-row[data-model-compact] .dci-trigger[data-model] .dci-triggerEffort { display: none; }
+.dci-row[data-model-compact] .dci-trigger[data-model]::before { content: ''; flex: none; width: 16px; height: 16px;
+  background-color: currentColor; -webkit-mask: var(--dci-model-icon) center / 16px 16px no-repeat;
+  mask: var(--dci-model-icon) center / 16px 16px no-repeat; }
+.dci-tools, .dci-modes, .dci-trailing { align-items: center; min-width: 0; display: flex; }
+.dci-tools, .dci-modes { gap: 12px; }
+.dci-trailing { flex: none; gap: 12px; margin-left: auto; }
+@container (max-width: 560px) { .dci-tools, .dci-modes, .dci-trailing { gap: 8px; } }
+/* 官方 [hidden] 兜底：.tools/.standardControls 的 display:flex 是类选择器，
+   会盖过 UA 的 [hidden]{display:none}，官方 CSS 显式补同款规则。 */
+.dci-tools[hidden], .dci-standard-controls[hidden] { display: none; }
+.dci-trailing-active { flex: 1; margin-left: 0; }
 
 /* ===== 语音输入座位（官方 .standardControls / .activity / .activityExpanded）=====
    按钮本体是官方 activity 槽位条目组件（Gyyz9a_* 样式由语音插件自带注入）；
-   这里只负责座位：展开时 capture 行接管整行、左侧工具与模型控件让位。 */
+   这里只负责座位：展开时 capture 行接管整行、左侧工具与模型控件让位
+   （官方 hidden 属性隐藏，见 Toolbar）。
+   注意：官方 renderSlot 即使槽位无占用者也会输出 data-slot 包装（display:contents），
+   所以官方 .activity 永远不会命中 :empty ——实测（0.2.2 隔离宿主）无 voice 时
+   activity 是 display:flex 的 0×0 flex item，仍占一个 row gap（官方 trailing=306.6；
+   若隐藏则 294.6，少 12px）。因此这里不能加 :empty{display:none}；「旧宿主没有
+   该槽位」的情况由 Toolbar 用 useSlotDeclaration 决定是否渲染座位。 */
 .dci-standard-controls { align-items: center; min-width: 0; gap: 12px; display: flex; }
 .dci-voice-seat { flex: none; align-items: center; display: flex; }
-.dci-voice-seat:empty { display: none; }
-.dci-row[data-voice-active] .dci-tools, .dci-row[data-voice-active] .dci-standard-controls { display: none; }
-.dci-row[data-voice-active] .dci-trailing { flex: 1; margin-left: 0; }
-.dci-row[data-voice-active] .dci-voice-seat { flex: 1; min-width: 0; }
+.dci-voice-seat-expanded { flex: 1; min-width: 0; }
 
 /* 圆形图标按钮（官方 .add）*/
 .dci-add { background: var(--dsw-specific-selector, color-mix(in srgb, currentColor 8%, transparent));
   width: 28px; height: 28px; color: var(--dsw-alias-label-primary, currentColor); cursor: pointer; border: none;
-  border-radius: 999px; flex: none; place-items: center; display: grid; }
+  border-radius: 999px; corner-shape: round; flex: none; place-items: center; display: grid; }
 .dci-add:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover-solid, color-mix(in srgb, currentColor 14%, transparent)); }
 .dci-add:disabled { opacity: 0.5; cursor: default; }
 
@@ -125,10 +137,15 @@ const CSS = `
 
 /* 发送（官方 .primary）*/
 .dci-send { background: var(--dsw-alias-button-info-fill, color-mix(in srgb, currentColor 85%, transparent)); color: #fff; cursor: pointer;
-  border: none; border-radius: 999px; flex: none; place-items: center; width: 34px; height: 34px;
+  border: none; border-radius: 999px; corner-shape: round; flex: none; place-items: center; width: 34px; height: 34px;
   transition: background-color 0.1s; display: grid; transform: translateY(-2px); }
 .dci-send:hover:not(:disabled) { background: var(--dsw-alias-button-info-hover, color-mix(in srgb, currentColor 70%, transparent)); }
 .dci-send:disabled { opacity: 0.4; cursor: default; }
+/* 官方 .primary[data-sending]:disabled —— sending spinner 态不降透明度、光标 progress。 */
+.dci-send[data-sending]:disabled { opacity: 1; cursor: progress; }
+.dci-sending-spinner { animation: 0.8s linear infinite dci-input-sending; }
+@media (prefers-reduced-motion: reduce) { .dci-sending-spinner { animation-duration: 2.4s; } }
+@keyframes dci-input-sending { to { transform: rotate(360deg); } }
 
 /* ===== 菜单（官方 primitives Menu / ModelSelect .menu 逐值复刻：r20 卡片 / item r10 / 上方弹出）
    卡片 overflow:hidden + max-height:min(360px,100vh-96px)（官方 .menu 同款），
@@ -168,6 +185,11 @@ const CSS = `
   max-height: 400px; box-shadow: var(--dsw-elevation-prominent, 0 10px 34px rgba(0, 0, 0, 0.35));
   border: 0; border-radius: var(--dsw-radius-lg, 20px); flex-direction: column; padding: 4px; display: flex; position: absolute;
   bottom: calc(100% + 4px); left: 0; right: 0; overflow: hidden; }
+/* dropdown（侧栏/悬浮形态）：portal 到 body 的自适应浮层——位置/宽度/最大高度由
+   SlashMenu 量卡片（.dci-card）与视口后内联注入；fixed 不受面板/卡片裁剪，层级盖过
+   悬浮卡（.dci-float z-index:940）但低于模态/灯箱（1000）。normal 形态仍走上面的
+   卡片顶锚定 absolute 规则，几何不变。 */
+.dci-slash-menu[data-dropdown] { position: fixed; z-index: 950; left: auto; right: auto; top: auto; bottom: auto; }
 .dci-slash-viewport { flex-direction: column; min-height: 0; display: flex; overflow-y: auto; }
 .dci-slash-item { cursor: pointer; width: 100%; min-height: 34px; color: var(--dsw-alias-label-primary, inherit);
   text-align: left; background: transparent; border: none; border-radius: var(--dsw-radius-md, 10px); align-items: center; gap: 6px;
@@ -391,8 +413,8 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
 .dci-surface[data-side] .dci-body { flex: 1 1 auto; max-height: none; min-height: 0; }
 .dci-surface[data-side] .dci-row { padding: 6px 8px;
   border-top: 0.5px solid var(--dsw-alias-border-l1, transparent); }
-/* 候选菜单向下弹出（侧栏/悬浮形态：头部行下方），留在卡片边界内不被裁剪。 */
-.dci-surface[data-side] .dci-slash-menu, .dci-surface[data-float] .dci-slash-menu { bottom: auto; }
+/* 候选菜单的 side/float 形态已改为 portal 自适应浮层（见 .dci-slash-menu[data-dropdown]），
+   不再挂在 surface 下，故此处不再需要布局覆盖。 */
 
 /* ===== 设置分区（官方 T1PP 行结构 + 控件样式）===== */
 .dci-settings { display: flex; flex-direction: column; font-size: 14px; color: inherit; }
@@ -641,7 +663,10 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
   border-radius: var(--dsw-radius-sm); padding: 0 5px; }
 .dci-umsg-md :where(h1, h2, h3, h4, h5, h6) code { font: inherit; font-family: var(--ds-font-family-code); }
 .dci-umsg-md input[type='checkbox'] { margin: 0 8px 0 0; accent-color: var(--dsw-alias-label-secondary); }
-.dci-umsg-md img { display: block; width: auto; max-width: 100%; height: auto; margin: 0;
+/* 用户消息图片：width 由统一管线按 Obsidian 尺寸语法（![alt|120](url)）写成
+   width 属性；这里不能写 width:auto（CSS 会覆盖 presentational hint，尺寸语法
+   在用户消息侧失效）。只保留 max-width 约束，未带 width 的图片行为不变。 */
+.dci-umsg-md img { display: block; max-width: 100%; height: auto; margin: 0;
   border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-base); object-fit: contain; }
 .dci-umsg-tscroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
 .dci-umsg-tscroll table { border-collapse: collapse; width: max-content; max-width: max-content; }
@@ -665,7 +690,7 @@ button.dci-umsg-chip:hover, button.dci-umsg-chip:focus { outline: none; text-dec
 button.dci-umsg-chip:focus-visible { box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); }
 .dci-umsg-chip[data-chip="slash"] { font-family: var(--dsw-font-markdown-code-font-family); }
 .dci-umsg-chipicon { width: 1em; height: 1em; margin-right: 4px; vertical-align: -0.125em; }
-`;
+` + markdownStyles + heavyMarkdownStyles;
 
 export function injectStyles(): void {
   const el = document.getElementById(STYLE_ID);

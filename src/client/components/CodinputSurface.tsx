@@ -6,8 +6,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
-import { marked } from 'marked';
-import * as DOMPurifyModule from 'dompurify';
 import type {
   ComposerKeyboard,
   InputActions,
@@ -16,15 +14,22 @@ import type {
   UseProjection,
 } from '../host-types';
 import { stash } from '../services';
-import { loadPrefs, savePrefs } from '../prefs';
+import { loadPrefs, savePrefs, subscribePrefs } from '../prefs';
 import { addFilesToDraft, bindSessionFilePicker, dragHasFiles } from '../attachments';
 import { diagError, diagSession, diagWindow } from '../diag';
 import { IconEdit, IconEye } from '../icons';
 import { t, useT } from '../i18n';
+import {
+  activateMarkdown,
+  handleMarkdownClick,
+  renderMarkdown,
+  type MarkdownImageTarget,
+} from '../markdown';
 import { EditorPane } from './EditorPane';
 import { SlashMenu } from './SlashMenu';
 import { PopupSelectView } from './PopupSelectView';
 import { AttachmentRail } from './AttachmentRail';
+import { ImageLightbox } from './ImageLightbox';
 import { Toolbar } from './Toolbar';
 import { StatsRow } from './StatsRow';
 
@@ -59,12 +64,6 @@ export interface CodinputSurfaceProps {
   onDragZonePointerDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
 }
 
-marked.setOptions({ gfm: true, breaks: true });
-
-/** dompurify 的导出形状随打包条件漂移：默认导出与命名空间都兼容。 */
-const DOMPurify = ((DOMPurifyModule as unknown as { default?: unknown }).default ??
-  DOMPurifyModule) as unknown as { sanitize(html: string): string };
-
 export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
   const { sessionId, state, actions, useProjection, inputStandard, placeholder, disabled, blocked, running, side, hero, chatNodes, float, onDragZonePointerDown } = props;
   // 语言切换时整棵表面重渲染（文案都走 i18n 的 t()）。
@@ -73,12 +72,22 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
   const [editOn, setEditOn] = useState<boolean>(() => loadPrefs().defaultEdit);
   const [previewOn, setPreviewOn] = useState<boolean>(() => loadPrefs().defaultPreview);
   const [bodyHeight, setBodyHeight] = useState<number | null>(() => loadPrefs().composerBodyHeight);
+  /** Markdown 正文等宽连字（设置 → Markdown 等宽连字）：即时跟随 prefs 变化。 */
+  const [markdownMono, setMarkdownMono] = useState<boolean>(() => loadPrefs().markdownMono);
+  useEffect(() => subscribePrefs(() => setMarkdownMono(loadPrefs().markdownMono)), []);
   /** 拖文件悬停卡片时的落区提示（松手即入草稿附件）。 */
   const [dropActive, setDropActive] = useState(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const caretRef = useRef<number | null>(null);
   const previewRef = useRef<HTMLDivElement | null>(null);
+  /** 预览 Markdown 根（图片点灯箱 / 扩展渲染 扩展激活的挂点）。 */
+  const previewBodyRef = useRef<HTMLDivElement | null>(null);
+  /** Markdown 内 http(s) 图片点击后的大图灯箱。 */
+  const [lightbox, setLightbox] = useState<MarkdownImageTarget | null>(null);
+  const onPreviewClick = (event: React.MouseEvent<HTMLDivElement>): void => {
+    handleMarkdownClick(event, { onImage: setLightbox });
+  };
 
   // 高度调节：仅顶边把手，1:1 跟手（顶边上移多少、编辑区就高多少），松手持久化。
   // 宽度不做自有调节——沿用官方聊天宽度调节器（wSkVaW_widthHandle）：
@@ -233,23 +242,38 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
     actions.submit();
   };
 
-  // 官方同语义：草稿与附件皆空时发送禁用（空草稿手势仍可经键盘 Steer）。
+  // 官方同语义（0.2.2 InputBar）：empty = 草稿与附件皆空；machineBusy = 输入机
+  // 三个 busy 阶段（adjudicating / submitting / sending）——编辑器软锁、主按钮
+  // 不再可提交；sending 时主按钮转 spinner，停止由独立停止钮（interruptible）承接。
   const inert = disabled === true || blocked === true;
   const draftEmpty = (state?.draft ?? '').trim() === '';
   const noAttachments = (state?.attachmentIds.length ?? 0) === 0;
-  // 官方 primaryStops：运行中且草稿与附件皆空 → 主按钮变停止；停止形态不随
-  // 禁用锁死（官方 primaryDisabled 在 stops 分支只看 stop 是否可用）。
-  const primaryStops = running === true && draftEmpty && noAttachments;
-  const sendDisabled =
-    inert ||
-    actions === undefined ||
-    (state !== undefined && state.phase === 'submitting') ||
-    (draftEmpty && noAttachments);
+  const empty = draftEmpty && noAttachments;
+  const phase = state?.phase;
+  const sending = phase === 'sending';
+  const machineBusy = phase === 'adjudicating' || phase === 'submitting' || sending;
+  // 官方 primaryStops = running && subagent===null && !sending && (empty || blocked)。
+  // （插件侧无 subagent；blocked 走 bar owner props。）
+  // 停止形态不随禁用锁死：官方 primaryDisabled 在停止分支只看 stop 是否可用。
+  const primaryStops = running === true && !sending && (empty || blocked === true);
+  // 官方 primaryDisabled 的非停止分支：empty || disabled || machineBusy || uploadsPending
+  // （插件侧草稿附件即传即用，无 uploadsPending；!live 等价于 actions 缺席）。
+  const sendDisabled = primaryStops ? false : empty || inert || machineBusy || actions === undefined;
 
+  // 统一 Markdown 管线（与用户消息同一函数）：同步渲染，draft 变更即重算。
   const html = useMemo(
-    () => DOMPurify.sanitize(marked.parse(state?.draft ?? '') as string),
+    () => renderMarkdown(state?.draft ?? '', { surface: 'preview' }),
     [state?.draft, previewOn],
   );
+  // 扩展渲染 扩展（代码高亮 / KaTeX / Mermaid）的 DOM 激活口；无注册扩展时 no-op。
+  // 依赖必须含 previewOn：预览是条件渲染，「先粘贴、后开预览」时 html 没变、根节点
+  // 却从 null 变成新挂载节点，只靠 [html] 会跳过激活（late-mount 路径：KaTeX 停在
+  // 占位、Mermaid 一直 pending、代码块复制按钮无事件）。previewOn 切换时 React 会
+  // 先跑上一次 cleanup，再对新根重新激活；side/float 与 normal 共用本效果。
+  useEffect(() => {
+    if (!previewOn) return undefined;
+    return activateMarkdown(previewBodyRef.current, 'preview');
+  }, [html, previewOn]);
 
   // ---- 分屏同步滚动：两侧按滚动比例互随（内容高度不同，比例映射） ----
   // scroll 不冒泡但走捕获相位，挂在 body 上的 onScrollCapture 能收到两栏的
@@ -380,15 +404,27 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
               placeholder={placeholderText}
               viewRef={viewRef}
               onCaretMoved={caretMoved}
-              disabled={inert}
+              // 官方 busy 软锁：adjudicating / submitting / sending 三阶段编辑器只读
+              //（EditorPane 内部已覆盖前两者，sending 由这里并入 disabled）。
+              disabled={inert || sending}
               autoFocus={true}
               solo={!previewOn}
               stateKey={sessionId ?? 'hero'}
             />
           ) : null}
           {previewOn ? (
-            <div className="dci-preview" data-solo={!editOn} ref={previewRef}>
-              {html ? <div dangerouslySetInnerHTML={{ __html: html }} /> : <span style={{ opacity: 0.4 }}>{t("preview.empty")}</span>}
+            <div className="dci-preview" data-solo={!editOn} ref={previewRef} onClick={onPreviewClick}>
+              {html ? (
+                <div
+                  className="dci-md"
+                  data-dci-md="preview"
+                  data-mono={markdownMono ? 'true' : undefined}
+                  ref={previewBodyRef}
+                  dangerouslySetInnerHTML={{ __html: html }}
+                />
+              ) : (
+                <span style={{ opacity: 0.4 }}>{t("preview.empty")}</span>
+              )}
             </div>
           ) : null}
         </div>
@@ -400,7 +436,11 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
           triggers={triggers}
           caretRef={caretRef}
           useProjection={useProjection}
-          disabled={inert}
+          // 官方两个 owner 信号分开下发：inert（disabled）与 blocked。
+          // locked = inert || blocked；modelSeatLocked = inert || !live（不含 blocked）。
+          disabled={disabled === true}
+          blocked={blocked === true}
+          running={running === true}
           primaryStops={primaryStops}
           onStop={onStop}
           onNotify={notifyFor(sessionId)}
@@ -414,9 +454,12 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
           <StatsRow useProjection={useProjection} sessionId={sessionId} chatNodes={chatNodes} />
         ) : null}
 
-        {/* 官方 MenuView 锚定：主模式以卡片顶上方弹出；侧栏/悬浮形态由
-            SlashMenu 按 dropdown 改为头部行下方向下弹出（不被面板/视口裁剪） */}
-        {triggers ? <SlashMenu triggers={triggers} dropdown={side === true || float === true} /> : null}
+        {/* 官方 MenuView 锚定：normal 形态仍以卡片顶上方 absolute 浮层弹出（几何不变）；
+            side/float 形态由 SlashMenu portal 到 body，按卡片四周空位做自适应 fixed
+            浮层（不遮编辑区、不挤压卡片布局）。 */}
+        {triggers ? (
+          <SlashMenu triggers={triggers} dropdown={side === true || float === true} anchorRef={cardRef} />
+        ) : null}
       </div>
 
       {/* 数据行：主输入/侧栏渲染在卡片下方（官方 hero 新会话态无 stats）。 */}
@@ -425,6 +468,16 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
       ) : null}
 
       {popup ? <PopupSelectView popup={popup} /> : null}
+
+      {/* Markdown 图片大图灯箱（用户消息侧同组件同行为）。 */}
+      {lightbox ? (
+        <ImageLightbox
+          src={lightbox.src}
+          alt={lightbox.alt}
+          labels={{ dialog: t('image.preview'), close: t('image.closePreview') }}
+          onClose={() => setLightbox(null)}
+        />
+      ) : null}
     </div>
   );
 }

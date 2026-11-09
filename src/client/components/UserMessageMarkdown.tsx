@@ -3,10 +3,12 @@
  * 遮蔽条目（prefs.userMarkdown 开启时挂载，关闭即卸载还座官方）。
  *
  * 官方 UserStyleBubble 复刻：右对齐气泡（附件行 + 气泡 + 引用摘要行 + 操作行），
- * 气泡文本在官方纯文本排版之上按 Markdown 渲染（marked gfm+breaks + DOMPurify，
- * 与编辑器预览同一管线），Markdown 样式逐条移植官方 MarkdownText.module.css。
- * @/ 引用 chip、/技能 chip、复制钮、时间戳、点开文件/技能等行为逐值对齐官方
- * projectUserText（dsh-client-ui-primitives，MIT，见 LICENSE 归属段）。
+ * 气泡文本按 Markdown 渲染。v0.6 起渲染统一走 `src/client/markdown/`（与编辑器
+ * 预览同一函数 `renderMarkdown`，输出逐字节一致）；会话引用占位 span
+ * （data-dci-wire）在下面的装饰期换成官方引用 chip。Markdown 样式逐条移植官方
+ * MarkdownText.module.css。@/ 引用 chip、/技能 chip、复制钮、时间戳、点开文件/
+ * 技能等行为逐值对齐官方 projectUserText（dsh-client-ui-primitives，MIT，见
+ * LICENSE 归属段）。
  *
  * 挂载面（v0.3.7 取证，宿主 0.2.x web）：chat.view 的 flowItem 渲染点
  * `renderSlot("conversation.chat.node", owner, { entryKey: routedNode.kind })`，
@@ -15,18 +17,35 @@
  * 发送瞬间的本地回显（PendingSubmissionBubble）不经本槽位，保持官方纯文本，
  * 落库后即换 Markdown 形态。
  *
+ * 宿主代际（0.2.0 → 0.2.2）：0.2.2 的 user 节点视图改由「Factory + 键控座」
+ * 组合渲染，官方 UserContent（conversation.chat.user.content）只负责附件行 /
+ * 文本 / 额外块 / 引用摘要。本组件保留 Markdown 文本接管，但把**附件行**整段
+ * 委托给该 Factory（content.text 置空 → 官方只出附件行）：图片经
+ * conversation.chat.user.images → MessageImages 得到官方缩略图与点击大图灯箱。
+ * 旧 0.2.0 宿主没有该 Factory，FactoryOutlet 会渲染 options.fallback，回落到
+ * 该宿主专有的 renderMessageImages 座位；再没有则保留文件卡降级（不静默丢内容）。
+ * 两条附带约束：question-reply 来源的消息让位官方 question-reply 卡片；原始
+ * HTML 一律按文本转义（data-dci-wire 只能由本文件的 md 扩展产生）。
+ *
  * 已知边界（刻意不做）：KaTeX 数学公式、Shiki 代码高亮与 CodeBlock 语言横幅、
  * 链接分类图标不渲染（官方 MarkdownText 的完整面超出自含范围）；未知内容块
  * 出极简 JSON 块（官方 JsonBlock 的降级形态）。
  */
 
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Marked, type MarkedExtension } from 'marked';
-import * as DOMPurifyModule from 'dompurify';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { SlotRegisterOptions } from '../host-types';
 import { diagError } from '../diag';
+import { loadPrefs, subscribePrefs } from '../prefs';
 import { bindForeign, t, useT, type TranslateParams } from '../i18n';
+import {
+  activateMarkdown,
+  copyTextToClipboard,
+  handleMarkdownClick,
+  renderMarkdown,
+  type MarkdownImageTarget,
+} from '../markdown';
 import { FileGlyph, fileExtension, fileSizeText } from './AttachmentRail';
+import { ImageLightbox } from './ImageLightbox';
 
 /* ---------- 注册 ---------- */
 
@@ -63,12 +82,32 @@ interface UserMessageData {
   referenceLabels?: readonly string[];
   skillNames?: readonly string[];
   time?: unknown;
+  /** 官方 messageDefinition 落在 user/steering 节点上的消息源（鸭子切面）。 */
+  source?: unknown;
 }
 
+/** 0.2.0 宿主座位：官方 MessageImages（缩略图 + 灯箱）的便携 prop 形态。 */
+type RenderMessageImages = (args: { images: readonly unknown[]; align: string; compact?: boolean }) => ReactNode;
+
+/** 0.2.2 宿主座位：键控条目 kit 固定下发的 Factory 渲染器（boundRenderFactorySlot）。 */
+type RenderFactorySlot = (
+  name: string,
+  props: Record<string, unknown>,
+  options?: { fallback?: ReactNode },
+) => ReactNode;
+
 export interface UserMessageMarkdownProps {
-  node?: { data?: UserMessageData } | undefined;
-  /** 官方 renderMessageImages 座位 prop（图片缩略/灯箱全官方）。 */
-  renderMessageImages?: ((args: { images: readonly unknown[]; align: string; compact?: boolean }) => React.ReactNode) | undefined;
+  node?: { kind?: string; data?: UserMessageData } | undefined;
+  /** 0.2.0 宿主：图片缩略/灯箱官方座位（0.2.2 已移除此 prop，改走 Factory）。 */
+  renderMessageImages?: RenderMessageImages | undefined;
+  /**
+   * 0.2.2 宿主：官方 UserMessageNodeView 同座下发的 Factory seat。附件行委托
+   * conversation.chat.user.content；旧宿主没有该 Factory 时 FactoryOutlet 会渲染
+   * options.fallback（本组件传入旧座位/文件卡链路，不静默丢内容）。
+   */
+  renderFactorySlot?: RenderFactorySlot | undefined;
+  /** 0.2.2 用户节点 owner props 直传的授权图片加载器（官方同座）。 */
+  loadImage?: unknown;
   openFile?: ((path: string) => void) | undefined;
   openSkill?: ((name: string) => void) | undefined;
 }
@@ -97,69 +136,10 @@ function contentParts(content: readonly unknown[] | undefined): ContentParts {
   return parts;
 }
 
-/* ---------- Markdown 管线（marked + DOMPurify，与编辑器预览同源） ---------- */
+/* ---------- Markdown 管线 ---------- */
 
-/** dompurify 的导出形状随打包条件漂移：默认导出与命名空间都兼容。 */
-const DOMPurify = ((DOMPurifyModule as unknown as { default?: unknown }).default ??
-  DOMPurifyModule) as unknown as { sanitize(html: string, options?: Record<string, unknown>): string };
-
-/** 用户消息是「不可信 Markdown」面：marked 会原样透传原始 HTML，官方 MarkdownText 则是
- * mdast→React 逐节点渲染且链接/图片只放行 http(s)/mailto。这里用 DOMPurify 白名单收敛到
- * Markdown 产出面——禁 style/form/控件/媒体等原始 HTML（<style> 一旦进 DOM 会全局生效），
- * URI 只留 http(s)/mailto，行内 style 一律去掉。 */
-const SANITIZE_OPTIONS = {
-  ALLOWED_TAGS: [
-    'p', 'br', 'strong', 'em', 'del', 'code', 'pre', 'blockquote', 'ul', 'ol', 'li', 'a', 'img',
-    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'input', 'span',
-  ],
-  ALLOWED_ATTR: [
-    'href', 'src', 'alt', 'title', 'target', 'rel', 'type', 'checked', 'disabled', 'start',
-    'colspan', 'rowspan', 'align', 'data-dci-wire',
-  ],
-  ALLOWED_URI_REGEXP: /^(?:https?:|mailto:)/i,
-  FORBID_ATTR: ['style'],
-};
-
-function escapeHtml(text: string): string {
-  return text.replace(
-    /[&<>"']/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string,
-  );
-}
-
-/** 会话引用的落库线格式：@[标签](dsh-session:…)（官方 SESSION_WIRE_RE）。 */
-const SESSION_WIRE_SRC = /^@\[([^\]\n]+)\]\(dsh-session:[^)\s]+\)/;
-
-/** marked 扩展：线格式不进通用链接解析（DOMPurify 会剥掉 dsh-session: href），
- * 渲染成带 data 的占位 span，装饰期换成会话 chip。 */
-const sessionWireExtension: NonNullable<MarkedExtension['extensions']>[number] = {
-  name: 'dshSessionWire',
-  level: 'inline',
-  start(src: string): number | undefined {
-    const i = src.indexOf('@[');
-    return i < 0 ? undefined : i;
-  },
-  tokenizer(src: string) {
-    const m = SESSION_WIRE_SRC.exec(src);
-    if (!m) return undefined;
-    return { type: 'dshSessionWire', raw: m[0], label: m[1] } as never;
-  },
-  renderer(token) {
-    const label = String((token as { label?: unknown }).label ?? '');
-    return `<span data-dci-wire="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
-  },
-};
-
-const mdParser = new Marked({ gfm: true, breaks: true, extensions: [sessionWireExtension] });
-
-function renderMarkdown(text: string): string {
-  try {
-    return DOMPurify.sanitize(mdParser.parse(text) as string, SANITIZE_OPTIONS);
-  } catch (error) {
-    diagError('umsg.markdown', error);
-    return `<p>${escapeHtml(text).replace(/\n/g, '<br>')}</p>`;
-  }
-}
+/* 统一管线在 src/client/markdown/：renderMarkdown 产出 sanitized HTML；会话引用线格式
+   @[...](dsh-session:…) 的占位 span 由管线扩展产生，下面的装饰期把占位换成官方引用 chip。*/
 
 /* ---------- 引用 chip（官方 projectUserText 逐值复刻） ---------- */
 
@@ -391,9 +371,11 @@ function decorateMarkdownRoot(root: HTMLElement | null, actionsRef: React.Mutabl
   if (!root) return;
   try {
     // 官方 sanitizeUrl 只放行 http(s)/mailto：其余链接（含 DOMPurify 已剥掉 href 的残链）
-    // 没有可点面，拆回纯文本；http(s) 统一新开页。
+    // 没有可点面，拆回纯文本；http(s) 统一新开页。页内锚点（#…）是统一管线的
+    // 脚注上标/回跳，必须保留可点。
     for (const anchor of Array.from(root.querySelectorAll('a'))) {
       const href = anchor.getAttribute('href') ?? '';
+      if (href.startsWith('#')) continue;
       if (/^https?:/i.test(href)) {
         anchor.setAttribute('target', '_blank');
         anchor.setAttribute('rel', 'noreferrer noopener');
@@ -486,27 +468,6 @@ function messageClock(time: unknown, now = Date.now()): string {
   return `${officialText(d.getFullYear() === n.getFullYear() ? 'clock.md' : 'clock.ymd', d.getFullYear() === n.getFullYear() ? 'umsg.clock.md' : 'umsg.clock.ymd', params)} ${clock}`;
 }
 
-async function writeClipboard(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    try {
-      const area = document.createElement('textarea');
-      area.value = text;
-      area.style.position = 'fixed';
-      area.style.opacity = '0';
-      document.body.appendChild(area);
-      area.select();
-      const ok = document.execCommand('copy');
-      area.remove();
-      return ok;
-    } catch {
-      return false;
-    }
-  }
-}
-
 /* ---------- 图标（官方 MessageIconActions glyph 逐字路径） ---------- */
 
 function CopyGlyph(): JSX.Element {
@@ -568,8 +529,38 @@ function MessageImageFallback({ image }: { image: { attachment: unknown } }): JS
   );
 }
 
+/**
+ * 附件行回退：0.2.2 主路径由官方 content Factory 渲染（见 view），只有旧宿主的
+ * FactoryOutlet fallback 才会走到这里——0.2.0 宿主用其 renderMessageImages 座位
+ * （官方缩略图 + 灯箱），再缺则保留文件卡降级，保证内容不静默丢失。
+ */
+function AttachmentRowFallback({
+  attachments,
+  renderMessageImages,
+}: {
+  attachments: ContentParts['attachments'];
+  renderMessageImages?: RenderMessageImages | undefined;
+}): JSX.Element {
+  const compact = attachments.length > 1;
+  return (
+    <div className="dci-umsg-attrow" data-message-attachments="true">
+      {attachments.map((att, index) =>
+        att.type === 'image' ? (
+          <Fragment key={`image:${index}`}>
+            {renderMessageImages
+              ? renderMessageImages({ images: [att.image], align: 'end', compact })
+              : <MessageImageFallback image={att.image} />}
+          </Fragment>
+        ) : (
+          <MessageFileCard key={`file:${index}`} file={att.file} />
+        ),
+      )}
+    </div>
+  );
+}
+
 function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element | null {
-  const { node, renderMessageImages, openFile, openSkill } = props;
+  const { node, renderMessageImages, renderFactorySlot, loadImage, openFile, openSkill } = props;
   // 订阅宿主 locale 快照：语言切换时复制钮/引用摘要等文案即时刷新（其它组件同款）。
   useT();
   const data = (node?.data ?? {}) as UserMessageData;
@@ -577,17 +568,37 @@ function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element |
   const referenceLabels = useMemo(() => (Array.isArray(data.referenceLabels) ? data.referenceLabels : []), [data.referenceLabels]);
   const skillNames = useMemo(() => (Array.isArray(data.skillNames) ? data.skillNames : []), [data.skillNames]);
   const { text, attachments, rest } = useMemo(() => contentParts(content), [content]);
-  const compactImages = attachments.length > 1;
   const showBubble = text !== '' || rest.length > 0;
+  // 官方 UserStyleBubble 的 facts 形状（0.2.2）：引用标签/技能名随 content 传给
+  // 官方 content Factory；text 为空时它不渲染文本，facts 只为同构保留。
+  const factoryFacts = useMemo(
+    () => ({
+      ...(referenceLabels.length > 0 ? { sessionLabels: referenceLabels } : {}),
+      ...(skillNames.length > 0 ? { skillNames } : {}),
+    }),
+    [referenceLabels, skillNames],
+  );
+  const sourceKind = (data.source as { kind?: unknown } | null | undefined)?.kind;
 
-  const html = useMemo(() => (text === '' ? '' : renderMarkdown(text)), [text]);
+  /** Markdown 正文等宽连字（prefs.markdownMono）：即时跟随设置变化。 */
+  const [markdownMono, setMarkdownMono] = useState<boolean>(() => loadPrefs().markdownMono);
+  useEffect(() => subscribePrefs(() => setMarkdownMono(loadPrefs().markdownMono)), []);
+
+  const html = useMemo(() => (text === '' ? '' : renderMarkdown(text, { surface: 'user-message' })), [text]);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  /** Markdown 内 http(s) 图片点击后的大图（用户消息里的 Markdown 图片与预览一致走灯箱）。 */
+  const [lightbox, setLightbox] = useState<MarkdownImageTarget | null>(null);
+  const onMarkdownClick = useCallback((event: React.MouseEvent<HTMLDivElement>): void => {
+    handleMarkdownClick(event, { onImage: setLightbox });
+  }, []);
   const actionsRef = useRef<ChipActions>({ openFile, openSkill, skillNames, referenceLabels });
   actionsRef.current = { openFile, openSkill, skillNames, referenceLabels };
   // 引用标签 / 技能名单后到（投影刷新）时重跑装饰，补齐 @引用与 /技能 chip。
   useEffect(() => {
     decorateMarkdownRoot(bodyRef.current, actionsRef);
   }, [html, referenceLabels, skillNames]);
+  // 扩展渲染 扩展（代码高亮 / KaTeX / Mermaid）的 DOM 激活口；本批未注册扩展时是 no-op。
+  useEffect(() => activateMarkdown(bodyRef.current, 'user-message'), [html]);
 
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<number | null>(null);
@@ -600,7 +611,7 @@ function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element |
   );
   const onCopy = useCallback(() => {
     if (copied || text === '') return;
-    void writeClipboard(text).then((ok) => {
+    void copyTextToClipboard(text).then((ok) => {
       if (!ok) return;
       setCopied(true);
       if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
@@ -611,32 +622,56 @@ function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element |
     });
   }, [copied, text]);
 
+  // 附件行：0.2.2 起整体委托官方 content Factory（text 置空 → 官方只出附件行；
+  // extraBlocks 空、referenceLabels 空数组避免与下方自有引用摘要重复）。图片经
+  // conversation.chat.user.images → MessageImages 走官方缩略图 + 点击大图灯箱。
+  // 旧宿主没有 conversation.chat.user.content Factory 时，FactoryOutlet 渲染
+  // options.fallback：0.2.0 的 renderMessageImages 座位 → 文件卡降级。
+  const attachmentRow =
+    attachments.length === 0 ? null : typeof renderFactorySlot === 'function' ? (
+      renderFactorySlot(
+        'conversation.chat.user.content',
+        {
+          content: { text: '', attachments, extraBlocks: [], referenceLabels: [] },
+          loadImage,
+          facts: factoryFacts,
+          interactive: true,
+        },
+        {
+          fallback: <AttachmentRowFallback attachments={attachments} renderMessageImages={renderMessageImages} />,
+        },
+      )
+    ) : (
+      <AttachmentRowFallback attachments={attachments} renderMessageImages={renderMessageImages} />
+    );
+
+  // 问题 B：问答回复（source.kind === 'user-question-reply'）在官方 0.2.2 由
+  // question-reply 键控卡片（[data-question-reply]，官方 UserMessageBubble）呈现。
+  // 该消息源若再以 user/steering 节点落到本座（历史投影/旧宿主兜底形态），本组件
+  // 再渲染一份就会让同一条问答在消息流里出现两次——这里直接让位官方卡片。
+  if (sourceKind === 'user-question-reply') return null;
+
   if (!showBubble && attachments.length === 0 && referenceLabels.length === 0 && data.time === undefined) {
     // 空消息：不渲染任何东西（避免空操作行突兀）。
     return null;
   }
 
   return (
-    <div className="dci-umsg-row">
+    <div className="dci-umsg-row" data-dci-node={node?.kind} data-dci-src={typeof sourceKind === 'string' ? sourceKind : undefined}>
       <div className="dci-umsg-stack">
-        {attachments.length > 0 && (
-          <div className="dci-umsg-attrow" data-message-attachments="true">
-            {attachments.map((att, index) =>
-              att.type === 'image' ? (
-                <Fragment key={`image:${index}`}>
-                  {renderMessageImages
-                    ? renderMessageImages({ images: [att.image], align: 'end', compact: compactImages })
-                    : <MessageImageFallback image={att.image} />}
-                </Fragment>
-              ) : (
-                <MessageFileCard key={`file:${index}`} file={att.file} />
-              ),
-            )}
-          </div>
-        )}
+        {attachmentRow}
         {showBubble && (
           <div className="dci-umsg-bubble">
-            {text !== '' && <div className="dci-umsg-md" ref={bodyRef} dangerouslySetInnerHTML={{ __html: html }} />}
+            {text !== '' && (
+              <div
+                className="dci-umsg-md dci-md"
+                data-dci-md="user-message"
+                data-mono={markdownMono ? 'true' : undefined}
+                ref={bodyRef}
+                onClick={onMarkdownClick}
+                dangerouslySetInnerHTML={{ __html: html }}
+              />
+            )}
             {rest.map((block, index) => (
               <pre key={index} className="dci-umsg-extra">
                 {officialText('message.extraBlock', 'umsg.extraBlock')}
@@ -667,6 +702,14 @@ function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element |
             {copied ? <CheckGlyph /> : <CopyGlyph />}
           </button>
         </div>
+        {lightbox ? (
+          <ImageLightbox
+            src={lightbox.src}
+            alt={lightbox.alt}
+            labels={{ dialog: t('image.preview'), close: t('image.closePreview') }}
+            onClose={() => setLightbox(null)}
+          />
+        ) : null}
       </div>
     </div>
   );

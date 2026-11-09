@@ -171,9 +171,11 @@ function StatPanel(props: {
   );
 }
 
-/** 官方 exactCount：千分位分组 + " tok"。 */
+/** 官方 formatExactTokens：千分位分组 + " tok"；NaN/Infinity/负值不渲染（"—"）。 */
 function exactCount(value: number | undefined): string {
-  const digits = String(value ?? 0);
+  if (value === undefined) return '0 tok';
+  if (!Number.isFinite(value) || value < 0) return '—';
+  const digits = String(Math.trunc(value));
   const groups: string[] = [];
   for (let end = digits.length; end > 0; end -= 3) groups.unshift(digits.slice(Math.max(0, end - 3), end));
   return `${groups.join(',')} tok`;
@@ -230,15 +232,13 @@ function Pill(props: { stats: SessionStats; open: boolean; onToggle(): void; onC
           panelRef={panelRef}
           position={position}
           rows={[
-            [t('stats.modelTime'), (stats.llmMs ?? 0) > 0 ? formatDuration(stats.llmMs!) : '—'],
-            [t('stats.toolTime'), (stats.toolMs ?? 0) > 0 ? formatDuration(stats.toolMs!) : '—'],
-            [t('stats.ttft'), (stats.ttftSteps ?? 0) > 0 ? formatDuration(stats.ttftMs! / stats.ttftSteps!) : '—'],
+            [t('stats.modelTime'), (stats.llmMs ?? 0) > 0 ? (formatDuration(stats.llmMs!) ?? '—') : '—'],
+            [t('stats.toolTime'), (stats.toolMs ?? 0) > 0 ? (formatDuration(stats.toolMs!) ?? '—') : '—'],
             [
-              t('stats.tpsLabel'),
-              (stats.decodeMs ?? 0) > 0
-                ? t('stats.tps', { tps: formatTokensPerSecond((stats.decodeTokens ?? 0) / ((stats.decodeMs ?? 1) / 1000)) })
-                : '—',
+              t('stats.ttft'),
+              (stats.ttftSteps ?? 0) > 0 ? (formatDuration(stats.ttftMs! / stats.ttftSteps!) ?? '—') : '—',
             ],
+            [t('stats.tpsLabel'), tps !== null ? t('stats.tps', { tps }) : '—'],
           ]}
         />
       ) : null}
@@ -252,6 +252,8 @@ function TokenPill(props: { stats: SessionStats; open: boolean; onToggle(): void
   const { rootRef, panelRef, position } = useStatDialogSeat(open, onClose);
   if (stats.totalTokens === undefined) return null;
   const total = stats.totalTokens;
+  const totalText = formatTokens(total);
+  if (totalText === null) return null;
   const cacheHitText =
     stats.cacheHitText ??
     formatCacheHitPercent(
@@ -267,14 +269,14 @@ function TokenPill(props: { stats: SessionStats; open: boolean; onToggle(): void
         aria-expanded={open}
         aria-label={
           cacheHitText !== null
-            ? `${formatTokens(total)} · ${t('stats.cacheHit', { percent: cacheHitText })}`
-            : formatTokens(total)
+            ? `${totalText} · ${t('stats.cacheHit', { percent: cacheHitText })}`
+            : totalText
         }
         onClick={onToggle}
       >
         <DatabaseIcon />
         <span className="dci-stat-label">
-          {formatTokens(total)}
+          {totalText}
           {cacheHitText !== null ? (
             <>
               <span className="dci-stat-sep" aria-hidden="true">·</span>
@@ -320,7 +322,11 @@ export function StatsRow(props: StatsRowProps): JSX.Element | null {
   const pressure = useProjection
     ? (useProjection('contextPressure') as PressureSnapshot | undefined)
     : undefined;
-  const hasGauge = pressure !== undefined && !!pressure.contextWindow;
+  const hasGauge =
+    pressure !== undefined &&
+    typeof pressure.contextWindow === 'number' &&
+    Number.isFinite(pressure.contextWindow) &&
+    pressure.contextWindow > 0;
   // 面板打开期间其数据源消失（切换会话 / 投影短暂缺席）时自动收起，避免恢复后「自己重开」。
   useEffect(() => {
     if (open === null) return;
@@ -361,7 +367,9 @@ interface BreakdownSnapshot {
   toolsTokens?: number;
 }
 
+/** 上下文分段 token 紧凑文本；NaN/Infinity/负值不渲染（"—"）。 */
 function shortTokens(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return '—';
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}K`;
   return `${n}`;
@@ -386,16 +394,25 @@ export function ContextGauge(props: {
     ? (useProjection('contextBreakdown') as BreakdownSnapshot | undefined)
     : undefined;
 
-  if (!pressure || !pressure.contextWindow) return null;
-  const windowTokens = pressure.contextWindow;
+  const windowTokens = pressure?.contextWindow;
+  if (windowTokens === undefined || !Number.isFinite(windowTokens) || windowTokens <= 0) return null;
   // 官方 contextOccupancy 语义：优先 projectedTokens（含投影增长），缺失退 pressureTokens。
-  const usedTokens = pressure.projectedTokens ?? pressure.pressureTokens ?? 0;
-  const pct = Math.min(100, Math.round((usedTokens / windowTokens) * 100));
+  // 任一脏值（NaN/Infinity/负数）都不进入几何计算。
+  const projected = pressure?.projectedTokens;
+  const pressureTokens = pressure?.pressureTokens;
+  const usedRaw = projected !== undefined ? projected : pressureTokens !== undefined ? pressureTokens : 0;
+  const usedTokens = Number.isFinite(usedRaw) && usedRaw >= 0 ? usedRaw : 0;
+  const pct = Math.min(100, Math.max(0, Math.round((usedTokens / windowTokens) * 100)));
   const dash = (pct / 100) * GAUGE_CIRCUMFERENCE;
+  const breakdownTokens = (value: number | undefined): number =>
+    value !== undefined && Number.isFinite(value) && value > 0 ? value : 0;
+  const systemTokens = breakdownTokens(breakdown?.systemTokens);
+  const toolsTokens = breakdownTokens(breakdown?.toolsTokens);
+  const messageTokens = breakdownTokens(breakdown?.messageTokens);
   const segments: readonly [string, number][] = [
-    ['dci-gauge-colorSystem', breakdown?.systemTokens ?? 0],
-    ['dci-gauge-colorTools', breakdown?.toolsTokens ?? 0],
-    ['dci-gauge-colorMessages', breakdown?.messageTokens ?? 0],
+    ['dci-gauge-colorSystem', systemTokens],
+    ['dci-gauge-colorTools', toolsTokens],
+    ['dci-gauge-colorMessages', messageTokens],
   ];
   return (
     <span className="dci-gauge-root" ref={rootRef}>
@@ -450,21 +467,21 @@ export function ContextGauge(props: {
                     <span className={`dci-gauge-swatch dci-gauge-colorSystem`} aria-hidden="true" />
                     {t("stats.prompt")}
                   </dt>
-                  <dd>~{shortTokens(breakdown?.systemTokens ?? 0)}</dd>
+                  <dd>~{shortTokens(systemTokens)}</dd>
                 </div>
                 <div className="dci-gauge-row">
                   <dt>
                     <span className={`dci-gauge-swatch dci-gauge-colorTools`} aria-hidden="true" />
                     {t("stats.tools")}
                   </dt>
-                  <dd>~{shortTokens(breakdown?.toolsTokens ?? 0)}</dd>
+                  <dd>~{shortTokens(toolsTokens)}</dd>
                 </div>
                 <div className="dci-gauge-row">
                   <dt>
                     <span className={`dci-gauge-swatch dci-gauge-colorMessages`} aria-hidden="true" />
                     {t("stats.messages")}
                   </dt>
-                  <dd>~{shortTokens(breakdown?.messageTokens ?? 0)}</dd>
+                  <dd>~{shortTokens(messageTokens)}</dd>
                 </div>
               </dl>
             </div>,

@@ -6,6 +6,44 @@
 
 const MODIFIERS = new Set(['ctrl', 'alt', 'shift', 'meta', 'mod']);
 
+/** 规范化输出时修饰键的固定顺序（与 comboFromEvent 一致）。 */
+const MODIFIER_ORDER = ['ctrl', 'alt', 'shift', 'meta'] as const;
+
+/** 命名键（enter/escape/arrowup/f12…）：字母开头、字母数字组成。 */
+const NAMED_KEY = /^[a-z][a-z0-9]{0,15}$/;
+
+/** 主键 token 是否可解析：单字符（非空白/加号）或命名键。 */
+function isKeyToken(token: string): boolean {
+  return token.length === 1 ? /[^\s+]/.test(token) : NAMED_KEY.test(token);
+}
+
+/**
+ * 存储的组合串是否基本合法：非空字符串，恰好一个可解析主键，无空/重复
+ * token；`mod` 不与 ctrl/meta 混用（否则 matchEvent 语义有歧义）。
+ */
+export function isValidHotkey(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  if (value.length === 0 || value.length > 64) return false;
+  const tokens = value.toLowerCase().split('+');
+  if (tokens.some((token) => token.length === 0)) return false;
+  const unique = new Set(tokens);
+  if (unique.size !== tokens.length) return false;
+  const keys = tokens.filter((token) => !MODIFIERS.has(token));
+  if (keys.length !== 1 || keys[0] === undefined || !isKeyToken(keys[0])) return false;
+  return !(unique.has('mod') && (unique.has('ctrl') || unique.has('meta')));
+}
+
+/**
+ * 组合串规范化：小写 + 修饰键固定顺序（ctrl+alt+shift+meta，mod 收尾）+ 主键。
+ * 调用方应先用 isValidHotkey 校验；非法输入按原 token 尽力拼接。
+ */
+export function normalizeHotkey(combo: string): string {
+  const tokens = combo.toLowerCase().split('+').filter(Boolean);
+  const modifiers = MODIFIER_ORDER.filter((token) => tokens.includes(token));
+  const key = tokens.find((token) => !MODIFIERS.has(token));
+  return [...modifiers, ...(tokens.includes('mod') ? ['mod'] : []), ...(key === undefined ? [] : [key])].join('+');
+}
+
 /** 事件 → 规范化组合串（如 "ctrl+shift+enter"）；纯修饰键按下返回 null。 */
 export function comboFromEvent(event: KeyboardEvent): string | null {
   const raw = event.key;

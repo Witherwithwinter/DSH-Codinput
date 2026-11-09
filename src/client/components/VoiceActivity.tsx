@@ -9,67 +9,28 @@
  * 渲染。条目出现/消失经 slots.subscribe 响应式跟随（用户开关语音插件即时生效）。
  *
  * props 组装复刻官方 renderer 的合成公式：
- *   {...standard(sessionId/inputActions), ...entry.inject()（其 hooks 子表的
- *   speechReadiness 按 standardHookPropName 变成 useSpeechReadiness 选择器钩子）,
- *   ...ownerProps(locked/onActiveChange), t = locale.bind(entry.locale)}
- * inject 结果按（条目 × 会话）缓存——官方 renderer 同款缓存轴，避免每次渲染
- * 重建对象让钩子身份漂移。宿主未就绪（slots 无检视面 / inject 不可调 /
- * locale 缺席）一律不渲染，绝不半组装。
+ *   {...standard(sessionId/inputActions), ...entry.inject()（hooks 子表的每个
+ *   快照 store 按 standardHookPropName 折成 use<Name> 选择器钩子）,
+ *   ...t = locale.bind(entry.locale), ...ownerProps(locked/onActiveChange)}
+ * 折叠走 slotEntry.entryInjectProps（= 官方 bindInjectSources 的插件侧复刻，
+ * 按条目 × 会话缓存 inject 面、按 store 身份缓存钩子）——**不能只折已知钩子**：
+ * 0.2.2 的 voice-input inject 返回
+ *   { openSettings, hooks: { speechReadiness, microphoneDevice, pluginNavigation },
+ *     selectMicrophone, createRecording, transcribe, ... }
+ * 而 VoiceInput 组件会调用 useSpeechReadiness / useMicrophoneDevice /
+ * usePluginNavigation 三个钩子；旧实现只绑了 speechReadiness，另外两个未定义
+ * 直接抛错，被 EntryBoundary 静默吞掉 → 麦克风整体不渲染（0.2.2 回归根因）。
+ * 通用折叠后旧宿主（hooks 表只有 speechReadiness 的旧条目）同样成立。
+ *
+ * 宿主未就绪（slots 无检视面 / inject 不可调 / locale 缺席）一律不渲染，
+ * 绝不半组装；条目崩溃仍由 EntryBoundary 隔离（只丢本座位）。
  */
 
-import { createElement, useMemo, useSyncExternalStore } from 'react';
-import type { HostObservable, SlotEntryLike } from '../host-types';
-import { diagError } from '../diag';
-import { EntryBoundary, firstComponentEntry, translatorFor, useSlotEntries } from './slotEntry';
+import { createElement, useMemo } from 'react';
+import { EntryBoundary, entryInjectProps, firstComponentEntry, translatorFor, useSlotEntries } from './slotEntry';
 
 const ACTIVITY_SLOT = 'conversation.input.activity';
 const VOICE_NS_FALLBACK = 'voice-input';
-
-type ReadinessSelector = (value: unknown) => unknown;
-type ReadinessHook = (selector: ReadinessSelector) => unknown;
-
-/** observableHook 同款缓存轴：钩子身份按 readiness store 稳定，不逐渲染重订。 */
-const readinessHookCache = new WeakMap<object, ReadinessHook>();
-/** 官方 renderer 的 inject 缓存轴：条目 × 会话绑定。 */
-const injectCache = new WeakMap<object, Map<string, Record<string, unknown> | null>>();
-
-/** 调条目 inject 工厂取 props 面（session 槽位以 sessionId 调用，官方同参）。 */
-function resolveInjected(entry: SlotEntryLike, sessionId: string): Record<string, unknown> | null {
-  if (typeof entry.inject !== 'function') return null;
-  let perSession = injectCache.get(entry);
-  if (!perSession) {
-    perSession = new Map();
-    injectCache.set(entry, perSession);
-  }
-  if (!perSession.has(sessionId)) {
-    let face: Record<string, unknown> | null = null;
-    try {
-      face = (entry.inject as (key: string) => Record<string, unknown>)(sessionId) ?? null;
-    } catch (error) {
-      diagError('voice.inject', error);
-      face = null;
-    }
-    perSession.set(sessionId, face);
-  }
-  return perSession.get(sessionId) ?? null;
-}
-
-/** hooks.speechReadiness（快照 store）→ use<Name> 选择器钩子（observableHook 同款）。 */
-function readinessHookFor(source: unknown): ReadinessHook | null {
-  const face = source as HostObservable<unknown> | undefined;
-  if (!face || typeof face.subscribe !== 'function' || typeof face.getSnapshot !== 'function') return null;
-  let hook = readinessHookCache.get(face);
-  if (!hook) {
-    hook = (selector: ReadinessSelector): unknown =>
-      useSyncExternalStore(
-        (fn: () => void) => face.subscribe(fn) ?? (() => {}),
-        () => selector(face.getSnapshot()),
-        () => selector(face.getSnapshot()),
-      );
-    readinessHookCache.set(face, hook);
-  }
-  return hook;
-}
 
 export interface VoiceActivityProps {
   sessionId: string | undefined;
@@ -88,28 +49,28 @@ export function VoiceActivity(props: VoiceActivityProps): JSX.Element | null {
   // single 槽位赢家 = 优先级最低者 = entries 首个（register 即按优先级排序）。
   const entry = useMemo(() => firstComponentEntry(entries), [entries]);
 
+  // inject 面：通用 hooks→use<Name> 折叠加其余字段原样（entryInjectProps 自带
+  // 条目 × 会话缓存与失败标记，这里不再自建缓存）。
   const injected = useMemo(
-    () => (entry && sessionId ? resolveInjected(entry, sessionId) : null),
+    () => (entry && sessionId ? entryInjectProps(entry, sessionId) : null),
     [entry, sessionId],
   );
   const translator = useMemo(() => (entry ? translatorFor(entry, VOICE_NS_FALLBACK) : null), [entry]);
-  const readinessSource = (injected?.['hooks'] as { speechReadiness?: unknown } | undefined)?.speechReadiness;
-  const useReadiness = useMemo(() => readinessHookFor(readinessSource), [readinessSource]);
 
-  if (!entry || !sessionId || !injected || !translator || !useReadiness) return null;
+  if (!entry || !sessionId || !injected || !translator) return null;
 
-  // hooks 子表已折成 use* 钩子（bindInjectSources 同款），其余 props 原样下传。
-  const { hooks: _hooks, ...actions } = injected;
-  void _hooks;
-  return createElement(EntryBoundary, {
-    children: createElement(entry.component as React.ComponentType<Record<string, unknown>>, {
+  // 官方 renderEntry 展开顺序：standard kit → inject 面 → 条目词典 t → owner props。
+  // owner props 最后展开（与官方一致：条目 inject 不得覆盖 locked/onActiveChange）。
+  return createElement(
+    EntryBoundary,
+    null,
+    createElement(entry.component as React.ComponentType<Record<string, unknown>>, {
       sessionId,
       inputActions,
+      ...injected,
+      t: translator,
       locked,
       onActiveChange,
-      ...actions,
-      useSpeechReadiness: useReadiness,
-      t: translator,
     }),
-  });
+  );
 }

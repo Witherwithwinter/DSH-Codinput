@@ -46,8 +46,10 @@ export interface SlotsService {
   inject(slotName: string, factory: () => Generator<unknown> | (() => unknown)): void;
   /**
    * 槽位检视面（0.2.x 起的 SlotCore 公开方法，鸭子探测）：entries 返回条目
-   * 快照（引用在变更之间稳定，可作 uSES getSnapshot 源；未声明槽返回稳定
-   * 空数组）；subscribe 订阅该槽条目变更。
+   * 快照（引用在变更之间稳定，可作 uSES getSnapshot 源）。**抛错 = 该槽位
+   * 未声明**（旧宿主，或本宿主尚未声明该子槽位）；返回空数组 = 已声明但
+   * 当前无占用者——两者语义不同，见 slotEntry.useSlotDeclaration。
+   * subscribe 订阅该槽条目变更（未声明键可能同样抛错）。
    */
   entries?(key: string): readonly unknown[];
   subscribe?(key: string, fn: () => void): () => void;
@@ -75,7 +77,13 @@ export interface SlotEntryLike {
 // ---------- input machine ----------
 
 export type DraftAttachmentId = string;
-export type InputPhase = 'plain' | 'adjudicating' | 'claimed' | 'submitting';
+/**
+ * 输入机提交阶段（官方 0.2.2 contract/input.d.ts 逐值）：
+ * `adjudicating`（`/` 行命令裁决中）、`submitting`（已 claim 的命令执行中）、
+ * `sending`（普通消息等待 Host 接收；0.2.2 新增）。三者都是 busy：
+ * 编辑器/附件只读，发送主按钮不可重复提交。
+ */
+export type InputPhase = 'plain' | 'adjudicating' | 'claimed' | 'submitting' | 'sending';
 
 export interface InputState {
   readonly draft: string;

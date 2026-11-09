@@ -26,7 +26,15 @@
  */
 
 import { useMemo } from 'react';
-import { entryId, listRows, renderSlotEntry, useSlotEntries } from './slotEntry';
+import type { ReactNode } from 'react';
+import {
+  entryId,
+  entryInjectFailed,
+  firstComponentEntry,
+  listRows,
+  renderSlotEntry,
+  useSlotEntries,
+} from './slotEntry';
 
 export interface InputSlotSeatProps {
   /** 官方子槽位全名（如 conversation.input.left）。 */
@@ -46,4 +54,51 @@ export function InputSlotSeat(props: InputSlotSeatProps): JSX.Element | null {
   if (sessionId === undefined || rows.length === 0) return null;
 
   return <>{rows.map((entry, index) => renderSlotEntry(entry, entryId(entry, index), { sessionId, standard }))}</>;
+}
+
+export interface InputSingleSlotProps {
+  /** 官方单值子槽位全名（如 conversation.input.permission / .plan）。 */
+  slot: string;
+  sessionId: string | undefined;
+  /** 宿主下发给本插件条目的 standard props 原样面。 */
+  standard: Record<string, unknown> | undefined;
+  /** 官方 renderSlot 第二参数的 owner props（如 { locked }）。 */
+  ownerProps?: Record<string, unknown> | undefined;
+  /**
+   * 兜底渲染（可选）：
+   * - 条目 inject 面在插件 fiber 里不可复现（依赖宿主服务面的 inject 会抛
+   *   `without inject`，见 slotEntry.boundInject）→ 渲染 fallback；
+   * - 条目组件自身崩溃 → EntryBoundary 回退 fallback。
+   * 缺省 null（槽位有占用者但无法镜像时按官方「画不出来」处理）。
+   */
+  fallback?: ReactNode;
+}
+
+/**
+ * 单值槽位镜像（0.2.2 的 `conversation.input.permission` / `.plan` 用）。
+ *
+ * 官方口径（InputBar.tsx）：`renderSlot("conversation.input.permission", { locked })`
+ * 与 `renderSlot("conversation.input.plan", { locked })` 位于 `.tools` 内
+ * `.modes` 容器（permission 在前）。**槽位已声明但无占用者 = 官方留空**，
+ * 因此这里对「已声明 + 空」返回 null，绝不回退自绘控件；「未声明」由调用方
+ * 用 `useSlotDeclaration` 区分后决定回退（旧宿主才回退 PermissionMenu）。
+ */
+export function InputSingleSlot(props: InputSingleSlotProps): JSX.Element | null {
+  const { slot, sessionId, standard, ownerProps, fallback } = props;
+  const entries = useSlotEntries(slot);
+  const occupant = useMemo(() => firstComponentEntry(entries), [entries]);
+
+  // 官方门槛：无会话不画该座位（InputBar 的 sessionId 三元）。
+  if (sessionId === undefined || occupant === null) return null;
+
+  // 让位可行性：inject 面必须在宿主 fiber 上下文里才算数（见 slotEntry）。
+  // 不可复现时回退调用方给的兜底（permission 用自绘菜单保住旧功能）。
+  if (entryInjectFailed(occupant, sessionId)) return <>{fallback ?? null}</>;
+
+  return renderSlotEntry(occupant, `single:${entryId(occupant, 0)}`, {
+    sessionId,
+    standard,
+    ownerProps,
+    fallback,
+  });
 }

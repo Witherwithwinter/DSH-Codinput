@@ -1,6 +1,6 @@
 {
   "name": "dsh-codinput",
-  "version": "0.3.9",
+  "version": "0.4.0",
   "description": "DSH 插件：把聊天输入框变成代码编辑器一样的输入风格（CodeMirror 6 接管 conversation.composer.bar），web 与桌面端通用。",
   "license": "MIT",
   "author": "Witherwithwinter",
@@ -66,7 +66,10 @@
     "@codemirror/state": "^6.5.2",
     "@codemirror/view": "^6.36.0",
     "dompurify": "^3.2.4",
-    "marked": "^15.0.6"
+    "highlight.js": "^11.12.0",
+    "katex": "^0.18.0",
+    "marked": "^15.0.6",
+    "mermaid": "^12.3.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.18",

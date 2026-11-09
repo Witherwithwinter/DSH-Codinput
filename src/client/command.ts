@@ -3,9 +3,10 @@
  * 贡献。
  *
  * /codinput：输入回车即切换接管（进入/退出），菜单描述随当前状态变化；接管
- * 关闭（官方输入框）时输入同样生效——贡献注册是全局生命周期。菜单拾取路径
- * 会把 "/codinput" 插进草稿而不提交，切换后需清空当前草稿。侧栏里发起的退
- * 出会经总线请求 body 关掉自己的标签（见 sideinput）。
+ * 关闭（官方输入框）时输入同样生效——贡献注册是全局生命周期。命令 token 由
+ * 宿主 consume-token 通道消费；插件只在残留时兜底剥离 token 本身，绝不整体
+ * 清空草稿（否则「先有草稿再 /codinput 退出」会丢草稿）。侧栏里发起的退出会
+ * 经总线请求 body 关掉自己的标签（见 sideinput）。
  *
  */
 
@@ -17,13 +18,40 @@ import { t } from './i18n';
 import { IconCodinputCommand16 } from './icons';
 import { diagWindow, runGuarded } from './diag';
 
-function clearDraftOf(sessionId: string | undefined): void {
+/** `/codinput` 命令 token 的规范拼写（宿主命令名即 `codinput`）。 */
+const COMMAND_TOKEN = '/codinput';
+
+/**
+ * 清理 `/codinput` 命令 token 的残留，**只剥 token，不碰草稿其余内容**。
+ *
+ * 官方命令通道在调用 `ui.run` 之前会先派发 `slash/input-consume-token`
+ * （菜单拾取 = exact span，裸命令回车 = bare-token），正常路径此时草稿里
+ * 已经没有 token。但「工具行指令按钮程序化唤起菜单」等路径的 span 消费
+ * 可能落空，草稿里会残留 "/codinput" 前缀。旧实现无条件 `setDraft('')`
+ * 把草稿整体清空——用户先有草稿、再输入 `/codinput` 退出接管时，宿主只
+ * 消费掉命令 token，剩下的用户草稿随后被这段无条件清空吞掉（普通/悬浮
+ * 形态都中招，退出后内置输入框变空）。
+ *
+ * 这里沿用宿主 bare-token guard 的判据：只有「token 本身」或「token 后跟
+ * 空白」才当作命令 token 处理；"/codinputX" 这类真的用户文本不动。清理后
+ * 余下的用户内容原样保留。
+ */
+function stripCommandToken(sessionId: string | undefined): void {
   if (!sessionId) return;
   try {
     const actx = stash.sessions?.scope(sessionId);
-    if (actx && stash.conversation) stash.conversation.input.for(actx).setDraft('');
+    if (!actx || !stash.conversation) return;
+    const input = stash.conversation.input.for(actx);
+    const draft = input.state?.getSnapshot?.().draft ?? '';
+    const leading = draft.replace(/^\s+/, '');
+    if (!leading.toLowerCase().startsWith(COMMAND_TOKEN)) return;
+    const rest = leading.slice(COMMAND_TOKEN.length);
+    // 宿主命令 token 语法：token 必须以行尾/空白收尾。
+    if (rest !== '' && !/^\s/.test(rest)) return;
+    const next = rest.replace(/^\s+/, '');
+    if (next !== draft) input.setDraft(next);
   } catch {
-    /* 会话作用域不可达时忽略（提交路径本就会清空草稿） */
+    /* 会话作用域不可达时忽略（退出接管本身不受影响） */
   }
 }
 
@@ -97,8 +125,12 @@ export function registerCodinputCommand(ctx: ClientContext): void {
             ui: {
               kind: 'action',
               run: () => {
-                // 卸载会清掉诊断 sessionId，先捕获再延迟清草稿。
+                // 卸载会清掉诊断 sessionId，先捕获（清理必须在卸载前做完，
+                // 否则官方输入框挂载时就会带上残留 token）。
                 const sessionId = diagWindow().__dshCodinputSessionId ?? undefined;
+                // 只剥离命令 token：宿主已派发 consume-token，这里兜住
+                // 「程序化唤起菜单导致 span 消费落空」的残留；用户草稿保留。
+                stripCommandToken(sessionId);
                 savePrefs({ enabled: !loadPrefs().enabled });
                 // 侧栏里发起的退出：关掉承载会话的 Codinput 标签（body 经
                 // tab 域 actions.close 关闭、卸载撤销承载），主输入回到官方
@@ -106,7 +138,6 @@ export function registerCodinputCommand(ctx: ClientContext): void {
                 if (!loadPrefs().enabled) {
                   for (const carried of carriedSessionIds()) requestSidebarTabClose(carried);
                 }
-                setTimeout(() => clearDraftOf(sessionId), 80);
               },
             },
           }),

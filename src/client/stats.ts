@@ -157,30 +157,90 @@ export function deriveChatStats(nodes: unknown): ChatStats | undefined {
   return { turns: turns.size, steps, llmMs, toolMs, ttftMs, ttftSteps, decodeMs, decodeTokens };
 }
 
-/** 官方 formatTokensPerSecond：≥10 取整，<10 保留 1 位小数。 */
-export function formatTokensPerSecond(tps: number): string {
+/** 官方 formatTokensPerSecond：≥10 取整，<10 保留 1 位小数；NaN/Infinity → null。 */
+export function formatTokensPerSecond(tps: number): string | null {
+  if (!Number.isFinite(tps)) return null;
   const clamped = Math.max(0, tps);
   return clamped >= 10 ? String(Math.round(clamped)) : String(Math.round(clamped * 10) / 10);
 }
 
-/**
- * 官方 formatCacheHitPercent 语义：整除 100 → "100"；整数舍入 <100 → 整数；
- * 否则递增小数位直到舍入仍 <100（99.9 / 99.99 …）。
- */
-export function formatCacheHitPercent(cacheReadTokens: number, promptTokens: number): string | null {
-  if (promptTokens <= 0) return null;
-  if (cacheReadTokens >= promptTokens) return '100';
-  for (let places = 0; places < 20; places++) {
-    const factor = 10 ** places;
-    const rounded = Math.round((cacheReadTokens / promptTokens) * 100 * factor) / factor;
-    if (rounded < 100) return places === 0 ? String(rounded) : rounded.toFixed(places);
+/** 官方 roundedPercentUnits：把缓存占比四舍五入到精确百分比单位（正半分进位）。 */
+function roundedPercentUnits(cacheReadTokens: number, promptTokens: number, decimalPlaces: number): number {
+  const scale = (decimalPlaces === 0 ? 1 : 10) * 100;
+  const doubledScale = scale * 2;
+  const denominatorQuotient = Math.floor(promptTokens / doubledScale);
+  const denominatorRemainder = promptTokens % doubledScale;
+  let lower = 0;
+  let upper = scale;
+  while (lower < upper) {
+    const candidate = Math.floor((lower + upper + 1) / 2);
+    const factor = candidate * 2 - 1;
+    if (
+      cacheReadTokens >=
+      factor * denominatorQuotient + Math.ceil((factor * denominatorRemainder) / doubledScale)
+    ) {
+      lower = candidate;
+    } else {
+      upper = candidate - 1;
+    }
   }
-  return '99.99';
+  return lower;
 }
 
-/** 官方 formatDuration：<60s 一位小数秒，否则 分+秒。 */
-export function formatDuration(ms: number): string {
-  const s = ms / 1000;
+/** 官方 displayPercentUnits：0 位 → 整数；>0 位 → 整数 + 一位小数（官方只支持 0/1）。 */
+function displayPercentUnits(units: number, decimalPlaces: number): string {
+  if (decimalPlaces === 0) return String(units);
+  const whole = Math.floor(units / 10);
+  const tenths = units % 10;
+  return tenths === 0 ? String(whole) : `${whole}.${tenths}`;
+}
+
+/**
+ * 官方 formatCacheHitPercent 完整算法（0.2.2-rc.1）：无计费输入 → null；
+ * 全命中 → "100"；整数舍入仍 <100 → 整数文本；否则按官方「区分精度」规则
+ * 返回 99.9…（不把部分命中断章取义成 99.99 或 100）。NaN/Infinity → null。
+ *
+ * @param decimalPlaces 官方只使用 0 / 1 两档；非 0 一律按 1 位处理。
+ */
+export function formatCacheHitPercent(
+  cacheReadTokens: number,
+  promptTokens: number,
+  decimalPlaces = 0,
+): string | null {
+  if (!Number.isFinite(cacheReadTokens) || !Number.isFinite(promptTokens)) return null;
+  const prompt = Math.trunc(promptTokens);
+  if (prompt <= 0) return null;
+  // 计数应为整数；脏值截断并夹到 [0, prompt]，保证算法整数语义且不越界。
+  const cacheRead = Math.min(Math.max(0, Math.trunc(cacheReadTokens)), prompt);
+  const missedInputTokens = prompt - cacheRead;
+  if (missedInputTokens === 0) return '100';
+  const places = decimalPlaces === 0 ? 0 : 1;
+  const roundedUnits = roundedPercentUnits(cacheRead, prompt, places);
+  if (roundedUnits < (places === 0 ? 100 : 1e3)) return displayPercentUnits(roundedUnits, places);
+  let distinguishingPlaces = 1;
+  let scaledDoubleGap = missedInputTokens * 200;
+  const denominatorTens = Math.floor(prompt / 10);
+  while (scaledDoubleGap <= denominatorTens) {
+    scaledDoubleGap *= 10;
+    distinguishingPlaces += 1;
+  }
+  const denominatorOnes = prompt % 10;
+  let roundedLoss = 5;
+  for (let loss = 1; loss < 5; loss += 1) {
+    const factor = loss * 2 + 1;
+    const threshold = factor * denominatorTens + Math.floor((factor * denominatorOnes) / 10);
+    if (scaledDoubleGap <= threshold) {
+      roundedLoss = loss;
+      break;
+    }
+  }
+  return `99.${'9'.repeat(distinguishingPlaces - 1)}${10 - roundedLoss}`;
+}
+
+/** 官方 formatDuration：<60s 一位小数秒，否则 分+秒；NaN/Infinity → null。 */
+export function formatDuration(ms: number): string | null {
+  if (!Number.isFinite(ms)) return null;
+  const s = Math.max(0, ms) / 1000;
   if (s < 60) return `${Math.round(s * 10) / 10}s`;
   const whole = Math.round(s);
   return `${Math.floor(whole / 60)}分${whole % 60}秒`;
@@ -260,11 +320,23 @@ function readTurnsSteps(k2: unknown, k3: unknown): ChatStats | undefined {
   return pick(k2) ?? pick(k3);
 }
 
-/** 官方 formatTokens：<1e3 原值，否则 K/M（≥100 取整、<100 一位小数）。 */
-export function formatTokens(tokens: number): string {
+/**
+ * 官方紧凑 token 文本（517 / 12.2K / 1.2M，本地文案后缀 " tok"）：
+ * <1e3 原值；<1e6 用 K（≥100 取整、<100 一位小数）；≥1e6 用 M。
+ * K 位舍入到 1000 时进位到 M，永远不出现 "1000K"（如 999_950 → "1M"）。
+ * NaN/Infinity 不渲染（返回 null）。
+ */
+export function formatTokens(tokens: number): string | null {
+  if (!Number.isFinite(tokens)) return null;
+  const value = Math.max(0, tokens);
   const scaled = (candidate: number): string =>
     candidate >= 100 ? String(Math.round(candidate)) : String(Math.round(candidate * 10) / 10);
-  if (tokens < 1e3) return `${tokens} tok`;
-  if (tokens < 1e6) return `${scaled(tokens / 1e3)}K tok`;
-  return `${scaled(tokens / 1e6)}M tok`;
+  if (value < 1e3) return `${String(value)} tok`;
+  if (value < 1e6) {
+    const thousands = value / 1e3;
+    const roundedK = thousands >= 100 ? Math.round(thousands) : Math.round(thousands * 10) / 10;
+    if (roundedK < 1e3) return `${String(roundedK)}K tok`;
+    return `${scaled(value / 1e6)}M tok`;
+  }
+  return `${scaled(value / 1e6)}M tok`;
 }

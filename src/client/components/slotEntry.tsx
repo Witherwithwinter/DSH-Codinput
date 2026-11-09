@@ -56,6 +56,43 @@ const RENDERABLE_OBJECT_TYPES: readonly symbol[] = [
   Symbol.for('react.lazy'),
 ];
 
+/**
+ * 槽位声明态（官方 SlotCore 检视面可区分的三种事实）：
+ * - `declared`：槽位键已声明（entries 返回数组，哪怕为空 = 已声明无占用者）；
+ * - `undeclared`：槽位键未声明（entries 抛错）——旧宿主没有该子槽位；
+ * - `unknown`：检视面本身缺席（更老的宿主没有 entries 方法）或读值异常。
+ *
+ * 与 `useSlotEntries`（无条目一律归一成空数组）分开：permission/plan 这类
+ * **新槽位**要求「已声明但无人占用 → 按官方留空」，而「宿主未声明 → 回退
+ * 自绘控件」，两者不能混。getSnapshot 返回字符串常量，快照身份按值稳定。
+ */
+export type SlotDeclaration = 'declared' | 'undeclared' | 'unknown';
+
+export function useSlotDeclaration(key: string): SlotDeclaration {
+  const slots = stash.slots;
+  const subscribe = useCallback(
+    (fn: () => void) => {
+      if (typeof slots?.subscribe !== 'function') return () => {};
+      try {
+        return slots.subscribe(key, fn) ?? (() => {});
+      } catch {
+        return () => {};
+      }
+    },
+    [slots, key],
+  );
+  const getSnapshot = useCallback((): SlotDeclaration => {
+    if (!slots || typeof slots.entries !== 'function') return 'unknown';
+    try {
+      slots.entries(key);
+      return 'declared';
+    } catch {
+      return 'undeclared';
+    }
+  }, [slots, key]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
 /** 组件位是否为 React 可渲染类型（函数组件 / memo / forwardRef / lazy 包装）。 */
 export function isRenderableComponent(value: unknown): boolean {
   if (typeof value === 'function') return true;

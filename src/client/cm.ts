@@ -139,6 +139,19 @@ export function subscribeEditorPrefs(view: EditorView, placeholder: string, edit
   });
 }
 
+/**
+ * 永远按字面字符渲染：同时关掉 `liga` / `calt`。
+ *
+ * 连字会把 `->`、`//` 等替换成合并字形，视觉上像「字符消失」；更关键的是
+ * DSH 桌面 0.2.2 内置的 Chromium 152 在「`calt` 连字 + 后续任意字符」时会把
+ * 连字字形第一格画空（宿主 shaping bug，CSS 层面无法稳定规避）。故本插件不做
+ * 连字：编辑器所见即所存，也与预览 / 消息区的纯文本渲染保持一致。
+ */
+const LITERAL_TEXT_STYLES = {
+  fontVariantLigatures: 'none',
+  fontFeatureSettings: '"liga" 0, "calt" 0',
+} as const;
+
 function baseTheme(fontFamily: string): Extension {
   return EditorView.theme({
     '&': { fontSize: '13px', height: '100%' },
@@ -147,8 +160,13 @@ function baseTheme(fontFamily: string): Extension {
       fontFamily,
       lineHeight: '1.6',
       overflow: 'auto',
+      ...LITERAL_TEXT_STYLES,
     },
-    '.cm-content': { caretColor: 'var(--dsw-alias-state-business-primary, currentColor)', paddingBottom: '8px' },
+    '.cm-content': {
+      caretColor: 'var(--dsw-alias-state-business-primary, currentColor)',
+      paddingBottom: '8px',
+      ...LITERAL_TEXT_STYLES,
+    },
     '.cm-line': { padding: '0 8px' },
     // CodeMirror 自绘光标（drawSelection）默认黑色，深色主题下不可见——
     // 显式对齐官方输入框的 caret 颜色（品牌强调色）。

@@ -18,6 +18,7 @@ import { loadPrefs, subscribePrefs } from './prefs';
 import { isAnySidebarInputCarried, subscribeSidebarInput } from './sideinput';
 import { barRegistration, CodinputBar } from './components/CodinputBar';
 import { userMarkdownRegistrations } from './components/UserMessageMarkdown';
+import { registerHeavyMarkdown } from './markdown/heavy';
 import { sidebarBodyRegistration, sidebarTabDefinition, sidebarTitleRegistration } from './sidebar';
 import { settingsRegistration } from './settings';
 import { registerCodinputCommand } from './command';
@@ -46,6 +47,14 @@ function tryRegister(doRegister: () => void, label: string, attempts = 60): void
 export function apply(ctx: ClientContext): void {
   injectStyles();
   installServices(ctx);
+
+  // ---- Markdown 扩展渲染 heavy 扩展：代码高亮 / KaTeX / Mermaid（全内置离线）----
+  // 只注册渲染扩展；同步/异步激活由 基础渲染的 activateMarkdown 在 innerHTML
+  // 落地后统一调度（组件侧无感）。注册幂等，热更新重复 apply 安全。
+  runGuarded('md.heavy', () => {
+    registerHeavyMarkdown();
+    diagWindow().__dshCodinputShell['md.heavy'] = 'registered';
+  });
 
   // 诊断：插件加载期即接管 console.error（应用首渲染在插件加载之后），
   // 抓取槽位边界的原始错误对象。

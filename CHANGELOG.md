@@ -2,6 +2,58 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.0] — 2026-11-10
+
+本版本适配 DSH `0.2.2-rc.1` 桌面/网页宿主，带来 Markdown 渲染升级（Obsidian 风格，全内置离线）与编辑器字面字符渲染（移除字体连字）。
+
+### 修复
+
+- **`/codinput` 退出丢草稿**：宿主的命令通道在调用插件 `ui.run()` 之前已把命令 token 从草稿消费掉，旧实现随后 `setTimeout(80ms)` **无条件 `setDraft('')`**，把 token 之外的用户草稿整体清空。现改为**同步** `stripCommandToken()`：只在草稿确实以 `/codinput` 开头（token 后跟空白或行尾）时剥掉 token，其余内容原样保留；普通 / 悬浮 / 侧栏三形态与三条退出入口均不再丢草稿。
+- **编辑器「丢字」实为字体连字**：JetBrains Mono 的连字把 `->` 画成 `→`、把 `//` 画成合并字形，用户视角是「编辑侧的 `-` / 首个 `/` 消失」，与消息记录（纯文本）不一致；隔离宿主逐键码点取证确认**文档 / 机器草稿 / 持久化草稿里的字符一个不少**，纯属渲染层。现默认关闭编辑器字体连字：`.cm-scroller` / `.cm-content` 输出 `font-variant-ligatures: none` 与 `font-feature-settings: "liga" 0, "calt" 0`；本版同时移除「字体连字」设置（理由见下）。
+- **桌面端 calt shaping bug 结论**：DSH 桌面 `0.2.2-rc.1`（Electron 44.7 / Chromium 152）在「`calt`/`liga` 连字 + 后续任意字符」时会把连字第一格画空，**只在 CodeMirror 编辑器面**出现；普通 DOM（预览/用户消息/代码块）正常，web/Edge 157 正常。实测修补字体（calt 搬 liga）、12 种 CSS/合成层 workaround 均无法规避 → **编辑器保持字面是桌面端唯一稳定解**；Markdown 渲染面可以使用连字（见下）。
+- **麦克风按钮消失（0.2.2 回归）**：0.2.2 的 voice-input 条目 `inject()` 新增 `hooks.microphoneDevice` / `hooks.pluginNavigation`，`VoiceInput` 需要 `useSpeechReadiness` / `useMicrophoneDevice` / `usePluginNavigation`；旧 `VoiceActivity` 只绑定 `speechReadiness`、丢弃其余 hooks → 组件内 `usePluginNavigation is not a function` 抛错被条目边界静默，麦克风整体不渲染。改为 `slotEntry.entryInjectProps` 通用折叠：`hooks` 表任意键 → `use<Name>` 选择器钩子、其余字段原样。
+- **带图用户消息渲染错误（0.2.2 回归）**：0.2.2 移除了座位 prop `renderMessageImages`，用户消息附件行改由 `conversation.chat.user.content` factory 渲染、图片走 `conversation.chat.user.images` 槽位（官方 `MessageImages` 缩略图 + 原图灯箱）。旧实现拿不到新 prop → 回退文件卡 `image.png PNG 53KB` 且点击无法放大。现在附件行整体委托官方 factory（`content.text=""` → 官方只渲染附件行），图片/灯箱完全走官方；旧宿主回退链保留（`renderMessageImages` → 文件卡）。
+- **Shift+Enter 换行失效（B1，@RaM-bugourp）**：旧版偏好迁移把 `lineBreakHotkey` 写成 `shift-enter`（规范分隔符是 `+`）→ 永远不匹配。迁移值改为 `shift+enter` 并修复已存坏值；另修行为层：自定义换行快捷键显式插入 `\n` 后选区未随之前移，光标留在插入点之前导致后续输入落回上一行 → `EditorPane` dispatch 现带 `selection: { anchor: head + 1 }`。
+- **快捷键被旧迁移反复覆盖（B2，@RaM-bugourp）**：旧字段 `sendKey` / `lineBreakKey` / `floating` 一直留在存储里，每次加载都重新迁移、覆盖用户改过的快捷键。改为一次性迁移：迁移后删除旧字段、只写已知字段；用户已改过的新值优先。
+- **偏好设置无类型校验（B3，@RaM-bugourp）**：存储写坏（坏 JSON、错误类型、数组、未知键、越界数值）会抛错或污染界面。新增 `normalizePrefs`：每字段独立类型/枚举/范围校验并回退默认，任意输入不抛错；保存前同样归一化。偏好键 `dsh-codinput.prefs.v2` → `.v3` 一次性迁移（旧字段清理、坏值修复）。
+- **统计与缓存命中边界文本（B4，@RaM-bugourp）**：`formatCacheHitPercent` 完整复刻官方 0.2.2 算法（`99.9 / 99.99 / 99.999…`）；`formatTokens` K 位舍入到 1000 时进位 M（`999_950 → 1M tok`，永不 1000K）；tps/duration 补 NaN/±Infinity 防护；数据行胶囊、详情面板、上下文小圈全部走安全函数。
+- **用户消息可伪造会话 chip（B5，安全，@RaM-bugourp）**：marked 默认透传原始 HTML、DOMPurify 白名单允许 `span` + `data-dci-wire` → 手写 `<span data-dci-wire="x">` 会被装饰成会话 chip。现在原始 HTML 一律转义为文本，`data-dci-wire` 只能由插件自身的 Markdown 扩展产生；伪造 span/script/onerror/style/iframe/javascript: 均不执行、不产生 chip。
+- **「问答被渲染成用户侧消息」**：确认是宿主 0.2.2 官方行为——会把 `ask_user_question` 的回答渲染成官方 **question-reply 回执卡片**（DOM 带 `data-question-reply`），不是本插件气泡；插件另加防御：遇到 `source.kind === 'user-question-reply'` 的节点让位官方渲染。
+- **Markdown 渲染缺陷（验收发现并复验）**：callout `question` 家族误用背景语义 token 作前景 accent（浅/深对比度仅 1.15/1.47）→ 8 家族统一改为前景派生，最低 4.93（浅）/7.87（深）；用户消息图片 `width` 属性被 legacy `.dci-umsg-md img { width:auto }` 覆盖 → 删除该规则，Obsidian 尺寸语法两侧一致；预览「后开」时 `activateMarkdown` effect 缺 `previewOn` 依赖 → KaTeX/Mermaid/复制按钮未激活，补齐依赖；用户消息 h1–h6/th/td 因 legacy `font:` 简写未跟随等宽字体 → mono 态显式补 family/连字。
+- **构建 P0**：`scripts/build.mjs` banner 拼接双重转义（`.join('\n')`）产出字面 `\n`，整包 JS 语法无效（宿主 `import failed`）→ 修复为 `.join('\n')` 并新增构建末尾 `node --check` 与单文件断言，坏产物直接阻断构建。
+
+### 变更
+
+- **底部工具行逐值对齐官方 `0.2.2-rc.1` InputBar**：`+` 指令钮 28×28、`conversation.input.permission` / `.plan` 槽位镜像（官方权限选择器 / 计划 chip）、`input.left` / `.right` / `.model` 座位顺序、语音 activity 座位（麦克风钮）、sending 阶段独立停止钮与旋转发送态、官方 stop / sending / steer·queue 文案、行 `container-type: inline-size` / padding `2px 8px 6px` / gap 12 / `@container` 窄宽 gap 8、模型文字 compact 收起；圆形按钮补 `corner-shape: round`（宿主默认 squircle）。
+- **编辑器字面渲染**：`->`、`//` 等始终按字面字符显示，与预览 / 用户消息的纯文本一致；「字体连字」设置项移除（prefs 遗留字段忽略并丢弃）。
+- **用户消息 Markdown 统一渲染管线**：预览 `.dci-preview` 与用户消息 `.dci-umsg-md` 共用同一 `renderMarkdown`，输出一致；会话 chip 装饰、附件 factory 委托、question-reply 让位、官方气泡外层均保留。
+- **候选菜单四向自适应浮层**：悬浮 / 右侧栏形态的 `/` `@` 候选菜单从「头部行下方固定弹出、覆盖编辑区」改为 `createPortal(document.body)` 的 `position: fixed` 浮层——以 `.dci-card` 实时矩形为不可覆盖区，在上/下/左/右按可用空间自适应选位，打开期间逐帧复算；普通形态保持卡片上方浮层。
+- 预览面板 `overflow-y: auto` → `overflow: auto`（宽表格/代码块可横向滚动）。
+- 设置项调整：移除「字体连字」；新增「Markdown 等宽连字」（默认开）。
+- 数据行详情面板 portal 化：三枚面板（会话统计 / Token 用量 / 上下文分段）`createPortal(document.body)` + `position: fixed`，跟随滚动/尺寸变化、Escape 与点外关闭、三枚互斥。
+
+### 新增
+
+- **Markdown 渲染（Obsidian 风格，全内置离线）**：GFM 表格（逐列对齐、宽表横滚）/ 任务清单（只读勾选、嵌套）/ 删除线 / 自动链接；**脚注**（上标 + 文末脚注区 + 回跳）；**8 类 Obsidian Callouts**（note/tip/warning/danger/info/success/question/quote，图标/配色/折叠，浅深主题对比度达标）；Obsidian 扩展语法 `==高亮==`、`%%注释%%`（隐藏、不误伤代码）、`[[wikilink|别名]]`（chip，点击复制目标）、`![[file]]`（样式化降级）、图片尺寸 `![alt|300](url)`、图片点击灯箱。
+- **代码块**：highlight.js 46 种语言高亮 + 语言标签 + 复制按钮（未知语言不高亮不崩）。
+- **数学公式**：KaTeX 行内 `$...$` / 块级 `$$...$$`；错误公式回退原文；20 个 woff2 字体全部内联 data URI，运行时**零网络请求**。
+- **Mermaid**：13 类图表（flowchart / sequence / class / state / ER / gantt / pie / journey / gitGraph / info / mindmap / timeline），可见时懒渲染、浅深主题跟随、`securityLevel:'strict'`、失败回退源码；ELK/cose 与 cytoscape 构建期排除。
+- **Markdown 正文等宽连字（默认开、设置可关）**：预览与用户消息正文改用 JetBrains Mono，`->`/`=>`/`//` 等靠**字体连字**显示箭头/连字（DOM、草稿、复制、发送内容仍是原文）；代码块/行内代码使用各自代码字体并同样显示连字；用户消息 h1–h6/th/td 同步等宽。
+- 构建：`scripts/build.mjs` 新增 `katex-css-inline` / `mermaid-trim` 两个构建期 plugin（带断言防依赖升级静默失效）+ 产物 `node --check` / 单文件自检。
+- 新依赖：`highlight.js ^11.12.0`（BSD-3）、`katex ^0.18.0`（MIT）、`mermaid ^12.3.0`（MIT）；`NOTICE` 补三方许可与传递依赖（ELK/cytoscape 未分发）。
+
+### 说明
+
+- 本版同时包含编辑器字面渲染、Markdown 渲染与正文/行内代码连字等能力（详见上文章节）。
+- **体积**：`lib/client.js` ≈ 3.55 MB（gzip ≈ 1.10 MiB / brotli ≈ 0.94 MiB）；相对 0.3.9 基线（≈ 540 KB）增加约 2.84 MiB raw——全部 Markdown 渲染依赖（KaTeX 字体、highlight.js、Mermaid）内联打包，换来**离线可用、零网络请求**；构建约 1–7 s，单文件、连续构建字节一致。
+- **安全**：原始 HTML 一律转义；外链 `target=_blank rel=noopener noreferrer`、`javascript:`/`data:` 协议拦截；KaTeX `trust:false`；Mermaid `securityLevel:'strict'` + SVG 过 DOMPurify；代码高亮只输出 class/文本。
+- **已知限制**：Mermaid 仅内置 13 类常用图（其余回退源码）；`[[wikilink]]` 仅复制目标名、不做仓库导航；`![[图片]]` 只做文本降级；**编辑器不做字体连字**（桌面 Chromium 152 无解，等宿主升级）；系统未安装 JetBrains Mono 时正文等宽回退到宿主 code font（无连字则箭头退化为字面）。
+- **「Markdown 等宽连字」开关语义**：开启时预览与用户消息的正文/标题/表格/行内代码均用 JBM 显示连字；关闭后**预览行内代码**回到阅读字体字面、正文恢复阅读字体；**用户消息行内代码**回到宿主代码字体（该字体默认连字，视觉上仍可能显示箭头，开关不改变它）。
+- **验收记录**（隔离 web DSH `0.2.2-rc.1` + 无头 Edge；隔离桌面 Electron 44.7 / Chromium 152 抽验）：底部工具行/麦克风、带图用户消息与问答、prefs 迁移与统计边界、Markdown 渲染（GFM/脚注/Callouts/Obsidian 语法/图片尺寸与灯箱/代码高亮/KaTeX/Mermaid/正文与行内代码连字）、安全与回归全部 PASS；桌面抽验（编辑器字面渲染、预览正文连字、无第一格空白）PASS；`__dshCodinputErrs` / console error 全为 0。
+- **发布材料**：`npm run typecheck` 通过；`lib/client.js` 由当前源码重建（md5 `a7708d2d00ce005de5e599cc7819296f`，3,555,033 B；gzip 1,157,872 B / brotli 958,709 B；构建自检 `node --check` OK）。
+
+[0.4.0]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.9...v0.4.0
+
 ## [0.3.9] — 2026-11-06
 
 修复 dsh `0.2.2-rc.1` 上模型 / 权限 / 设置下拉的整体错位、布局变化不跟随与开合失效：菜单改为 portal 到 `document.body`，锚点改按元素实时读取。

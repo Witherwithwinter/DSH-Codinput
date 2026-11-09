@@ -102,7 +102,9 @@ export function EditorPane(props: EditorPaneProps): JSX.Element {
         }
         if (matchEvent(prefsNow.lineBreakHotkey, event) && prefsNow.lineBreakHotkey !== 'enter') {
           event.preventDefault();
-          view.dispatch({ changes: { from: view.state.selection.main.head, insert: '\n' } });
+          const head = view.state.selection.main.head;
+          // 显式插入换行后必须把光标放到插入点之后，否则 CodeMirror 会把光标留在插入点之前，后续输入落回上一行（B1 行为层：Shift+Enter「看起来没换行」）；普通 Enter 走 CM 默认 keymap，无此问题。
+          view.dispatch({ changes: { from: head, insert: '\n' }, selection: { anchor: head + 1 }, scrollIntoView: true });
           return true;
         }
         return false;

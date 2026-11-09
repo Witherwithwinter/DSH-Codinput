@@ -191,6 +191,13 @@ export function CodinputSettingsSection(): JSX.Element {
       <Row title={t("set.lineNumbers")} desc={t("set.lineNumbersDesc")}>
         <Switch on={prefs.lineNumbers} label={t("set.lineNumbers")} onToggle={() => update({ lineNumbers: !prefs.lineNumbers })} />
       </Row>
+      <Row title={t("set.markdownMono")} desc={t("set.markdownMonoDesc")}>
+        <Switch
+          on={prefs.markdownMono}
+          label={t("set.markdownMono")}
+          onToggle={() => update({ markdownMono: !prefs.markdownMono })}
+        />
+      </Row>
       <Row title={t("set.font")} desc={t("set.fontDesc")}>
         <input
           type="text"

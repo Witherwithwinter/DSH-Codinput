@@ -33,7 +33,7 @@ alongside this repository's LICENSE file.
     Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)
     Copyright (c) 2011-2018, Christopher Jeffrey (https://github.com/chjj/)
 
-  - DOMPurify 3.4.15
+  - DOMPurify 3.4.17
     (MPL-2.0 OR Apache-2.0) 双许可，本项目按 Apache-2.0 条款使用
     Copyright (c) Cure53 and contributors (https://cure53.de/)
 
@@ -47,6 +47,39 @@ alongside this repository's LICENSE file.
     crelt 1.0.7
     Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin>
 
-  以上版本为本仓库 v0.3.9 的 package-lock.json 锁定值。react / react-dom 为宿主平台
-  模块（bundle external，未随本包分发），esbuild / typescript 仅为构建期开发依赖，
-  均不在内置清单内。
+  - Markdown 渲染依赖（代码高亮 / 数学公式 / Mermaid 图表，随 bundle 内置）：
+
+    highlight.js 11.12.0
+    BSD 3-Clause License
+    Copyright (c) 2006, Ivan Sagalaev.
+
+    KaTeX 0.18.0（20 个 woff2 字体以 data URI 内联，随 KaTeX 许可分发）
+    MIT License
+    Copyright (c) 2013-2020 Khan Academy and other contributors
+
+    Mermaid 12.3.0
+    MIT License
+    Copyright (c) 2014 - 2022 Knut Sveidqvist
+
+    @mermaid-js/parser 2.0.1（Mermaid 解析器；其打包产物内含 chevrotain 13.2.0，Apache-2.0）
+    MIT License
+    Copyright (c) 2023 Yokozuna59
+
+  - Markdown 渲染依赖的传递依赖（均随 bundle 内置；完整许可文本见各 npm 包内 LICENSE）：
+    dagre-d3-es 7.0.14 (MIT)、lodash-es 4.18.1 (MIT)、marked 16.4.2 (MIT，
+    与既有 marked 15.0.12 并存)、marked 15.0.12 (MIT)、dompurify 3.4.17
+    (MPL-2.0 OR Apache-2.0，本项目按 Apache-2.0 条款使用)、roughjs 4.6.6 (MIT)、
+    dayjs 1.11.23 (MIT)、khroma 2.1.0 (MIT)、stylis 4.4.0 (MIT)、ts-dedent 2.3.0
+    (MIT)、es-toolkit 1.53.2 (MIT)、@iconify/utils 3.1.7 (MIT)、
+    @braintree/sanitize-url 7.1.2 (MIT)、d3 7.9.2 及 d3-* 子模块 (ISC；
+    d3-ease 为 BSD-3-Clause，Copyright 2010-2026 Mike Bostock / 2001 Robert Penner)。
+    以上各包版权归其上游贡献者所有。
+
+  构建期裁剪说明：Mermaid 仅内置 13 种常用图类型（flowchart / sequence / class /
+  state / er / gantt / pie / journey / gitGraph / info / mindmap / timeline），未内置
+  图类型在渲染时回退为「源码 + 错误提示」；ELK（elkjs，EPL-2.0 OR
+  GPL-3.0-or-later）与 cytoscape 布局依赖已被构建脚本排除，**未**随本包分发。
+
+  以上版本为本仓库 v0.4.0 的 package-lock.json 锁定值（含 Markdown 渲染新增
+  依赖）。react / react-dom 为宿主平台模块（bundle external，未随本包分发），
+  esbuild / typescript 仅为构建期开发依赖，均不在内置清单内。
