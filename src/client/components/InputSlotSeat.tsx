@@ -42,13 +42,18 @@ export interface InputSlotSeatProps {
   sessionId: string | undefined;
   /** 宿主下发给本插件条目的 standard props 原样面（见组件头注释）。 */
   standard: Record<string, unknown> | undefined;
+  /**
+   * 镜像时跳过的宿主自带条目 id（可选）：这些条目的 UI 已由 Codinput 自绘面
+   * 顶替，整座镜像会重复（典型：`composer.dock` 的官方 Activity/Usage 胶囊）。
+   */
+  excludeIds?: readonly string[] | undefined;
 }
 
 export function InputSlotSeat(props: InputSlotSeatProps): JSX.Element | null {
-  const { slot, sessionId, standard } = props;
+  const { slot, sessionId, standard, excludeIds } = props;
   const entries = useSlotEntries(slot);
   // 官方 list 合成：id 首占位去重 + order 升序（entries 快照引用稳定，直接 memo）。
-  const rows = useMemo(() => listRows(entries), [entries]);
+  const rows = useMemo(() => listRows(entries, excludeIds), [entries, excludeIds]);
 
   // 官方同款门槛：无会话不渲染（input.left / input.right 都是 strict session 槽位）。
   if (sessionId === undefined || rows.length === 0) return null;

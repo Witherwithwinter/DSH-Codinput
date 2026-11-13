@@ -13,6 +13,7 @@ import type {
   SlotsService,
 } from './host-types';
 import { diagError, runGuarded } from './diag';
+import { installSeatAudit } from './seats';
 import { installI18n } from './i18n';
 
 export interface ServiceStash {
@@ -42,6 +43,8 @@ export function installServices(ctx: ClientContext): void {
       stash.slots = scope['slots'] as SlotsService;
       stash.sessions = scope['sessions'] as SessionsFace;
       stash.commandUi = scope['commandUi'] as CommandUiFace;
+      // 未镜像子座位的运行时审计（issue #8）：有占用者却没有渲染点时告警。
+      runGuarded('seat.audit', () => installSeatAudit(stash.slots as SlotsService));
     });
   });
 

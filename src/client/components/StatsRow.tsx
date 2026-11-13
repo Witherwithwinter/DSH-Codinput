@@ -12,12 +12,16 @@ import { createPortal } from 'react-dom';
 import { useSessionStats, formatTokens, formatTokensPerSecond, formatCacheHitPercent, formatDuration, type SessionStats } from '../stats';
 import type { UseProjection } from '../host-types';
 import { t } from '../i18n';
+import { listRows, useSlotEntries } from './slotEntry';
+import { ComposerDockSlot, COMPOSER_DOCK_SLOT, SHIPPED_DOCK_IDS } from './ComposerDockSlot';
 
 export interface StatsRowProps {
   useProjection: UseProjection | undefined;
   sessionId: string | undefined;
   /** chat legacy 节点数组（sessionStats 投影缺席时按官方 deriveStats 派生）。 */
   chatNodes?: unknown;
+  /** 宿主下发给 bar 条目的 standard props 原样面（composer.dock 座位条目用）。 */
+  standard?: Record<string, unknown> | undefined;
 }
 
 /** 官方仪表盘 glyph（弧 + 指针 + 中点，stroke 1.25）。 */
@@ -308,7 +312,7 @@ function TokenPill(props: { stats: SessionStats; open: boolean; onToggle(): void
 }
 
 export function StatsRow(props: StatsRowProps): JSX.Element | null {
-  const { useProjection, sessionId, chatNodes } = props;
+  const { useProjection, sessionId, chatNodes, standard } = props;
   // 唯一展开：三枚（轮步/用量/上下文小圈）共用一个 open 态——任意一枚展开
   // 即收起其余（官方 chat StatsPills 的 openPill 同语义：详情面板同时只存在一个）。
   const [open, setOpen] = useState<'rounds' | 'tokens' | 'gauge' | null>(null);
@@ -317,6 +321,15 @@ export function StatsRow(props: StatsRowProps): JSX.Element | null {
     setOpen((current) => (current === key ? null : key));
   }, []);
   const stats = useSessionStats(useProjection, sessionId, chatNodes);
+
+  // composer.dock 座位（issue #8）：官方 dock 行由 [composer.dock 条目, ContextMeter]
+  // 组成，bar 被遮蔽后该渲染点随官方输入框消失；这里在复刻数据行里把它渲染回来。
+  // 只镜像第三方条目：官方 Activity/Usage 胶囊由本行自绘复刻，镜像整座会重复
+  // （运行时验证 3 项 → 5 项），故按 SHIPPED_DOCK_IDS 过滤。无第三方条目时整行
+  // 维持旧行为（不因空座位多出一条空白行）。
+  const dockEntries = useSlotEntries(COMPOSER_DOCK_SLOT);
+  const hasDockSeat =
+    sessionId !== undefined && listRows(dockEntries, SHIPPED_DOCK_IDS).length > 0;
 
   // 官方 rc.2：上下文小圈独立于 stats 胶囊渲染（无 stats 也要出圈）。
   const pressure = useProjection
@@ -334,9 +347,10 @@ export function StatsRow(props: StatsRowProps): JSX.Element | null {
     if (!valid) setOpen(null);
   }, [open, hasGauge, stats]);
 
-  if (!stats && !hasGauge) return null;
+  if (!stats && !hasGauge && !hasDockSeat) return null;
   return (
     <div className="dci-stat-root" data-composer-stats="codinput">
+      {hasDockSeat ? <ComposerDockSlot sessionId={sessionId} standard={standard} /> : null}
       {stats ? (
         <>
           <Pill stats={stats} open={open === 'rounds'} onToggle={() => toggle('rounds')} onClose={close} />

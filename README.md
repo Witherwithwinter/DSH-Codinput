@@ -94,7 +94,7 @@ dsh plugin --profile web add link:/abs/path/to/DSH-Codinput
 ```jsonc
 {
   "dependencies": {
-    "dsh-codinput": "^0.4.0"          // 本地开发用 "link:/abs/path/to/DSH-Codinput"
+    "dsh-codinput": "^0.4.1"          // 本地开发用 "link:/abs/path/to/DSH-Codinput"
   },
   "dsh": {
     "profile": {
@@ -119,7 +119,7 @@ dsh plugin --profile web add link:/abs/path/to/DSH-Codinput
 | --- | --- |
 | 桌面版（Electron，`0.2.2-rc.1`） | ✅ 0.4.0 目标快照：底部工具行 / 麦克风 / 用户消息图片 / 草稿等均以该版官方包（npm `@deepseek-ai/dsh@0.2.2-rc.1`，与桌面 `app.asar` 同版本）逐值核对，并在同版本隔离 web 宿主以无头 Edge 探针验收（见 CHANGELOG）；0.4.0 另在隔离桌面实例（Electron 44.7 / Chromium 152，独立 `--user-data-dir` + 复制 `DSH_HOME`，不触碰在用实例）实测编辑器字面渲染（移除连字）与输入回归；桌面端最终目检由用户实机确认。0.3.2 记录的 `0.2.1-rc.2` 语音输入端到端实测仍有效 |
 | web `0.2.0-rc.2` | ✅ 实机实测通过（本机此前 web 宿主；0.3.5–0.3.7 的座位镜像、模型座让位、用户消息 Markdown 与三面板互斥均在此版本以 Chromium 自动化探针实测；0.3.8 的 portal 面板定位/Escape/点外关闭与 Markdown 安全硬化另在隔离宿主以无头 Edge 探针复核；0.4.0 的 `/codinput` 退出草稿保留、连字与悬浮/侧栏候选菜单四向浮层同在此版本以隔离宿主 + 无头 Edge 探针验收，见 CHANGELOG） |
-| web `0.2.2-rc.1` | ✅ 实机实测通过（0.3.9 菜单修复专项 33/33 断言；0.4.0 的底部工具行逐值对齐 / 麦克风座位 / 带图消息官方缩略图+灯箱 / 问答回执仅官方一处 / prefs 迁移与统计边界均在此版本隔离宿主以无头 Edge 探针验收；0.4.0 的 Markdown 渲染升级——统一管线 / GFM / 脚注 / callouts / Obsidian 语法 / 图片尺寸与灯箱 / 代码高亮+复制 / KaTeX（离线字体内联）/ Mermaid 13 图——同在此版本隔离宿主以无头 Edge 全量验收，见 CHANGELOG） |
+| web `0.2.2-rc.1` | ✅ 实机实测通过（0.3.9 菜单修复专项 33/33 断言；0.4.0 的底部工具行逐值对齐 / 麦克风座位 / 带图消息官方缩略图+灯箱 / 问答回执仅官方一处 / prefs 迁移与统计边界均在此版本隔离宿主以无头 Edge 探针验收；0.4.0 的 Markdown 渲染升级——统一管线 / GFM / 脚注 / callouts / Obsidian 语法 / 图片尺寸与灯箱 / 代码高亮+复制 / KaTeX（离线字体内联）/ Mermaid 13 图——同在此版本隔离宿主以无头 Edge 全量验收，见 CHANGELOG；0.4.1 的 issue #8 子座位修复（`composer.dock` 第三方条目镜像 + 未镜像座位审计）同在此版本隔离宿主以 `dsh-cost-meter@1.9.64` / `dsh-context@0.84.1` 实测） |
 | `0.1.7-rc.2` | ✅ 实机实测通过（候选菜单亚克力、上下文小圈挪位、dock 行布局即为此版对齐） |
 | `0.1.5-rc.2` | ✅ 实机实测通过 |
 | `0.1.6-alpha.2` | ✅ 开发基线，全部功能端到端实测通过 |
@@ -145,7 +145,7 @@ Codinput 不自带配色：全部颜色取自宿主的 `--dsw-*` 设计 token（
 - **`[[wikilink]]` 是样式化 chip（点击复制目标名）**，不做仓库文件跳转（宿主没有对应导航目标）；`![[图片]]` 同理只做样式化文本降级，不会加载仓库文件。
 - **Markdown 里的原始 HTML 一律转义**（安全决策）：与 Obsidian 允许内联 HTML 不同，`<div>`/`<script>` 等按可见文本显示，不执行、不参与排版。
 - **Codinput 标签存在期间主输入整体隐藏**（唯一输入入口约定，浏览同栏其他标签也不恢复）；官方 stats dock 与上下文小圈都渲染在官方输入框内部，因此随之消失、由本插件的复刻数据行接管。
-- **第三方子座位的镜像边界**：左右座（list）与模型座（single）已镜像；`input.attachments` / `overlay` / `dock` 生态暂无租客，留扩展位。模型座上**带 `inject` 面且依赖宿主 ctx 服务**的插件（如 dsh-model-accordion）在插件侧无法复现其 inject 绑定，会降级回自绘模型芯片（不空、不崩，`__dshCodinputErrs` 记一条 `slot.inject` 诊断）；纯 UI 替换类（reasoning-slider、dsh-effort-dial）已实测可正常显示与交互。
+- **第三方子座位的镜像边界**：已镜像 `input.left` / `.right` / `.model` / `.model.label` / `.permission` / `.plan` / `.activity` 与 `composer.dock`（`dsh-cost-meter` 这类默认注册在 dock 的条目已恢复显示；镜像只取**第三方**条目——官方宿主自带的 `ActivityPill` / `UsagePill` 由自绘数据行承担，整座镜像会重复）；**`input.overlay` / `input.attachments` 未镜像**——宿主里这两个座位的第三方占用者（如 `dsh-context` 的上下文弹层、`@knyazevai/dsh-client-ui-attachment` 的附件渲染）在接管期间不可见。宿主侧原因：官方 slot 只授权「声明该 child 的条目」渲染它（每个声明只能有一个存活 owner），遮蔽 `composer.bar` 后子座位成孤儿，没有原生转发可用，接管者只能逐座复刻（`conversation.input.dock` 在 bar 之外，不受影响）。接管期间检测到「有**第三方**占用者但未镜像」会在 `__dshCodinputErrs` 记一条 `slot.unmirrored` 并在 console 告警；官方自带占用者（`slash-menu` / `command-popup` / `feedback-dialog` / `ComposerAttachments`）静默跳过（其 UI 由自绘面或官方其它渲染路径承担），干净宿主不会刷屏。模型座上**带 `inject` 面且依赖宿主 ctx 服务**的插件（如 dsh-model-accordion）在插件侧无法复现其 inject 绑定，会降级回自绘模型芯片（不空、不崩，`__dshCodinputErrs` 记一条 `slot.inject` 诊断）；纯 UI 替换类（reasoning-slider、dsh-effort-dial）已实测可正常显示与交互。
 - 同一 pane 复制出第二个「Codinput」标签时，第二个面板只出提示、不渲染第二个编辑面（输入入口唯一）。
 - 悬浮模式的手势只保留「拖回底部输入区 = 普通」；「拖入右侧栏 = 侧栏模式」已按产品决策舍弃。
 - 页面重载后，若侧栏布局恢复了 Codinput 标签但尚未被点开过，主输入会先出现——dockkit 对重载恢复的标签是惰性挂载，点一次标签即恢复侧栏承载。

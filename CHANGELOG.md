@@ -2,6 +2,23 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.1] — 2026-11-13
+
+### 修复
+
+- **`conversation.composer.dock` 座位被静默抹掉（issue #8）**：官方 `InputBar` 在卡片下方 `.dock` 容器里渲染该 list 座（`[renderSlot("conversation.composer.dock", {}), ContextMeter]`），bar 被 `priority:-1` 遮蔽后渲染点随官方输入框消失——注册在这里的 `dsh-cost-meter`（默认 `position="dock"`）、`dsh-quota-meter` 等条目整块 UI 不可见。现在数据行在胶囊组之前按官方 list 语义复刻该座位（`ComposerDockSlot`，与左右座共用 `InputSlotSeat` 引擎；owner props 为空、`sessionId` 缺省不渲染）。**只镜像第三方条目**：官方宿主自己也往该座注册 `ActivityPill(id activity)` / `UsagePill(id usage)`（client-ui-chat，slot catalog 与运行时双证），它们由数据行自绘胶囊顶替，整座镜像会重复渲染（隔离宿主实测 3 项 → 5 项），故按 `SHIPPED_DOCK_IDS` 过滤；没有第三方条目时行为与旧版一致。
+- **未镜像座位静默失效无告警**：`input.overlay` / `input.attachments` 在接管期间仍无渲染点。新增 `src/client/seats.ts` 运行时审计：接管生效时订阅这两个座位的条目变化，发现「有**第三方**占用者但无渲染点」即写 `__dshCodinputErrs`（`slot.unmirrored`）+ console 告警；官方自带占用者（overlay 的 `slash-menu` / `command-popup` / `feedback-dialog`、attachments 的 `ComposerAttachments`——接管设计已知代价，其 UI 由自绘面或官方其它路径承担）静默跳过，干净宿主不再刷屏；同座位同占用者只报一次，插件卸载时断开订阅。占用者名按 `options.id` → 组件名 → 归属名取值，不再出现不可读的压缩短名。
+
+### 验证
+
+- **隔离宿主运行时验证（issue #8 修复）**：独立 `DSH_HOME` + `@deepseek-ai/dsh@0.2.2-rc.1` + 无头 Edge，加载真实关闭态会话，未发消息、未调模型。结果：装 `dsh-cost-meter@1.9.64` 后数据行出现其 dock 条目（成本按钮），修复前该 UI 无渲染点；干净宿主数据行保持 3 项（官方 Activity/Usage 胶囊不再重复）、`__dshCodinputErrs` 为空、无 console 告警；第三方 overlay 告警路径保留。报告与截图见 `docs/review/issue8-runtime.md`（仓库外文档目录，不入库）。
+
+### 文档
+
+- **修正 README 的租客断言**：原文「`input.attachments` / `overlay` / `dock` 生态暂无租客，留扩展位」未经核验且不成立——`dsh-cost-meter` 默认注册 `conversation.composer.dock`、`dsh-context` 注册 `conversation.input.overlay`、`@knyazevai/dsh-client-ui-attachment` 无条件注册 `conversation.input.attachments`（其首版早于该断言）。中英 README 同步改为「已镜像 / 未镜像」清单 + 宿主侧原因（slot 声明单 owner、无原生转发），并区分 `conversation.input.dock`（bar 之外、不受影响）与 `conversation.composer.dock`（bar 体内、原被抹掉）；同时补上这些座位上**官方自带占用者**（composer.dock 的 Activity/Usage 胶囊、attachments 的 `ComposerAttachments`、overlay 的指令/斜杠/反馈弹层）——镜像与审计都只针对第三方。
+
+[0.4.1]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.4.0...v0.4.1
+
 ## [0.4.0] — 2026-11-10
 
 本版本适配 DSH `0.2.2-rc.1` 桌面/网页宿主，带来 Markdown 渲染升级（Obsidian 风格，全内置离线）与编辑器字面字符渲染（移除字体连字）。

@@ -94,7 +94,7 @@ dsh --version                         # 你本机实际跑的那个
 
 `latest` 通道发的是 rc（当前 `latest` / `next` 同指 `0.2.2-rc.1`），所以「装了 dsh 插件却跑不起来」的报障大概率发生在 rc 上。开发机可以待在 alpha，但**对外声称的兼容范围应当以 rc 为准**，至少在 rc 上跑一遍第 1、3 节。
 
-> **已验记录**：web 宿主 `0.2.0-rc.2` 为 0.3.x/0.4.x 验证基线（0.3.5–0.3.7 均在本机 link 安装下以 Chromium 自动化探针实测，见 CHANGELOG）；桌面版 `0.2.1-rc.2` 的语音同步于 0.3.2 实测通过；现网 `latest` / `next` = `0.2.2-rc.1`（2026-11-06 实测）；web 宿主 `0.2.2-rc.1` 的菜单专项（0.3.9 / PR #5）已在隔离宿主以无头 Edge 自动化探针验收（33/33 断言通过：portal / 几何 / 跟随 / 开合 / resize）；0.4.0 的 `/codinput` 退出草稿保留、连字与悬浮/侧栏候选菜单四向浮层已在隔离 web `0.2.0-rc.2` 宿主以无头 Edge 探针验收；**0.4.0 的底部工具行逐值对齐 / 麦克风恢复 / 用户消息图片灯箱 / prefs 迁移与统计边界 / 编辑器字面渲染（移除连字）已在隔离 web `0.2.2-rc.1` 宿主以无头 Edge 探针验收**（宿主版本与用户桌面版 `0.2.2-rc.1` 相同）。换宿主版本后请重新走一遍下面这节。
+> **已验记录**：web 宿主 `0.2.0-rc.2` 为 0.3.x/0.4.x 验证基线（0.3.5–0.3.7 均在本机 link 安装下以 Chromium 自动化探针实测，见 CHANGELOG）；桌面版 `0.2.1-rc.2` 的语音同步于 0.3.2 实测通过；现网 `latest` / `next` = `0.2.2-rc.1`（2026-11-06 实测）；web 宿主 `0.2.2-rc.1` 的菜单专项（0.3.9 / PR #5）已在隔离宿主以无头 Edge 自动化探针验收（33/33 断言通过：portal / 几何 / 跟随 / 开合 / resize）；0.4.0 的 `/codinput` 退出草稿保留、连字与悬浮/侧栏候选菜单四向浮层已在隔离 web `0.2.0-rc.2` 宿主以无头 Edge 探针验收；**0.4.0 的底部工具行逐值对齐 / 麦克风恢复 / 用户消息图片灯箱 / prefs 迁移与统计边界 / 编辑器字面渲染（移除连字）已在隔离 web `0.2.2-rc.1` 宿主以无头 Edge 探针验收**（宿主版本与用户桌面版 `0.2.2-rc.1` 相同）；**0.4.1 的 issue #8 子座位修复在隔离 web `0.2.2-rc.1` 宿主以无头 Edge 实测**：装 `dsh-cost-meter@1.9.64` 后其 `composer.dock` 条目在数据行恢复（修复前无渲染点）、干净宿主数据行仍 3 项且官方 Activity/Usage 胶囊不重复、装 `dsh-context@0.84.1` 时只对第三方 overlay 告警（官方占用者静默）。换宿主版本后请重新走一遍下面这节。
 
 不动现有安装的验证方式（独立 prefix + 独立 `DSH_HOME`，不碰你在用的 profile 与会话）：
 
@@ -205,3 +205,21 @@ flowchart LR
 - [ ] **回归**：编辑/预览分屏比例与同步滚动、预览开关与 `defaultPreview`、三形态（normal/float/side）渲染均正常；用户消息附件行仍为官方缩略图+灯箱，question-reply 让位仍成立；10 次连续切换预览无异常、无内存/定时器报错。
 - [ ] **体积/离线**：`lib/client.js` ≈ 3.4MB（发布压缩），运行时零网络请求；`npm run build` 末尾 `node --check lib/client.js` 自检通过（坏 banner/语法错误会被构建阻断）。
 
+
+## 10. 子座位镜像与未镜像告警（issue #8）
+
+**`conversation.composer.dock` 座位镜像（新增）**
+
+- [ ] **有租客**：安装 `dsh-cost-meter`（默认 `position="dock"`）并启用接管 → 卡片下方数据行、复刻胶囊**之前**出现成本读数，点击/悬停交互正常；同一会话切换、三形态（normal / float / side）下都渲染；把 cost-meter 位置切到 header/sidebar → dock 位置条目消失、切回即恢复。
+- [ ] **官方条目不重复**：装/不装 cost-meter 两种情况下，数据行都**不得**出现两组「轮步 / 用量」胶囊——官方 `composer.dock` 的 `ActivityPill(id activity)` / `UsagePill(id usage)` 已被 `SHIPPED_DOCK_IDS` 过滤，由自绘胶囊承担；装 cost-meter 时数据行只**多**出成本读数一项。
+- [ ] **无租客**：不装 dock 租客 → 数据行与 0.4.0 完全一致（3 项；无空行、无额外 gap；宽度、居中、与卡片 4px 间距不变）。
+- [ ] **卸载零残留**：禁用/卸载 cost-meter → 条目立即消失，数据行恢复旧几何；`__dshCodinputErrs` 无新增错误。
+- [ ] **门槛一致**：hero（新会话无对话）态不渲染数据行，与官方 `variant === "composer"` 门槛一致。
+
+**未镜像座位运行时审计（新增）**
+
+- [ ] **第三方占用者告警**：装 `dsh-context`（占用 `conversation.input.overlay`）和/或 `@knyazevai/dsh-client-ui-attachment`（占用 `conversation.input.attachments`）→ 接管生效后 console 出现 `[dsh-codinput] slot "…" has N third-party occupant(s) (…) but Codinput renders no seat for it`，且 `__dshCodinputErrs` 有一条 `slot.unmirrored`；同一座位 + 同一占用者只报一次（切换会话/重渲染不刷屏）。
+- [ ] **官方占用者不告警**：只装 codinput 的干净宿主（0.2.2-rc.1 官方自带 overlay 3 个：`slash-menu` / `command-popup` / `feedback-dialog`；attachments 1 个：`ComposerAttachments`）→ **无** `slot.unmirrored`、无 console 告警、`__dshCodinputErrs` 为空；宿主升级换了官方 id/组件名后按本条复验（失配会是可见的「重新告警」回归）。
+- [ ] **不接管不告警**：`/codinput` 退出接管（或设置里关闭）→ 官方输入框原样渲染，不产生新的 `slot.unmirrored`；重新进入接管后若仍缺座位会补报一次。
+- [ ] **旧宿主/无租客**：不装上述插件（或槽位未声明的旧宿主）→ 不告警、不报错、无 console 噪音。
+- [ ] **卸载清理**：插件卸载/热更新后重复装载，订阅不叠加（告警次数不随 reload 增长）；`__dshCodinputSeatDump` 之类的调试口不存在于发布产物。

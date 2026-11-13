@@ -451,7 +451,7 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
 
         {/* 数据行：悬浮形态收进卡片（工具行下方，随卡片圆角一体）。 */}
         {float && hero !== true ? (
-          <StatsRow useProjection={useProjection} sessionId={sessionId} chatNodes={chatNodes} />
+          <StatsRow useProjection={useProjection} sessionId={sessionId} chatNodes={chatNodes} standard={inputStandard} />
         ) : null}
 
         {/* 官方 MenuView 锚定：normal 形态仍以卡片顶上方 absolute 浮层弹出（几何不变）；
@@ -464,7 +464,7 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
 
       {/* 数据行：主输入/侧栏渲染在卡片下方（官方 hero 新会话态无 stats）。 */}
       {!float && hero !== true ? (
-        <StatsRow useProjection={useProjection} sessionId={sessionId} chatNodes={chatNodes} />
+        <StatsRow useProjection={useProjection} sessionId={sessionId} chatNodes={chatNodes} standard={inputStandard} />
       ) : null}
 
       {popup ? <PopupSelectView popup={popup} /> : null}

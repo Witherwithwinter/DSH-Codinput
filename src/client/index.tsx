@@ -12,6 +12,7 @@
 
 import type { ClientContext } from './host-types';
 import { installServices } from './services';
+import { setTakeoverActive, stopSeatAudit } from './seats';
 import { injectStyles } from './styles';
 import { diagError, diagWindow, runGuarded } from './diag';
 import { loadPrefs, subscribePrefs } from './prefs';
@@ -47,6 +48,8 @@ function tryRegister(doRegister: () => void, label: string, attempts = 60): void
 export function apply(ctx: ClientContext): void {
   injectStyles();
   installServices(ctx);
+  // 未镜像座位的审计订阅随插件生命周期回收（热更新/卸载不残留监听）。
+  ctx.effect(() => () => stopSeatAudit(), 'dsh-codinput: seat audit');
 
   // ---- Markdown 扩展渲染 heavy 扩展：代码高亮 / KaTeX / Mermaid（全内置离线）----
   // 只注册渲染扩展；同步/异步激活由 基础渲染的 activateMarkdown 在 innerHTML
@@ -102,6 +105,7 @@ export function apply(ctx: ClientContext): void {
     try {
       barDisposer = ctx.slots.register(bar.options, CodinputBar);
       diagWindow().__dshCodinputShell['bar'] = 'mounted';
+      setTakeoverActive(true);
     } catch (error) {
       diagError('bar.register', error);
     }
@@ -112,6 +116,7 @@ export function apply(ctx: ClientContext): void {
     try {
       disposer?.();
       diagWindow().__dshCodinputShell['bar'] = 'unmounted';
+      setTakeoverActive(false);
     } catch (error) {
       diagError('bar.dispose', error);
     }

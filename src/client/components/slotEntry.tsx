@@ -115,13 +115,18 @@ export function firstComponentEntry(entries: readonly unknown[]): SlotEntryLike 
  * entries 已由 SlotCore 按（priority↑, order↑）排序，同 id 首个占位（去重），
  * 剩余行再按 order 升序稳定排序（官方 `[...rows].sort(a.order - b.order)`）。
  * 无组件的条目跳过（官方 deadCell 是废黜兜底，插件侧无法复现其内部状态）。
+ *
+ * `excludeIds`：镜像时跳过宿主自带条目（如 `conversation.composer.dock` 里
+ * client-ui-chat 的官方 Activity/Usage 胶囊——它们的 UI 已由 Codinput 自绘数据行
+ * 顶替，整座镜像会与自绘件重复，见 issue #8 运行时验证）。
  */
-export function listRows(entries: readonly unknown[]): SlotEntryLike[] {
+export function listRows(entries: readonly unknown[], excludeIds?: readonly string[]): SlotEntryLike[] {
   const byId = new Map<unknown, SlotEntryLike>();
   for (const candidate of entries) {
     const record = candidate as (SlotEntryLike & { options?: { id?: unknown } }) | null | undefined;
     if (!record || typeof record !== 'object' || !isRenderableComponent(record.component)) continue;
     const id = (record as { options?: { id?: unknown } }).options?.id;
+    if (typeof id === 'string' && excludeIds?.includes(id)) continue;
     if (byId.has(id)) continue;
     byId.set(id, record);
   }
