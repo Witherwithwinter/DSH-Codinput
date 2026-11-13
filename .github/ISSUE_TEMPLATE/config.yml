@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 先看 README（安装 / 三形态 / 兼容边界）
+    url: https://github.com/Witherwithwinter/DSH-Codinput#readme
+    about: 安装方式、桌面/web 支持范围、子座位镜像边界、已知限制
+  - name: TESTING 冒烟清单（宿主升级 / 换版本后按这个走）
+    url: https://github.com/Witherwithwinter/DSH-Codinput/blob/main/TESTING.md
+    about: 宿主升级后的标准回归步骤与诊断口说明
+  - name: CHANGELOG（先确认你的版本是否已修）
+    url: https://github.com/Witherwithwinter/DSH-Codinput/blob/main/CHANGELOG.md
+    about: 各版本修复 / 变更记录

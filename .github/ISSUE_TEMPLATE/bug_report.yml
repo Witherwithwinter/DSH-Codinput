@@ -1,0 +1,211 @@
+name: Bug 反馈
+description: 报一个 bug（崩溃 / 样式 / 行为不一致 / 插件座位兼容 / 编辑器或预览异常）
+title: "[bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。这个仓库的多数问题与「**宿主版本 + 已启用插件 + 运行形态**」强相关，这三项不填很难定位。
+
+        提交前请先做两件事：
+        1. 在 [Issues](https://github.com/Witherwithwinter/DSH-Codinput/issues?q=is%3Aissue) 里搜一下是否已有人报过；
+        2. 用 `/codinput` 退出接管，看问题是否还在——这一步能直接区分「Codinput 接管导致」还是「宿主 / 其它插件导致」。
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 问题类型
+      options:
+        - 崩溃 / 报错
+        - 样式 / 布局
+        - 交互 / 行为不一致
+        - 插件座位兼容（其它插件的按钮 / 读数 / 面板消失、错位）
+        - 输入 / 编辑器（IME、快捷键、光标、草稿）
+        - 预览 / Markdown 渲染
+        - 性能
+        - 其它
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 环境
+
+  - type: input
+    id: codinput-version
+    attributes:
+      label: DSH-Codinput 版本
+      description: 插件列表或设置页可见，例如 `0.4.1`
+      placeholder: "0.4.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: host-version
+    attributes:
+      label: 宿主（DeepSeek Harness）版本
+      options:
+        - "0.2.2-rc.1（当前 latest / 桌面版同版）"
+        - "0.2.2-rc.3（next）"
+        - "0.2.2-alpha.3（alpha）"
+        - "0.2.0-rc.2"
+        - "其它（请写进下面的环境补充）"
+        - "不确定（设置 → 关于 / 诊断 里可看）"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 运行平台
+      options:
+        - 桌面版（Electron）
+        - web（浏览器 / `dsh web`）
+        - 两者都试过
+        - 不确定
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: 出问题时的运行形态
+      options:
+        - 普通（接管主输入）
+        - 悬浮（浮动卡片）
+        - 侧栏（右侧 Codinput 标签）
+        - 已退出接管（官方输入框）
+        - 不确定
+    validations:
+      required: true
+
+  - type: textarea
+    id: env-detail
+    attributes:
+      label: 环境补充（可选）
+      description: 操作系统、主题（浅色 / 深色）、缩放比例、容器宽度、宿主语言等可能与问题有关的设置
+      placeholder: Windows 11 / 深色主题 / Chromium 152 / 1440×900 …
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 已启用的其它插件（座位兼容类问题必填）
+
+  - type: textarea
+    id: plugins
+    attributes:
+      label: 其它已启用的 DSH 插件
+      description: |
+        列出 profile 里所有第三方插件即可，不必精确到版本。涉及「某个按钮/读数不见了、错位」的兼容问题**必须**填，否则无法判断是哪个插件占了哪个位置。
+        例：
+        ```
+        - dsh-cost-meter 1.9.64
+        - dsh-context 0.84.1
+        - @knyazevai/dsh-client-ui-attachment
+        - dsh-ops 0.5.2
+        ```
+      placeholder: "- dsh-cost-meter 1.9.64\n- dsh-context 0.84.1\n- …"
+
+  - type: dropdown
+    id: exit-takeover
+    attributes:
+      label: "`/codinput` 退出接管后，问题是否还在？"
+      description: 用来区分问题属于 Codinput 接管，还是宿主 / 其它插件
+      options:
+        - 退出后问题消失（与接管有关）
+        - 退出后问题仍在（与接管无关）
+        - 没试过
+        - 退出后其它功能也坏了（属于更严重的接管问题）
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 复现与现象
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从干净状态开始一步步写；能稳定复现的步骤比文字描述有用得多
+      placeholder: |
+        1. 新建会话，打开 Codinput（普通形态）
+        2. 发送一条带图片的消息
+        3. 切到侧栏形态
+        4. 看到图片气泡消失
+    validations:
+      required: true
+
+  - type: dropdown
+    id: reproducible
+    attributes:
+      label: 复现概率
+      options:
+        - 每次都能复现
+        - 偶尔（多试几次会出现）
+        - 只出现过一次
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图 / 录屏
+      description: 直接把图片拖进输入框；界面/样式/座位类问题请尽量带图
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 诊断信息
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 诊断信息
+      description: |
+        在出问题的页面按 `F12` 打开控制台，执行下面两行，把输出原样贴进来（没有报错就贴 `[]` / `{}`）：
+        ```js
+        copy(JSON.stringify(window.__dshCodinputErrs ?? [], null, 2))
+        copy(JSON.stringify(window.__dshCodinputShell ?? {}, null, 2))
+        ```
+        控制台里如果还有红色报错，也请一并贴上。
+      render: shell
+      placeholder: |
+        []
+        { "apply": "done", "bar": "registered", ... }
+
+  - type: input
+    id: console-error
+    attributes:
+      label: 控制台报错摘要（可选）
+      placeholder: "例：Uncaught TypeError: … / slot.unmirrored / slot.entry"
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 已搜索过现有 issue，确认不是重复问题
+          required: true
+        - label: 已补齐环境（版本 / 宿主 / 平台 / 形态）与复现步骤，没有只写一句“坏了”
+          required: true
+        - label: 兼容类问题已附上「其它已启用插件」清单
+          required: true
