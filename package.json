@@ -41,8 +41,9 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:dev": "node scripts/build.mjs --dev",
+    "check:popup": "node scripts/check-popup-contract.mjs",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build && npm run typecheck"
+    "prepublishOnly": "npm run check:popup && npm run build && npm run typecheck"
   },
   "dsh": {
     "bundle": {
