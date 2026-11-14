@@ -467,7 +467,7 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
         <StatsRow useProjection={useProjection} sessionId={sessionId} chatNodes={chatNodes} standard={inputStandard} />
       ) : null}
 
-      {popup ? <PopupSelectView popup={popup} /> : null}
+      {popup ? <PopupSelectView popup={popup} anchorRef={cardRef} /> : null}
 
       {/* Markdown 图片大图灯箱（用户消息侧同组件同行为）。 */}
       {lightbox ? (

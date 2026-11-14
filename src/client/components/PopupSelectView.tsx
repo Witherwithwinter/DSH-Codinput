@@ -3,21 +3,22 @@
  * （命令的选项弹层，如 /model 类确认选择）。键盘与指针路由回控制器。
  */
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, type RefObject } from 'react';
 import { filterOptions } from './popup-filter';
 import type { PopupSelectController, PopupState } from '../host-types';
 import { useSnapshot } from './useSnapshot';
 import { t } from '../i18n';
+import { MenuSurface } from './MenuSurface';
 
 export interface PopupSelectViewProps {
   popup: PopupSelectController;
+  anchorRef: RefObject<HTMLElement>;
 }
 
 export function PopupSelectView(props: PopupSelectViewProps): JSX.Element | null {
-  const { popup } = props;
+  const { popup, anchorRef } = props;
   const state = useSnapshot(popup.state) as PopupState | undefined;
   const searchRef = useRef<HTMLInputElement | null>(null);
-  const rootRef = useRef<HTMLDivElement | null>(null);
 
   const filtered = useMemo(
     () => (state ? filterOptions(state.options, state.search) : []),
@@ -26,10 +27,6 @@ export function PopupSelectView(props: PopupSelectViewProps): JSX.Element | null
 
   useEffect(() => {
     if (!state?.open) return;
-    const onDown = (event: PointerEvent): void => {
-      if (rootRef.current && event.target instanceof Node && rootRef.current.contains(event.target)) return;
-      popup.dismiss();
-    };
     const onKey = (event: KeyboardEvent): void => {
       if (!state.open || state.submitting) return;
       if (state.confirming) {
@@ -53,12 +50,8 @@ export function PopupSelectView(props: PopupSelectViewProps): JSX.Element | null
         popup.dismiss({ focusComposer: true });
       }
     };
-    window.addEventListener('pointerdown', onDown, true);
     window.addEventListener('keydown', onKey, true);
-    return () => {
-      window.removeEventListener('pointerdown', onDown, true);
-      window.removeEventListener('keydown', onKey, true);
-    };
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [state?.open, state?.submitting, state?.confirming, state?.active, popup]);
 
   useEffect(() => {
@@ -70,7 +63,13 @@ export function PopupSelectView(props: PopupSelectViewProps): JSX.Element | null
   const confirming = state.confirming;
 
   return (
-    <div className="dci-menu" ref={rootRef}>
+    <MenuSurface
+      anchor={anchorRef.current}
+      onClose={() => popup.dismiss()}
+      dismissOnAnchorPointerDown
+      minWidth={320}
+      wrapViewport={false}
+    >
       {state.command ? <div className="dci-group-title">{state.command}</div> : null}
       {state.status === 'failed' ? (
         <div className="dci-error">{state.error ?? t('menu.loadFailed')}</div>
@@ -114,7 +113,7 @@ export function PopupSelectView(props: PopupSelectViewProps): JSX.Element | null
           </div>
         </div>
       ) : (
-        /* 官方两级结构：卡片 overflow:hidden，列表在 .dci-viewport 内滚 */
+        /* Keep the search/header fixed while the option list owns the only viewport. */
         <div className="dci-viewport">
           {state.status === 'pending' ? <div className="dci-empty">{t('menu.loading')}</div> : null}
           {state.status === 'ready' && filtered.length === 0 ? <div className="dci-empty">{t('menu.empty')}</div> : null}
@@ -136,6 +135,6 @@ export function PopupSelectView(props: PopupSelectViewProps): JSX.Element | null
         </div>
       )}
       {state.error && state.status === 'ready' ? <div className="dci-error">{state.error}</div> : null}
-    </div>
+    </MenuSurface>
   );
 }

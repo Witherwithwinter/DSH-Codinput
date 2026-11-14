@@ -39,6 +39,10 @@ export interface MenuSurfaceProps {
   minWidth?: number;
   /** 弹出方向：top = 锚点上方（默认，官方 ModelSelect/Menu 同款），bottom = 锚点下方（设置区下拉）。 */
   side?: 'top' | 'bottom';
+  /** 锚点本身也是输入区时，点击锚点应按外部点击关闭 popupSelect。 */
+  dismissOnAnchorPointerDown?: boolean;
+  /** 默认由 MenuSurface 提供滚动 viewport；固定头部菜单可自行提供唯一 viewport。 */
+  wrapViewport?: boolean;
 }
 
 /** 官方 place() 的视口留距。 */
@@ -48,7 +52,17 @@ const MARGIN = 12;
 const SHIFT_THRESHOLD = 1;
 
 export function MenuSurface(props: MenuSurfaceProps): JSX.Element {
-  const { anchor, initialRect, onClose, children, alignEnd, minWidth = 218, side = 'top' } = props;
+  const {
+    anchor,
+    initialRect,
+    onClose,
+    children,
+    alignEnd,
+    minWidth = 218,
+    side = 'top',
+    dismissOnAnchorPointerDown = false,
+    wrapViewport = true,
+  } = props;
   const firstPlaceRef = useRef(true);
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
@@ -112,12 +126,12 @@ export function MenuSurface(props: MenuSurfaceProps): JSX.Element {
       // 落在触发器上时不要在这里关：pointerdown 先于 click，先关掉会让触发器
       // 自己的 onClick 读到 open=false 又开回来，表现为「点一次收不起来」。
       // 开合交给触发器的 onClick 统一 toggle。
-      if (anchor && event.target instanceof Node && anchor.contains(event.target)) return;
+      if (!dismissOnAnchorPointerDown && anchor && event.target instanceof Node && anchor.contains(event.target)) return;
       onClose();
     };
     window.addEventListener('pointerdown', onDown, true);
     return () => window.removeEventListener('pointerdown', onDown, true);
-  }, [anchor, onClose]);
+  }, [anchor, dismissOnAnchorPointerDown, onClose]);
 
   // 未定位的首帧隐藏但仍参与布局（官方 unplaced card 同款）——place() 在
   // layout effect 里同步测得尺寸后即落位，无闪烁。
@@ -134,11 +148,11 @@ export function MenuSurface(props: MenuSurfaceProps): JSX.Element {
         top: pos?.top ?? 0,
         bottom: 'auto',
         right: 'auto',
-        minWidth,
+        minWidth: `min(${minWidth}px, calc(100vw - ${MARGIN * 2}px))`,
         ...(pos ? null : { visibility: 'hidden' }),
       }}
     >
-      <div className="dci-viewport">{children}</div>
+      {wrapViewport ? <div className="dci-viewport">{children}</div> : children}
     </div>,
     document.body,
   );

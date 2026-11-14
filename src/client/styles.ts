@@ -243,6 +243,26 @@ const CSS = `
   background: transparent; color: inherit; outline: none; }
 .dci-error { padding: 6px 10px; color: var(--dsw-alias-state-error-primary, #d54941); font-size: 12px; }
 
+/* ===== popupSelect（/model 等命令的选项弹层）===== */
+.dci-group-title { flex: none; min-width: 0; padding: 7px 10px 6px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: var(--dsw-alias-label-tertiary, currentColor); font-size: 12px; font-weight: 500; line-height: 16px; }
+.dci-opt { box-sizing: border-box; display: flex; align-items: center; width: 100%; min-height: 44px; padding: 6px 10px;
+  border: none; border-radius: var(--dsw-radius-md, 10px); background: transparent; color: inherit; cursor: pointer;
+  font-family: inherit; text-align: left; }
+.dci-opt:hover, .dci-opt[data-active="true"] { background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 10%, transparent)); }
+.dci-opt-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+.dci-opt-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-primary, inherit);
+  font-size: 14px; line-height: 22px; }
+.dci-opt-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-tertiary, currentColor);
+  font-size: 12px; line-height: 18px; }
+.dci-confirm { min-width: 0; padding: 8px; }
+.dci-row-name { color: var(--dsw-alias-label-primary, inherit); font-size: 14px; font-weight: 500; line-height: 22px; }
+.dci-row-desc { margin-top: 2px; color: var(--dsw-alias-label-secondary, currentColor); font-size: 12px; line-height: 18px; }
+.dci-confirm > label { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; color: var(--dsw-alias-label-primary, inherit);
+  cursor: pointer; font-size: 13px; line-height: 20px; }
+.dci-confirm > label input { flex: none; width: 16px; height: 16px; margin: 2px 0 0;
+  accent-color: var(--dsw-alias-button-primary-fill, currentColor); cursor: pointer; }
+
 /* ===== 模型/推理等级 cell 行（官方 ModelSelection .cell）===== */
 .dci-cell { box-sizing: border-box; width: auto; min-width: 100%; height: 40px; color: var(--dsw-alias-label-primary, inherit);
   cursor: pointer; text-align: left; background: transparent; border: none; border-radius: 10px;
