@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { ImageLightbox } from './ImageLightbox';
+import { ImageLightbox } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { ConversationFace, DraftAttachmentId, InputState } from '../host-types';
 import { stash } from '../services';
 import { useSnapshot } from './useSnapshot';

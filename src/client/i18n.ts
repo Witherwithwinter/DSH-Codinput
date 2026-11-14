@@ -30,6 +30,7 @@ const ZH: Dict = {
   'tool.send': '发送消息',
   // 官方 0.2.2 input.* 按钮文案（conversation 词典逐值）：sending / queue / steer。
   'tool.sending': '正在发送消息',
+  'tool.continue': '继续生成',
   'tool.sendQueue': '排队发送',
   'tool.sendSteer': '插话发送',
   'tool.model': '选择模型，当前 {name}',
@@ -150,6 +151,7 @@ const EN: Dict = {
   'tool.send': 'Send message',
   // Official 0.2.2 input.* copy (conversation dictionary, verbatim).
   'tool.sending': 'Sending message',
+  'tool.continue': 'Continue generating',
   'tool.sendQueue': 'Queue message',
   'tool.sendSteer': 'Steer message',
   'tool.model': 'Select model, current {name}',
@@ -363,6 +365,47 @@ function lookup(key: string, params?: TranslateParams): string | undefined {
  */
 export function t(key: string, params?: TranslateParams): string {
   return lookup(key, params) ?? key;
+}
+
+/**
+ * 官方输入框文案的宿主命名空间映射：这些字符串宿主 `conversation` 词典里已有
+ * （8 种语言、与官方输入框逐字一致），不再由本插件的 zh/en 复刻一遍。
+ * 键值映射到官方 rc.3 的 `input.*` / `file.*` 等键；宿主词典缺失时回退内置词典。
+ */
+const HOST_BAR_KEYS: Record<string, string> = {
+  'tool.command': 'input.commands',
+  'tool.send': 'input.send',
+  'tool.stop': 'input.stop',
+  'tool.sending': 'input.sending',
+  'tool.sendQueue': 'input.send.queue',
+  'tool.sendSteer': 'input.send.steer',
+  'tool.continue': 'input.continue',
+  'attach.group': 'attachment.pending',
+  'attach.uploading': 'file.uploading',
+  'attach.failed': 'file.uploadFailed',
+  'attach.retry': 'file.retry',
+  'attach.remove': 'file.remove',
+  'attach.pending': 'file.pending',
+};
+
+/**
+ * 官方 bar 文案：优先取宿主 `conversation` 词典（与官方输入框逐字一致、随宿主
+ * 语言包），缺失时回退本插件词典。用于工具行标签/提示等「官方已有同名文案」处。
+ */
+export function tBar(key: string, params?: TranslateParams): string {
+  const hostKey = HOST_BAR_KEYS[key];
+  if (hostKey !== undefined) {
+    const host = bindForeign('conversation');
+    if (host) {
+      try {
+        const text = host(hostKey, params);
+        if (text && text !== hostKey) return text;
+      } catch {
+        /* 宿主 bind 异常：回退内置词典 */
+      }
+    }
+  }
+  return t(key, params);
 }
 
 /**

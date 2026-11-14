@@ -5,7 +5,7 @@
  * 共用同一套合成公式，抽到这里避免多份漂移）。
  */
 
-import { createElement, useCallback, useSyncExternalStore, Component } from 'react';
+import { createElement, useCallback, useMemo, useRef, useSyncExternalStore, Component } from 'react';
 import type { HostObservable, SlotEntryLike } from '../host-types';
 import { bindForeign } from '../i18n';
 import { diagError } from '../diag';
@@ -216,6 +216,41 @@ export function renderSlotEntry(
   );
 }
 
+/**
+ * 官方 `renderSlot(key, ownerProps, opts)` 的子座渲染等价（**只**给官方组件
+ * 自己声明的子槽用：模型座的 `conversation.input.model.label` / `.options`）。
+ *
+ * 为什么需要：Codinput 以 priority -1 遮蔽官方 bar 条目后，官方组件（如
+ * ModelSelect）自带的 `renderSlot` prop 仍指向**宿主发给本插件 bar 条目的**
+ * 那个函数——它只能渲染本插件声明的子槽（我们没有、也不能重复声明宿主的
+ * 子槽），调用官方组件自己的子槽会抛错。这里按官方 renderer 语义用条目快照
+ * 手工合成：single-inline 取首个可渲染条目并原样返回其元素（无包装 DOM，
+ * 与官方 inline 槽一致）；list 按 id 首占位 + order 升序合成。空/未声明/
+ * 条目 inject 不可复现 → 返回官方 fallback（调用方给的兜底内容）。
+ *
+ * 快照订阅由调用方用 `useSlotEntries` 做（本函数是纯渲染函数，可在渲染期调）。
+ */
+export function renderChildSlot(
+  kind: 'single-inline' | 'list',
+  entries: readonly unknown[],
+  ownerProps: Record<string, unknown>,
+  options: { fallback?: React.ReactNode } | undefined,
+  ctx: { sessionId: string; standard: Record<string, unknown> | undefined },
+): React.ReactNode {
+  const { sessionId, standard } = ctx;
+  if (kind === 'single-inline') {
+    const entry = firstComponentEntry(entries);
+    if (entry === null) return options?.fallback ?? null;
+    if (entryInjectFailed(entry, sessionId)) return options?.fallback ?? null;
+    return renderSlotEntry(entry, `child:${entryId(entry, 0)}`, { sessionId, standard, ownerProps });
+  }
+  const rows = listRows(entries);
+  if (rows.length === 0) return options?.fallback ?? null;
+  return rows.map((entry, index) =>
+    renderSlotEntry(entry, `child:${entryId(entry, index)}`, { sessionId, standard, ownerProps }),
+  );
+}
+
 export type SnapshotSelectorHook = <S>(sel: (s: any) => S, eq?: (a: S, b: S) => boolean) => S;
 
 /** 快照 store → use<Name> 选择器钩子（官方 observableHook 同款，按源缓存）。 */
@@ -333,6 +368,33 @@ export class EntryBoundary extends Component<
  * 专属字段（variant/blocked/disabled/placeholder/…）不该下发给子槽位条目；
  * 侧栏 body 再额外剔除注入的 useTabInfo。
  */
+/**
+ * 稳定版 standard kit：宿主 bar 条目每次重渲染都可能带来新的 props 对象，而
+ * kit 里的值（hooks/actions/services）绝大多数是稳定引用。逐键浅比较后复用上一份
+ * kit 对象，`React.memo` 的子组件（StatsRow 等）才不会因「每次按键父组件重渲染」
+ * 而跟着重渲染——这是长按回车/退格时帧率稳定的另一半。
+ */
+export function useStableKit(
+  props: Record<string, unknown>,
+  extraOmit: readonly string[] = [],
+): Record<string, unknown> {
+  const cache = useRef<{ props: Record<string, unknown>; kit: Record<string, unknown> } | null>(null);
+  const prev = cache.current;
+  let same = prev !== null && Object.keys(prev.props).length === Object.keys(props).length;
+  if (same && prev !== null) {
+    for (const key in prev.props) {
+      if (prev.props[key] !== props[key]) {
+        same = false;
+        break;
+      }
+    }
+  }
+  if (!same || prev === null) {
+    cache.current = { props, kit: kitFromBarProps(props, extraOmit) };
+  }
+  return cache.current!.kit;
+}
+
 export function kitFromBarProps(
   props: Record<string, unknown>,
   extraOmit: readonly string[] = [],

@@ -7,8 +7,9 @@
  * useStatDialogSeat（锚点/面板 ref + 定位 + 点外与 Escape 关闭），三枚共用 StatsRow 的
  * 单一展开态互斥（与官方 chat StatsPills 的 openPill 同语义）。 */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives';
 import { useSessionStats, formatTokens, formatTokensPerSecond, formatCacheHitPercent, formatDuration, type SessionStats } from '../stats';
 import type { UseProjection } from '../host-types';
 import { t } from '../i18n';
@@ -430,26 +431,27 @@ export function ContextGauge(props: {
   ];
   return (
     <span className="dci-gauge-root" ref={rootRef}>
-      <button
-        type="button"
-        className="dci-gauge-trigger"
-        aria-label={t("tool.context", { percent: Math.round(pct) })}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        title={t("tool.context", { percent: Math.round(pct) })}
-        onClick={onToggle}
-      >
-        <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
-          <circle className="dci-gauge-track" cx="7" cy="7" r="5.5" />
-          <circle
-            className="dci-gauge-fill"
-            cx="7" cy="7" r="5.5"
-            strokeDasharray={`${dash} ${GAUGE_CIRCUMFERENCE}`}
-            transform="rotate(-90 7 7)"
-          />
-        </svg>
-        <span>{Math.round(pct)}%</span>
-      </button>
+      <Tooltip label={t("tool.context", { percent: Math.round(pct) })} side="top" delayMs={500} portal>
+        <button
+          type="button"
+          className="dci-gauge-trigger"
+          aria-label={t("tool.context", { percent: Math.round(pct) })}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={onToggle}
+        >
+          <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
+            <circle className="dci-gauge-track" cx="7" cy="7" r="5.5" />
+            <circle
+              className="dci-gauge-fill"
+              cx="7" cy="7" r="5.5"
+              strokeDasharray={`${dash} ${GAUGE_CIRCUMFERENCE}`}
+              transform="rotate(-90 7 7)"
+            />
+          </svg>
+          <span>{Math.round(pct)}%</span>
+        </button>
+      </Tooltip>
       {open
         ? createPortal(
             <div
@@ -505,3 +507,10 @@ export function ContextGauge(props: {
     </span>
   );
 }
+
+/**
+ * memo 版数据行：宿主 kit 经 useStableKit 稳定后，按键只改变草稿，不改变
+ * sessionId/chatNodes/standard/useProjection，`React.memo` 让本行（含统计派生与
+ * 三个 SVG 仪表）在连续输入时完全不重渲染。
+ */
+export const StatsRowMemo = memo(StatsRow);

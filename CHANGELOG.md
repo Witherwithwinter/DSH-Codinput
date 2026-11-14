@@ -2,6 +2,99 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.5.0] — 2026-11-14（含 rc.3 Continue/Retry、附件座、文档级粘贴补齐）
+
+补上 0.5.0 遗留的已知缺口（「还有什么已知的也要补上」），全部延续「能不复刻就不复刻」原则：
+
+### 新特性（rc.3 官方行为补齐）
+
+- **「继续生成 / 重试」主按钮（rc.3 官方 InputBar 新增）**：本会话有失败轮次（`conversationContinuation` 投影）且输入面「干净」时，主按钮改为官方**三角 Continue** 图标 + 「继续生成」文案，点击调用官方 `retry(failureSeq)`（重新提交空输入重试该轮）。条件逐项对齐官方 `primaryRetries`：非运行中、无 subagent、草稿与附件皆空、无待输入的人类问题（`inbox.next-step` 无 user 源）、会话打开态、无在途提交、会话未移除、`phase === 'plain'`、队列为空、`retry` 可用；同时按官方 `primaryDisabled` 修正非停止分支（`(!primaryRetries && empty) || disabled || machineBusy`）。三角以官方 `.continueIcon` 的 `scale(1.5)` 绘制，Tooltip/aria 文案走官方 `input.continue` 同文案。
+- **附件座改镜像官方 `ComposerAttachments`**：`conversation.input.attachments` 不再自绘——条目可镜像时直接渲染宿主官方组件：图片 64×64 缩略图/原图灯箱、文件卡（类型 glyph + 名称 + 体积）、上传进度、失败重试、拖放浮层与**文档级拖放监听**全部官方实现。owner props 与官方 InputBar 逐项对齐（attachments / canAcceptDrop / onAddFiles / onRemoveAttachment / uploads / onRetryFile / uploadFailureText / dropLimits）。旧宿主（无该官条条目）、inject 不可复现或组件崩溃 → `fallbackOnMissing` 回退 0.4.x 自绘 `AttachmentRail`（不空、不崩）。
+- **文档级粘贴路由（rc.3 `registerFileIntake`）**：接管卡片注册进宿主的 composer 粘贴路由（`occurrence: main/embedded`、`accepts` 跟随禁用/忙态、`add` 走本插件草稿附件链路）。没有聚焦可编辑控件时粘贴文件，现在会正确路由进本 composer；编辑器内粘贴仍由本插件落地（CodeMirror 不处理文件粘贴），卡片其它区域让位官方路由，避免重复添加。拖放同理：官方附件条目接管时，卡片层拖放/粘贴处理器自动让位。
+- **`occurrence` 透传**：rc.3 bar owner props 新增的 `occurrence` 原样交给粘贴路由；`useProjection` 增加官方 rc.3 的「带选择器」重载（`useProjection('inbox', sel)`）。
+
+### 验证（隔离宿主 `@deepseek-ai/dsh@0.2.2-rc.3` + 无头 Edge CDP）
+
+- 0.5.0 全部项目回归通过（卡片/overlay 锚点、官方 `/` 候选与 `/model` `/permission` 弹层、官方 ModelSelect、官方 Tooltip、行号 39px 三位预留）；`__dshCodinputErrs` 与 console 全空。
+- **附件座实测**：向页面 dispatch 一个真实 `DataTransfer` 的 drop（`probe.txt`, 13B）→ 卡片内出现官方 FileCard（「probe.txt / TXT 13B」），自绘 `.dci-attach-*` 元素数为 **0**，证明渲染与拖放链路都走官方条目；截图见验收记录。
+- **继续生成**：无 API Key 的隔离宿主无法制造失败轮次，按钮逻辑以类型/契约自检与代码逐项对齐保证（`primaryRetries` 条件、`retry(failureSeq)` 调用、disabled 分支均有断言）；桌面实机按 `TESTING.md` §8.0 复验。
+- **文档级粘贴**：注册/让位路径静态与契约验证通过；合成 `ClipboardEvent` 在 Chromium 里不携带可路由的 `clipboardData`，真实粘贴行为需桌面/浏览器实机目检（已写入已知限制）。
+
+### 修复（体验）：长按回车 / 删除不再卡顿
+
+- **根因**：此前每次本地输入都会把整篇草稿经官方 `inputActions.setDraft(text)` 上报一次。官方该接口是**整篇替换**——重写整棵 Lexical 文档（`clear()` + 逐行重建段落）、重算投影、序列化快照、触发草稿持久化，单次成本 **O(草稿长度)**。长草稿下连按 Enter/Backspace 变成每键 O(n)：隔离宿主演示 600 行（约 22KB）草稿单次 `setDraft` ≈ **52–64ms**，主线程被占满，表现为明显掉帧（60 行/120 行时依次减轻）。
+- **修法**：把「写入官方输入机」从逐键改为**按需**——纯输入期间只更新插件本地镜像（编辑器 + 界面），宿主往返只发生在：
+  1. **空闲去抖 500ms**（停手后同步一版，保证草稿持久化与其它插件读数最终一致）；
+  2. **宿主即将读写草稿的语义动作前同步 flush**：发送（编辑器手势 / 工具行发送钮）、命令草稿的空格 claim、候选菜单的键盘 Enter/Tab 与遮罩层鼠标按下（`pointerdown` 捕获相位先 `flush + 重新 track`，保证 pick/claim 的 `span.draftRev` CAS 命中）、指令按钮；
+  3. **触发词起点**（当前 token 恰好是刚敲下的单个 `/` 或 `@`）——候选菜单打开前先把宿主草稿对齐，之后的查询串输入不再逐键上报。
+  界面按钮形态（空草稿 / 命令草稿 / 发送禁用 / Continue 重试可显性）改由本地镜像驱动；官方草稿回写（pick、claim、提交清空、权限草稿交换）仍是唯一外部写入口，按公共前后缀把光标落在被改写片段之后，避免 pick 后候选菜单复现。
+- **实测（隔离宿主 0.2.2-rc.3 + 无头 Edge CDP，600 行草稿，30 次/秒连按）**：Enter 帧间隔 p50 **50ms → 16.7ms**、单键 p50 延迟 **37.6ms → 10.7ms**；Backspace p50 延迟 **71.9ms → 6.7ms**（此前 600 行时每个键都是一次 60ms 级长任务，现在输入期间零宿主往返、零长任务）。120 行草稿与普通字符连打同样回到 60fps。
+- **分屏预览**：预览开启时「编辑 → 预览」的滚动同步改为 140ms 去抖（连按期间不再把整篇预览 markup 拉进布局），并为预览栏建立独立合成层，避免键入重绘连带整篇预览；预览正文仍只在停手后刷新。
+- **切会话 / 退出接管的草稿安全**：本地草稿尚未同步时切换会话或关闭接管，收尾 flush 写回**原会话**的输入机（不是新会话）。隔离宿主实测：A 会话输入后立即切到 B，B 草稿保持为空，切回 A 草稿完整还原。
+- **行为回归（隔离宿主实测）**：`/` 候选（鼠标点选与 Tab/Enter 选取）、`@` 引用（鼠标点选）、发送手势与工具行发送、空草稿禁用、官方外部改写回灌、鼠标/键盘 pick 后的 `draftRev` CAS 全部通过；`__dshCodinputErrs` 与 console 为空；空格 claim 行为与官方输入框一致。
+
+### 发布前收尾（0.5.0 终版）
+
+- **页面生命周期兜底**：`EditorPane` 挂载期间监听 `pagehide` 与 `visibilitychange(hidden)`，在刷新 / 关窗 / 最小化前把最后几个字符同步给**当前会话**的官方输入机（沿用 mountActions 归属，不会写进切换后的新会话）；失焦与卸载 flush 保留。隔离 rc.3 web 宿主实测：手动派发 `pagehide` 后宿主草稿立即变为最新输入；web 宿主本身不持久化草稿（官方输入框同样刷新即空），桌面端跨刷新/重开由宿主持久化承接，实机复验见 TESTING §8.0。
+- **外部整篇写入不覆盖本地未同步输入**：官方/第三方其它来源的整篇 `setDraft` 到达时，若本地还有未同步文本则先 flush 本地草稿（本地优先），避免「用户正在输入 + 其它插件写草稿」互相吞字；pick / claim / 提交清空等宿主动作前已有 `flushAndTrack`，走到回写时本地不 dirty，行为不变。
+- **CI 门禁**：`npm run build` 增加 `prebuild` 生命周期，先跑 `check:popup`（官方条目镜像 + overlay/模型/附件座位 + rc.3 continue/retry + 按需写回契约），CI 既有的 Build 步骤因此自动卡住契约回归；`prepublishOnly` 原有链路不变。
+- **死代码清理**：删除已下线的自绘组件（SlashMenu / PopupSelectView / ImageLightbox / 旧 stats 行）遗留的 102 行 CSS，仓库内 `dci-*` 类名已无未引用项。
+- **文档 / 元数据口径**：`package.json` description 改为「桌面版，适配 DSH 0.2.2-rc.3」，移除 `webui` 关键词；README 中英同步宿主 npm dist-tag（`latest` = `0.2.2-rc.1`、`next` = `0.2.2-rc.3`，0.5.0 完整能力需 rc.3），并补 rc.3 目标版本验证行；TESTING 增加页面生命周期与第三方座位清单。
+- **第三方座位实测（隔离 rc.3 宿主）**：装 `dsh-context@0.84.1`（占用 `conversation.input.overlay`，id `context-modal`）与 `@knyazevai/dsh-client-ui-attachment@0.2.6`（`conversation.input.attachments` 附件呈现）后，normal / float / side 三形态：`/context` 弹层可正常打开、附件 rail 渲染（单个文件卡、无重复、自绘 `dci-attach` 回退为 0）、`__dshCodinputErrs` 与 console 全空；float/side 下 overlay 锚点几何随卡片/侧栏（float 720×0 于卡片顶边，side 647×0 于侧栏卡片顶边）。
+
+### 已知限制（0.5.0）
+
+- `uploadFailureText` 使用官方 `attachmentErrorText` 的插件侧近似文案（宿主细化到具体 reason 的文案未逐条复刻）。
+- 文档级粘贴路由为契约级实现 + 让位逻辑，合成事件无法覆盖真实剪贴板路径。
+- `conversation.composer.dock` 仍只镜像第三方条目（官方 Activity/Usage 胶囊由自绘数据行承担）。
+
+
+### 0.5.0 初版（架构改造：官方条目镜像）
+
+本版本适配 **DSH `0.2.2-rc.3` 桌面版**，并把「**能不复刻就不复刻**」定为输入面的最高原则：凡是官方座位、官方弹层、官方 UI 原语可以原样复用的，一律**镜像官方条目本体**，不再自绘等价款——自绘覆盖面越小，第三方插件依赖官方输入框的能力（座位注入、键盘/焦点、无障碍、弹层几何）就越不会被本插件改写；只有 CodeMirror 编辑器与卡片外观无法避免由本插件承担，且必须逐像素对齐官方。同时**不再维护 web 宿主**（`dsh web`），只维护桌面版 DSH。
+
+### 变更（架构：官方条目镜像，删掉自绘复刻）
+
+- **模型座改镜像官方 `ModelSelect`**（`conversation.input.model`）：自绘模型/推理等级芯片下线，工具行模型座直接渲染 official `client-ui-model-selection` 的条目组件——两段式根菜单（模型 / 推理等级）、下钻列表、目录分组与吸顶标题、`>4` 条时的搜索框、键盘（↑↓/Enter/Tab/Esc/Shift+Tab）、焦点归还、加载/失败条带、Toast 全部是宿主同一份实现。官方组件签名里的 `renderSlot` 子座（`conversation.input.model.label` / `.options`）由插件侧按官方 renderer 语义合成后以 owner props 下发（`slotEntry.renderChildSlot`），模型名发布徽章等第三方子座条目照常显示。
+- **输入区弹层改镜像官方 `conversation.input.overlay` 座位**：官方 `MenuView`（`/`、`@` 候选）、`PopupSelectView`（`/model`、`/permission` 等弹层）、`FeedbackDialog` 都是注册在该座位的官方条目；本插件不再自绘斜杠菜单与指令弹层，而是在卡片里新增与官方 `InputBar .overlayAnchor` 同构的零高绝对定位条（`.dci-overlay-anchor[data-composer-overlay]`），把座位条目原样渲染进去。弹层几何（卡片全宽、`bottom: calc(100% + 4px)`、视口/上方空间钳制）、菜单材质与动画、搜索与虚拟高亮、Esc/Tab/外部点击关闭、焦点语义全部与官方输入框一致。
+- **悬停提示改用宿主 baseline 原语 `Tooltip`**（`@deepseek-ai/dsh-client-ui-primitives`，0.2.2-rc.3 的 `PLATFORM_MODULES` 共享模块，构建 external、不随包内置）：工具行的 添加/停止/发送 钮与编辑/预览开关、侧栏唤回小球、数据行上下文胶囊、用户消息复制钮等原生 `title` 全部替换为官方 Tooltip（`side:"top"`、`delayMs:500`、`portal`），样式、延迟、键盘 focus 行为、`aria-describedby`、移动端抑制与官方一致。
+- **保持既有座位镜像**：`conversation.input.permission` / `.plan` / `.left` / `.right` / `.activity` / `conversation.composer.dock` 继续按官方条目镜像（0.4.x 引入的引擎不变）；`conversation.input.overlay` 从「未镜像座位」移入「已镜像」，`seats.ts` 运行时审计只保留仍未镜像的 `conversation.input.attachments`（附件行仍由自绘 `AttachmentRail` 承担，后续版本再改镜像）。
+- **构建契约**：`package.json` 不新增宿主依赖（官方原语走共享模块表）；`scripts/build.mjs` 的 external 增加 `@deepseek-ai/dsh-client-ui-primitives`，`src/client/host-primitives.d.ts` 只声明用到的结构化类型面，保持「运行时零宿主依赖」。
+- **契约自检更新**：`scripts/check-popup-contract.mjs` 从「自绘 popup 锚点」改为校验新架构——overlay 锚点结构与官方座位渲染、模型座镜像 + 子座合成、styles 的锚点规则、构建 external；`prepublishOnly` 链路（`check:popup` → `build` → `typecheck`）保持。
+
+### 修复
+
+- **点击「模型 / 推理等级」闪动一下（#1）**：自绘芯片在点击时会被焦点环/重渲染与官方菜单打开抢拍，改为官方 `ModelSelect` 后，触发钮的 `data-selection-focus`（选择后恢复焦点但不画焦点环）、CSS 锚点跟随、菜单开合状态全部由官方实现，无闪动，达到官方效果。
+- **`/model`、`/permission` 面板未达官方效果（#2）**：自绘弹层与官方 `PopupSelectView` 在分组/吸顶、搜索清空、`Tab` 确认/`Shift+Tab` 返回、`↑↓` 环绕、`full access` 风险确认、加载/重试条带等细节上必然漂移；改为镜像官方 overlay 条目后逐项与官方一致（`/model` 使用模型目录 + 推理等级默认值，`/permission` 走官方命令装饰）。
+- **行号多一位整体右移（#3）**：CodeMirror 行号栏宽度此前由「当前最大行号」决定（9→10、99→100 时栏宽跳变，正文整体右移）。现在 `.cm-lineNumbers .cm-gutterElement` 预留 **3 位数字宽度**（`calc(3ch + 16px)` 加 `font-variant-numeric: tabular-nums`），≤999 行时栏宽恒定、正文不再位移；超过 999 行按内容自然加宽而不是裁切。
+- **悬停提示非官方（#4）**：见上「悬停提示改用官方 Tooltip」。
+
+### 适配 DSH 0.2.2-rc.3
+
+- **契约复核（rc.1 → rc.3）**：composer 座位名/kind/scope 全部未变，`conversation.composer.bar` owner props 新增 `occurrence`、注入面新增 `registerFileIntake` / `retry`；模型座新增 `conversation.input.model.options` 子槽；官方 `ModelSelect` 从 `useAnchoredPosition` 改为 CSS anchor positioning；input-trigger `MenuView`、commands `PopupSelectView`、permission-presets 无破坏性变更；shell `PLATFORM_MODULES` baseline 与 rc.1 相同（仍含 primitives）。
+- **本插件落点**：模型座同时适配 `label` + 新增 `options` 子槽；overlay/模型弹层都改用官方 CSS 锚点实现（以 `[data-composer-card]` 为包含块），不再自己量卡片几何；bar owner props 原样透传给座位条目（`occurrence` 等新字段随 standard kit 走，第三方条目按官方契约消费）。
+- **已知未覆盖（后续版本）**：rc.3 官方 `InputBar` 新增的「继续生成 / 重试」（`conversationContinuation` 投影 + `retry(failureSeq)`）尚未接入本插件的发送钮；`registerFileIntake` 文档级粘贴路由仍由本插件自己的粘贴/拖放链路承担；`conversation.input.attachments` 仍为自绘。
+
+### 不兼容 / 范围
+
+- **只维护桌面版 DSH**：`dsh web`（浏览器宿主）不再作为验证/兼容目标；插件仍以 `platform: "web"` 的客户端 bundle 形式注入（桌面版渲染层即该 bundle），无需额外配置。
+- 目标宿主 **DSH 0.2.2-rc.3 桌面版**；更早宿主上官方条目/官方原语可能缺失，模型座/权限座会回退到 0.4.x 的自绘兜底控件（overlay 座在旧宿主上没有官方条目，弹层不会自绘——旧宿主不再支持）。
+
+### 验证
+
+- **静态门禁**：`npm run check:popup`（新契约自检）、`npm run build`（esbuild + `node --check` 自检）、`npm run typecheck` 全通过；构建产物自带 `require("@deepseek-ai/dsh-client-ui-primitives")` 外部解析。
+- **隔离宿主运行时验收（`@deepseek-ai/dsh@0.2.2-rc.3` + 独立 `DSH_HOME`/profile + 无头 Edge CDP 探针）**，首页真实渲染、零发消息：
+  - 接管卡片与 overlay 锚点存在（`[data-composer-card="codinput"]`、`.dci-overlay-anchor[data-composer-overlay]`）；`__dshCodinputShell` 全部 registered，`__dshCodinputErrs` 为空，console 无错误。
+  - **`/` 候选（官方 MenuView）**：点 `+` 后在 overlay 锚点内出现官方菜单（774×341、行：文件/目标/计划/反馈/codinput/压缩/权限/模型），点外部即关闭。
+  - **模型座（官方 ModelSelect）**：触发钮为官方「请选择模型」（隔离宿主无 API Key，目录为空），点击打开官方 `MenuSurface`（`aria-expanded=true`、`data-menu-material`、文案「暂无可用模型」），再点关闭。
+  - **`/model` 弹层（官方 PopupSelectView）**：从候选行进入 → 官方弹层 774×79、带搜索框、点外部关闭。
+  - **`/permission` 弹层（官方 PopupSelectView）**：774×143，三档「仅可查看 / 工作区内修改 / 完全权限」。
+  - **官方 Tooltip**：悬停 `+` 出现官方气泡「指令（/）」（71×26，位于按钮上方），且按钮已无原生 `title`。
+  - **行号三位预留**：仅 1 行时行号栏宽度即 39px（= `calc(3ch + 16px)`，默认等宽字体），证明 ≤999 行内不会随位数变化。
+- 桌面实机终检（用户侧）：强刷页面后按 `TESTING.md` §8.0 清单目检模型/推理选择器、`/model`、`/permission`、行号与悬停提示。
+
+[0.5.0]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.4.1...v0.5.0
+
 ## [0.4.1] — 2026-11-13
 
 ### 修复

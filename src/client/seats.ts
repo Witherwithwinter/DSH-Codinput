@@ -12,23 +12,26 @@
  * 但 Codinput 没有渲染点」，就在诊断口（`__dshCodinputErrs` 的 `slot.unmirrored`）
  * 与 console 各留一条，把静默失效变成可见告警（issue #8）。
  *
- * 为什么只报第三方：这两个座位的「官方自带占用者」（见 `SHIPPED_OCCUPANTS`，
- * 0.2.2-rc.1 的 slot catalog + 隔离宿主运行时 dump 取证）是接管设计的已知代价——
- * 它们的 UI（斜杠菜单 / 指令弹层 / 反馈弹窗 / 官方附件行）已由 Codinput 自绘面
- * 或官方其它渲染路径承担，逐个告警会在**每个干净宿主**上刷屏并污染
- * `__dshCodinputErrs`（运行时验证发现，见 docs/review/issue8-runtime.md）。
+ * 为什么只报第三方：0.5.0 起所有官方 bar 子座位都已镜像（overlay 0.5.0、
+ * attachments 0.5.0），清单为空、审计默认不告警；保留本模块作为宿主新增子座
+ * 时的回归探针。若某座位重新落入未镜像清单，其「官方自带占用者」应按
+ * `SHIPPED_OCCUPANTS` 静默跳过（接管设计的已知代价），只对第三方告警。
  *
  * 不在本清单里的座位：
  * - `conversation.input.dock` 在 bar 之外（`ConversationContent` 直接渲染），
  *   接管不影响它；
- * - 已镜像的座位见 `MIRRORED_SEATS`（含 `composer.dock`，由 StatsRow 的数据行
- *   按官方 list 合成渲染，且只镜像第三方条目）。
+ * - `conversation.input.overlay` 自 0.5.0 起在卡片顶边的 `.dci-overlay-anchor`
+ *   里**原样镜像官方条目**（MenuView / PopupSelectView / FeedbackDialog）；
+ * - `conversation.input.attachments` 自 0.5.0 起镜像官方 `ComposerAttachments`
+ *   条目（条目缺失/不可复现时回退自绘 `AttachmentRail`）；
+ * - 其余已镜像的座位见 `MIRRORED_SEATS`（含 `composer.dock`，由 StatsRow 的
+ *   数据行按官方 list 合成渲染，且只镜像第三方条目）。
  */
 
 import { diagDebug, diagError } from './diag';
 import type { SlotEntryLike, SlotsService } from './host-types';
 
-/** 已在自绘面按位置复刻的座位（与宿主 0.2.2-rc.1 的 bar children 表对齐）。 */
+/** 已在自绘面按位置复刻的座位（与宿主 0.2.2-rc.3 的 bar children 表对齐）。 */
 export const MIRRORED_SEATS: readonly string[] = [
   'conversation.input.left',
   'conversation.input.right',
@@ -36,33 +39,32 @@ export const MIRRORED_SEATS: readonly string[] = [
   'conversation.input.permission',
   'conversation.input.plan',
   'conversation.input.activity',
+  'conversation.input.overlay',
+  'conversation.input.attachments',
   'conversation.composer.dock',
 ];
 
-/** 尚未镜像、但官方 bar 条目体内有声明的子座位。 */
-export const UNMIRRORED_SEATS: readonly string[] = [
-  'conversation.input.overlay',
-  'conversation.input.attachments',
-];
+/**
+ * 尚未镜像、但官方 bar 条目体内有声明的子座位（0.5.0 起为空清单）。
+ *
+ * 历史上这里是 `overlay`（0.5.0 起镜像官方条目）与 `attachments`
+ * （0.5.0 起镜像官方 `ComposerAttachments`，旧宿主/不可复现 inject 时回退
+ * 自绘轨道）。保留审计骨架：宿主再新增子座或本插件再次漏镜像时，把键加回
+ * 这里即可恢复「有第三方占用者但无渲染点」的可见告警。
+ */
+export const UNMIRRORED_SEATS: readonly string[] = [];
 
 /**
- * 宿主自带的未镜像座位占用者（0.2.2-rc.1）。
+ * 宿主自带的未镜像座位占用者（0.2.2-rc.3）。
  *
  * 取证：`@deepseek-ai/dsh-cordis-client-runner` 的 slot catalog `occupants`，
  * 以及隔离宿主运行时对 `slots.entries()` 的 dump：
- * - overlay：client-ui-commands `PopupSelectView` id `command-popup`、
- *   client-ui-input-trigger `MenuView` id `slash-menu`、
- *   client-ui-message-feedback `FeedbackDialog` id `feedback-dialog`；
  * - attachments（single）：client-ui-attachment `ComposerAttachments`（无 id）。
  *
  * 宿主升级后按新版 catalog 复核；若官方改了 id/组件名，这里的失配会表现为
  * 「干净宿主又开始告警」——可见回归，而不是静默漏报。
  */
 const SHIPPED_OCCUPANTS: Record<string, { ids: readonly string[]; components: readonly string[] }> = {
-  'conversation.input.overlay': {
-    ids: ['slash-menu', 'command-popup', 'feedback-dialog'],
-    components: ['MenuView', 'PopupSelectView', 'FeedbackDialog'],
-  },
   'conversation.input.attachments': {
     ids: [],
     components: ['ComposerAttachments'],

@@ -46,8 +46,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { DraftAttachmentId, InputActions, InputState, InputTriggerController, UseProjection } from '../host-types';
 import { openCommandMenu } from '../triggers';
-import { t, useT } from '../i18n';
-import { IconPlusOfficial, IconSendOfficial, IconStopOfficial } from '../icons';
+import { t, tBar, useT } from '../i18n';
+import { IconSendOfficial, IconStopOfficial } from '../icons';
 import { ModelMenu } from './ModelMenu';
 import { ModelSlot } from './ModelSlot';
 import { PermissionMenu } from './PermissionMenu';
@@ -56,6 +56,7 @@ import { InputLeftSlot } from './InputLeftSlot';
 import { InputRightSlot } from './InputRightSlot';
 import { InputSingleSlot } from './InputSlotSeat';
 import { useSlotDeclaration } from './slotEntry';
+import { IconPlusOutlineMedium, IconTriangleRightFillRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives';
 
 /** 0.2.2 新增子槽位（官方 InputBar 声明、在其 `.modes` 内渲染）。 */
 const PERMISSION_SLOT = 'conversation.input.permission';
@@ -91,8 +92,21 @@ export interface ToolbarProps {
   sendDisabled?: boolean;
   /** 官方 primaryStops：主按钮变停止（running && !sending && (empty || blocked)）。 */
   primaryStops?: boolean;
+  /** 官方 primaryRetries（rc.3）：主按钮变「继续生成」三角。 */
+  primaryRetries?: boolean;
+  /** 点击「继续生成」= 官方 retry(failureSeq)。 */
+  onRetry?(): void;
   /** 停止生成（官方 stop：conversation.cancel）。 */
   onStop?(): void;
+  /**
+   * 本地草稿镜像（表面在空/命令草稿切换时更新）：纯输入期间宿主草稿是按需
+   * 同步的，按钮形态必须用编辑器里的最新文本判定。
+   */
+  draftText?: string;
+  /** 取最新本地草稿（权限草稿交换等需要「当下」文本的回写场景）。 */
+  getDraft?(): string;
+  /** 任何会让宿主读写草稿的动作（指令菜单等）之前的同步钩子。 */
+  onBeforeHostAction?(): void;
 }
 
 /** 官方 keepFocus：mousedown 阻止默认，避免编辑器失焦。 */
@@ -186,7 +200,8 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
   useLayoutEffect(() => observeControlRow(rowRef.current), []);
 
   const attachments: readonly DraftAttachmentId[] = state?.attachmentIds ?? [];
-  const draft = state?.draft ?? '';
+  // 纯输入期间官方草稿可能滞后：按钮形态以本地镜像为准（见 ToolbarProps.draftText）。
+  const draft = props.draftText ?? state?.draft ?? '';
   const phase = state?.phase;
   const sending = phase === 'sending';
   const empty = draft.trim() === '' && attachments.length === 0;
@@ -215,12 +230,14 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
    */
   const primarySubmitMode = resolvePrimarySubmitMode();
   const primaryLabel = props.primaryStops
-    ? t('tool.stop')
+    ? tBar('tool.stop')
     : sending
-      ? t('tool.sending')
-      : running === true && !locked && plainMessageDraft
-        ? t(primarySubmitMode === 'steer' ? 'tool.sendSteer' : 'tool.sendQueue')
-        : t('tool.send');
+      ? tBar('tool.sending')
+      : props.primaryRetries === true
+        ? tBar('tool.continue')
+        : running === true && !locked && plainMessageDraft
+          ? t(primarySubmitMode === 'steer' ? 'tool.sendSteer' : 'tool.sendQueue')
+          : tBar('tool.send');
 
   // 官方 activity 语义：语音展开时本行左侧工具与模型控件隐藏、capture 行伸展
   // （隐藏用官方 `hidden` 属性 + CSS display:none，而不是重排 DOM）。
@@ -247,37 +264,52 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
 
   const onCommandClick = (): void => {
     if (!triggers) return;
+    // 指令菜单的 hit/span 要按当前草稿与光标构造：宿主动作前先补最后一版本地草稿。
+    props.onBeforeHostAction?.();
     openCommandMenu(triggers, undefined, caretRef.current ?? 0);
   };
 
   // 旧宿主（permission 槽位未声明）回退自绘菜单；0.2.2 声明后镜像官方条目。
-  const permissionFallback = (
-    <PermissionMenu
-      sessionId={sessionId}
-      actions={actions}
-      currentDraft={draft}
-      useProjection={useProjection}
-      disabled={locked}
-      onNotify={onNotify}
-    />
+  // currentDraft 只作兜底，真正取值走 getCurrentDraft（按下时同步读最新本地草稿）。
+  const permissionFallback = useMemo(
+    () => (
+      <PermissionMenu
+        sessionId={sessionId}
+        actions={actions}
+        currentDraft={draft}
+        getCurrentDraft={props.getDraft}
+        useProjection={useProjection}
+        disabled={locked}
+        onNotify={onNotify}
+      />
+    ),
+    [sessionId, actions, draft, props.getDraft, useProjection, locked, onNotify],
+  );
+  // 单值座 owner props 与模型座兜底元素按引用缓存：memo 化的座位组件在连续输入时
+  // 不因父组件重渲染而跟着重渲染（否则官方 ModelSelect/PermissionSelect 每键跑一遍）。
+  const seatOwnerProps = useMemo(() => ({ locked }), [locked]);
+  const modelFallback = useMemo(
+    () => <ModelMenu sessionId={sessionId} onNotify={onNotify} />,
+    [sessionId, onNotify],
   );
 
   return (
     <div className="dci-row" ref={rowRef}>
       <div className="dci-tools" hidden={voiceActive}>
-        <button
-          type="button"
-          className="dci-add"
-          aria-label={t('tool.command')}
-          aria-haspopup="listbox"
-          aria-expanded={commandMenuOpen}
-          title={t('tool.command')}
-          disabled={locked || !triggers}
-          onMouseDown={keepFocus}
-          onClick={onCommandClick}
-        >
-          <IconPlusOfficial size={14} />
-        </button>
+        <Tooltip label={tBar('tool.command')} side="top" delayMs={500} disabled={locked || !triggers} portal>
+          <button
+            type="button"
+            className="dci-add"
+            aria-label={tBar('tool.command')}
+            aria-haspopup="listbox"
+            aria-expanded={commandMenuOpen}
+            disabled={locked || !triggers}
+            onMouseDown={keepFocus}
+            onClick={onCommandClick}
+          >
+            <IconPlusOutlineMedium size={14} />
+          </button>
+        </Tooltip>
         {/* 官方 `.modes`：permission → plan 两枚 0.2.2 新单值座。 */}
         <div className="dci-modes">
           {permissionDeclaration === 'declared' ? (
@@ -285,7 +317,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
               slot={PERMISSION_SLOT}
               sessionId={sessionId}
               standard={inputStandard}
-              ownerProps={{ locked }}
+              ownerProps={seatOwnerProps}
               fallback={permissionFallback}
             />
           ) : (
@@ -296,7 +328,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
               slot={PLAN_SLOT}
               sessionId={sessionId}
               standard={inputStandard}
-              ownerProps={{ locked }}
+              ownerProps={seatOwnerProps}
             />
           ) : null}
         </div>
@@ -319,7 +351,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
             sessionId={sessionId}
             standard={inputStandard}
             locked={modelSeatLocked}
-            fallback={<ModelMenu sessionId={sessionId} onNotify={onNotify} />}
+            fallback={modelFallback}
           />
         </div>
         {/* 官方 activity 座位：input/session 存在且槽位已声明才渲染（官方
@@ -337,31 +369,34 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
         ) : null}
         {/* 官方 interruptible：运行中且正在 sending 时，主按钮之外单出停止钮。 */}
         {interruptible ? (
+          <Tooltip label={tBar('tool.stop')} side="top" delayMs={500} disabled={!props.onStop} portal>
+            <button
+              type="button"
+              className="dci-send"
+              aria-label={tBar('tool.stop')}
+              disabled={!props.onStop}
+              onMouseDown={keepFocus}
+              onClick={props.onStop}
+            >
+              <IconStopOfficial size={16} />
+            </button>
+          </Tooltip>
+        ) : null}
+        <Tooltip label={primaryLabel} side="top" delayMs={500} disabled={props.sendDisabled === true} portal>
           <button
             type="button"
             className="dci-send"
-            aria-label={t('tool.stop')}
-            title={t('tool.stop')}
-            disabled={!props.onStop}
+            aria-label={primaryLabel}
+            aria-busy={sending}
+            data-sending={sending ? '' : undefined}
+            disabled={props.sendDisabled}
             onMouseDown={keepFocus}
-            onClick={props.onStop}
+            onClick={() => (props.primaryRetries ? props.onRetry?.() : props.primaryStops ? props.onStop?.() : props.onSend())}
           >
-            <IconStopOfficial size={16} />
-          </button>
-        ) : null}
-        <button
-          type="button"
-          className="dci-send"
-          aria-label={primaryLabel}
-          title={primaryLabel}
-          aria-busy={sending}
-          data-sending={sending ? '' : undefined}
-          disabled={props.sendDisabled}
-          onMouseDown={keepFocus}
-          onClick={() => (props.primaryStops ? props.onStop?.() : props.onSend())}
-        >
           {props.primaryStops ? (
             <IconStopOfficial size={16} />
+          ) : props.primaryRetries === true ? (
+            <IconTriangleRightFillRegular size={16} className="dci-continue-icon" />
           ) : sending ? (
             <svg className="dci-sending-spinner" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
               <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" />
@@ -370,7 +405,8 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
           ) : (
             <IconSendOfficial size={16} />
           )}
-        </button>
+          </button>
+        </Tooltip>
       </div>
     </div>
   );

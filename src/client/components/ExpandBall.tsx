@@ -14,6 +14,7 @@
 
 import { useEffect, useState, type JSX } from 'react';
 import { createPortal } from 'react-dom';
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives';
 import { stash } from '../services';
 import { diagError } from '../diag';
 import { useSidebarCarry } from '../sideinput';
@@ -79,17 +80,18 @@ export function CodinputBall(props: { sessionId?: string }): JSX.Element | null 
 
   if (!active || !pos) return null;
   return createPortal(
-    <button
-      type="button"
-      className="dci-ball"
-      data-codinput-expand="true"
-      style={{ left: pos.left, top: pos.top }}
-      aria-label={t("ball.label")}
-      title={t("ball.title")}
-      onClick={() => summonSidebarCodinput(sessionId)}
-    >
-      <IconBrand size={BALL_ICON} />
-    </button>,
+    <Tooltip label={t("ball.title")} side="top" delayMs={500} portal>
+      <button
+        type="button"
+        className="dci-ball"
+        data-codinput-expand="true"
+        style={{ left: pos.left, top: pos.top }}
+        aria-label={t("ball.label")}
+        onClick={() => summonSidebarCodinput(sessionId)}
+      >
+        <IconBrand size={BALL_ICON} />
+      </button>
+    </Tooltip>,
     document.body,
   );
 }

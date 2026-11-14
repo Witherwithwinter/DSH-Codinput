@@ -30,6 +30,11 @@ const CSS = `
   box-shadow: var(--dsw-elevation-soft, none); font-size: var(--dsh-content-font-size, 14px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   border: 0; border-radius: var(--dsw-radius-panel, 22px); flex-direction: column; gap: 0; padding-top: 4px; display: flex; position: relative; min-width: 0; }
+/* 官方 InputBar overlayAnchor 同构：覆盖 conversation.input.overlay 座位的
+   零高绝对定位条，位于卡片顶边。官方 MenuView（/ 候选）与 PopupSelectView
+   （/model、/permission 等弹层）以它为包含块、用 bottom:calc(100% + 4px) 浮出
+   卡片上方——几何与官方输入框一致（见 CodinputSurface 的 OVERLAY_SLOT）。 */
+.dci-overlay-anchor { position: absolute; inset: 0 0 auto; height: 0; }
 /* 主模式 surface 复刻官方 composer root：侧向 clearance 内缩 + 底部 4px，
    卡片与数据行由数据行自身 padding-top 定距（官方 root 无 gap，dock 上边距 4px）。
    side/float 形态自带铺满布局，不参与。 */
@@ -65,6 +70,10 @@ const CSS = `
 .dci-body[data-split="true"] .dci-preview { scrollbar-width: none; }
 .dci-body[data-split="true"] .dci-preview::-webkit-scrollbar { display: none; }
 .dci-body[data-split="true"] .dci-editor-wrap { border-right: 1px solid var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 12%, transparent)); }
+/* 分屏预览独立合成层（连打性能）：预览是整篇 markdown 的完整 DOM，若与编辑栏
+ * 同层，每次键入引起的重绘会把它整篇重画——600 行草稿下实测掉到 ~30fps，
+ * 提升为独立合成层后回到 60fps（contain: paint 不足以隔离重绘）。 */
+.dci-body[data-split="true"] .dci-preview { will-change: transform; }
 .dci-editor-wrap { position: relative; flex: 1 1 100%; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; }
 .dci-editor-wrap[data-solo="true"] { flex-basis: 100%; }
 .dci-cm-host { flex: 1; min-height: 0; overflow-y: auto; }
@@ -144,6 +153,8 @@ const CSS = `
 /* 官方 .primary[data-sending]:disabled —— sending spinner 态不降透明度、光标 progress。 */
 .dci-send[data-sending]:disabled { opacity: 1; cursor: progress; }
 .dci-sending-spinner { animation: 0.8s linear infinite dci-input-sending; }
+/* 官方 InputBar .continueIcon：三角按 1.5 倍绘制（布局尺寸不变）。 */
+.dci-continue-icon { transform: scale(1.5); }
 @media (prefers-reduced-motion: reduce) { .dci-sending-spinner { animation-duration: 2.4s; } }
 @keyframes dci-input-sending { to { transform: rotate(360deg); } }
 
@@ -173,91 +184,9 @@ const CSS = `
 .dci-itemLabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dci-check { flex: none; color: var(--dsw-alias-label-primary, currentColor); display: grid; place-items: center; }
 
-/* ===== 候选菜单（官方 MenuView.module.css 逐值复刻：卡片顶锚定全宽浮层）
-   0.1.7-rc.2 起菜单本体不再带背景，亚克力在 primitives MenuSurface 的 material 层
-   （--dsw-menu-surface-fill + --dsw-menu-backdrop-filter）；单元素复刻把两层合并到这里，
-   token 链兼容旧宿主（无新 token 时回退 rc.3 形态：不透明 --dsw-specific-menu、r20、无 blur）===== */
-.dci-slash-menu { z-index: 100; box-sizing: border-box; --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2, transparent);
-  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2, transparent);
-  background: var(--dsw-menu-surface-fill, var(--dsw-specific-menu, rgba(30, 30, 34, 0.98)));
-  backdrop-filter: var(--dsw-menu-backdrop-filter, none); color: var(--dsw-alias-label-primary, inherit);
-  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1, transparent);
-  max-height: 400px; box-shadow: var(--dsw-elevation-prominent, 0 10px 34px rgba(0, 0, 0, 0.35));
-  border: 0; border-radius: var(--dsw-radius-lg, 20px); flex-direction: column; padding: 4px; display: flex; position: absolute;
-  bottom: calc(100% + 4px); left: 0; right: 0; overflow: hidden; }
-/* dropdown（侧栏/悬浮形态）：portal 到 body 的自适应浮层——位置/宽度/最大高度由
-   SlashMenu 量卡片（.dci-card）与视口后内联注入；fixed 不受面板/卡片裁剪，层级盖过
-   悬浮卡（.dci-float z-index:940）但低于模态/灯箱（1000）。normal 形态仍走上面的
-   卡片顶锚定 absolute 规则，几何不变。 */
-.dci-slash-menu[data-dropdown] { position: fixed; z-index: 950; left: auto; right: auto; top: auto; bottom: auto; }
-.dci-slash-viewport { flex-direction: column; min-height: 0; display: flex; overflow-y: auto; }
-.dci-slash-item { cursor: pointer; width: 100%; min-height: 34px; color: var(--dsw-alias-label-primary, inherit);
-  text-align: left; background: transparent; border: none; border-radius: var(--dsw-radius-md, 10px); align-items: center; gap: 6px;
-  padding: 6px 8px; font-size: 13px; line-height: 20px; display: flex; }
-.dci-slash-item[data-active="true"], .dci-slash-item:hover { background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 8%, transparent)); }
-.dci-slash-sectionTitle { min-height: 23px; color: var(--dsw-alias-label-tertiary, currentColor); flex: none;
-  padding: 5px 8px 2px; font-size: 11px; font-weight: 500; line-height: 16px; }
-.dci-slash-sectionTitle:not(:first-child) { margin-top: 3px; }
-.dci-slash-itemIcon { width: 14px; height: 14px; color: var(--dsw-alias-menu-icon, var(--dsw-alias-label-tertiary, currentColor)); flex: none;
-  justify-content: center; align-items: center; display: inline-flex; }
-.dci-slash-itemIcon svg { width: 14px; height: 14px; }
-.dci-slash-itemName { text-overflow: ellipsis; white-space: nowrap; flex: none; max-width: 40%; overflow: hidden; }
-.dci-slash-itemAlias { text-overflow: ellipsis; white-space: nowrap; max-width: 20%; color: var(--dsw-alias-label-tertiary, currentColor); flex: none;
-  font-size: 12px; line-height: 18px; overflow: hidden; }
-.dci-slash-itemDescription { text-overflow: ellipsis; white-space: nowrap; text-align: right; min-width: 0;
-  color: var(--dsw-alias-label-tertiary, currentColor); flex: 1; font-size: 12px; line-height: 18px; overflow: hidden; }
-.dci-slash-trailing { flex: none; align-items: center; gap: 3px; margin-left: auto; display: inline-flex; }
-.dci-slash-drillHintText { color: var(--dsw-alias-label-caption, currentColor); white-space: nowrap; font-size: 10px;
-  line-height: 16px; display: none; }
-.dci-slash-drillHint { border-radius: var(--dsw-radius-xs, 4px); background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 8%, transparent));
-  color: var(--dsw-alias-label-caption, currentColor); padding: 0 4px; font-family: inherit;
-  font-size: 10px; line-height: 16px; display: none; }
-.dci-slash-item[data-active="true"] .dci-slash-drillHintText, .dci-slash-item[data-active="true"] .dci-slash-drillHint { display: inline-flex; }
-.dci-slash-drill { width: 18px; height: 18px; border-radius: var(--dsw-radius-xs, 4px); color: var(--dsw-alias-menu-icon, var(--dsw-alias-label-caption, currentColor));
-  flex: none; place-items: center; display: inline-grid; cursor: pointer; }
-.dci-slash-drill:hover { background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 8%, transparent));
-  color: var(--dsw-alias-label-primary, inherit); }
-.dci-slash-groupTitle { color: var(--dsw-alias-label-tertiary, currentColor); padding: 6px 8px; font-size: 11px; line-height: 15px; }
-.dci-slash-skeletonRow { box-sizing: border-box; align-items: center; min-height: 34px; padding: 6px 8px; display: flex; }
-.dci-slash-skeletonBar { background: var(--dsw-alias-bg-skeleton, color-mix(in srgb, currentColor 10%, transparent));
-  border-radius: var(--dsw-radius-xs, 4px); height: 18px; animation: dci-slash-skeleton 2s cubic-bezier(0.36, 0, 0.64, 1) infinite; }
-@keyframes dci-slash-skeleton { 0% { opacity: 1; } 40% { opacity: 0.6; } 80%, 100% { opacity: 1; } }
-.dci-slash-crumbs { border-bottom: 0.5px solid var(--dsw-alias-border-l1, transparent); flex-wrap: wrap; flex: none;
-  align-items: center; gap: 2px; margin-bottom: 2px; padding: 3px 3px 5px; display: flex; }
-.dci-slash-crumb { max-width: 40%; color: var(--dsw-alias-label-tertiary, currentColor); cursor: pointer;
-  text-overflow: ellipsis; white-space: nowrap; background: transparent; border: none; border-radius: var(--dsw-radius-sm, 6px);
-  flex: 0 auto; padding: 2px 5px; font-family: inherit; font-size: 11px; line-height: 16px; overflow: hidden; }
-.dci-slash-crumb:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 8%, transparent));
-  color: var(--dsw-alias-label-primary, inherit); }
-.dci-slash-crumb:disabled { color: var(--dsw-alias-label-primary, inherit); cursor: default; background: transparent; }
-.dci-slash-crumbSeparator { color: var(--dsw-alias-menu-icon, var(--dsw-alias-label-caption, currentColor)); flex: none; display: inline-flex; }
-
-.dci-crumb-row { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px 6px; }
-.dci-crumb { border: none; background: transparent; color: var(--dsw-alias-label-secondary, inherit); cursor: pointer;
-  padding: 2px 6px; border-radius: 5px; font-size: 11.5px; display: inline-flex; }
-.dci-crumb:hover { background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 9%, transparent)); }
-.dci-crumb[data-current="true"] { color: var(--dsw-alias-label-primary, inherit); cursor: default; }
 .dci-empty { padding: 10px; color: var(--dsw-alias-label-tertiary, currentColor); text-align: left; }
-.dci-search { width: calc(100% - 8px); margin: 2px 4px 4px; padding: 5px 9px; font-size: 13px;
-  border-radius: 8px; border: 1px solid var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 18%, transparent));
-  background: transparent; color: inherit; outline: none; }
-.dci-error { padding: 6px 10px; color: var(--dsw-alias-state-error-primary, #d54941); font-size: 12px; }
 
-/* ===== popupSelect（/model 等命令的选项弹层）===== */
-.dci-group-title { flex: none; min-width: 0; padding: 7px 10px 6px; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; color: var(--dsw-alias-label-tertiary, currentColor); font-size: 12px; font-weight: 500; line-height: 16px; }
-.dci-opt { box-sizing: border-box; display: flex; align-items: center; width: 100%; min-height: 44px; padding: 6px 10px;
-  border: none; border-radius: var(--dsw-radius-md, 10px); background: transparent; color: inherit; cursor: pointer;
-  font-family: inherit; text-align: left; }
-.dci-opt:hover, .dci-opt[data-active="true"] { background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 10%, transparent)); }
-.dci-opt-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; }
-.dci-opt-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-primary, inherit);
-  font-size: 14px; line-height: 22px; }
-.dci-opt-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-tertiary, currentColor);
-  font-size: 12px; line-height: 18px; }
 .dci-confirm { min-width: 0; padding: 8px; }
-.dci-row-name { color: var(--dsw-alias-label-primary, inherit); font-size: 14px; font-weight: 500; line-height: 22px; }
-.dci-row-desc { margin-top: 2px; color: var(--dsw-alias-label-secondary, currentColor); font-size: 12px; line-height: 18px; }
 .dci-confirm > label { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; color: var(--dsw-alias-label-primary, inherit);
   cursor: pointer; font-size: 13px; line-height: 20px; }
 .dci-confirm > label input { flex: none; width: 16px; height: 16px; margin: 2px 0 0;
@@ -282,9 +211,6 @@ const CSS = `
   color: var(--dsw-alias-label-primary, inherit); font-size: 14px; line-height: 22px; }
 .dci-confirm-ack input { flex: none; width: 16px; height: 16px; margin: 3px 0 0;
   accent-color: var(--dsw-alias-button-primary-fill, currentColor); cursor: pointer; }
-.dci-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 8px 4px; }
-.dci-confirm-actions .dci-btn { min-width: 72px; }
-.dci-confirm-actions .dci-btn[data-primary="true"] { min-width: 136px; }
 .dci-btn { border: 1px solid var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 22%, transparent)); border-radius: 10px;
   background: transparent; color: inherit; padding: 6px 14px; cursor: pointer; font-size: 14px; line-height: 20px; }
 .dci-btn[data-primary="true"] { background: var(--dsw-alias-button-primary-fill, color-mix(in srgb, currentColor 85%, transparent));
@@ -362,9 +288,6 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
 .dci-attach-arrowLeft { left: 4px; }
 .dci-attach-arrowRight { right: 4px; }
 
-/* ===== 数据行（卡片下方，官方 data-composer-stats 位置）===== */
-.dci-stats { display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--dsw-alias-label-caption, currentColor);
-  padding: 0 6px; font-variant-numeric: tabular-nums; user-select: none; }
 
 /* ===== 悬浮模式（拖顶部行空白区脱出；拖回底部输入区回普通；prefs 记忆）===== */
 .dci-float { position: fixed; z-index: 940; min-width: 0; display: flex; flex-direction: column; }
@@ -433,8 +356,6 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
 .dci-surface[data-side] .dci-body { flex: 1 1 auto; max-height: none; min-height: 0; }
 .dci-surface[data-side] .dci-row { padding: 6px 8px;
   border-top: 0.5px solid var(--dsw-alias-border-l1, transparent); }
-/* 候选菜单的 side/float 形态已改为 portal 自适应浮层（见 .dci-slash-menu[data-dropdown]），
-   不再挂在 surface 下，故此处不再需要布局覆盖。 */
 
 /* ===== 设置分区（官方 T1PP 行结构 + 控件样式）===== */
 .dci-settings { display: flex; flex-direction: column; font-size: 14px; color: inherit; }
@@ -470,18 +391,6 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
 .dci-switch[aria-checked="true"]::after { transform: translateX(16px); }
 
 
-/* ===== 原图预览（官方 primitives ImageLightbox 逐值复刻）===== */
-.dci-lightbox { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 40px; }
-.dci-lightbox-mask { position: absolute; inset: 0; background: var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.55));
-  backdrop-filter: var(--dsw-mask-blur, blur(4px)); }
-.dci-lightbox-image { position: relative; max-width: min(100%, 1600px); max-height: calc(100vh - 80px);
-  object-fit: contain; border-radius: var(--dsw-radius-lg, 16px); background: var(--dsw-specific-input-major);
-  border: 0; box-shadow: var(--dsw-elevation-prominent, 0 10px 34px rgba(0, 0, 0, 0.35)); }
-.dci-lightbox-close { position: fixed; top: 20px; right: 20px; z-index: 1; display: grid; place-items: center;
-  width: 36px; height: 36px; border: 0.5px solid var(--dsw-alias-border-l2-darkmode-thin, var(--dsw-alias-border-l2, transparent));
-  border-radius: 999px; corner-shape: round; background: var(--dsw-specific-input-major);
-  color: var(--dsw-alias-label-primary, currentColor); cursor: pointer; }
-.dci-lightbox-close:focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, currentColor)); outline-offset: 3px; }
 
 /* ===== 数据行（官方 uV2eYG_dock 复刻：root 内居中、无横向 padding）===== */
 .dci-stat-root { max-width: 100%; box-sizing: border-box; width: 100%;

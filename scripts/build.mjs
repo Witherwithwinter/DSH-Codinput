@@ -1,6 +1,8 @@
 // 客户端产物构建：esbuild bundle + cjs，包成 window.__ModuleLoader__.load。
-// 外部依赖只有 react / react-dom（平台模块）；CodeMirror / marked / dompurify /
-// highlight.js / katex / mermaid 一律随包内置。
+// 外部依赖只有平台模块（宿主 PLATFORM_MODULES 共享表）：react / react-dom，以及
+// 官方原语库 @deepseek-ai/dsh-client-ui-primitives（Tooltip 等——「能不复刻就
+// 不复刻」，直接用宿主同一份官方实现，样式/行为/无障碍天然与官方一致）。
+// CodeMirror / marked / dompurify / highlight.js / katex / mermaid 一律随包内置。
 //
 // 默认出**发布产物**：压缩、无 sourcemap（源码随包在 src/，不必把内联 sourcemap
 // 打进产物——那是 1MB 级的体积）。开发调试用 --dev（npm run build:dev）：
@@ -218,7 +220,12 @@ export async function main() {
     minify: !dev,
     sourcemap: dev ? 'inline' : false,
     legalComments: 'none',
-    external: ['react', 'react-dom'],
+    external: [
+      'react',
+      'react-dom',
+      // 宿主 baseline 共享模块（见 host-primitives.d.ts 头注释）；不随包内置。
+      '@deepseek-ai/dsh-client-ui-primitives',
+    ],
     plugins: [createKatexCssPlugin(), createMermaidTrimPlugin()],
     banner: {
       js: [

@@ -180,7 +180,22 @@ function baseTheme(fontFamily: string): Extension {
     },
     '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'currentColor', fontWeight: 600 },
     '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, currentColor 6%, transparent)' },
-    '.cm-lineNumbers .cm-gutterElement': { minWidth: '2.2em', padding: '0 6px 0 10px' },
+    // 行号栏定宽（issue #3）：行号 gutter 是 flex 列，列宽由最宽的子
+    // `.cm-gutterElement` 决定，其中还有一个隐藏占位元素，其文本是
+    // maxLineNumber(doc.lines)——按 9/99/999… 取档。若只看可见行号，行数从
+    // 9→10、99→100 时占位元素与可见数字一起变宽，整列变宽、正文右移。
+    // 这里给**每个**行号元素同一个 min-width = 3 个数字 + 左右内边距
+    // （10px + 6px = 16px，与下方 padding 同源）。`ch` 是「0」字形宽度，随
+    // prefs.fontFamily / fontSize 自动换算，等宽字体下 3ch 恰为三位数字宽；
+    // 于是 ≤999 行列宽恒等于该值，>999 行时内容才会把列撑开（不裁切数字）。
+    // 注：CM 基础主题已给 `.cm-gutterElement` 设 box-sizing: border-box，
+    // 故 min-width 含内边距。首个/末个元素（含隐藏占位）同规则。
+    '.cm-lineNumbers .cm-gutterElement': {
+      minWidth: 'calc(3ch + 16px)',
+      padding: '0 6px 0 10px',
+      // 比例字体下把 0-9 设为等宽数字，避免单/多位数因字形宽度不同而抖动。
+      fontVariantNumeric: 'tabular-nums',
+    },
     '.cm-selectionBackground': { backgroundColor: 'color-mix(in srgb, currentColor 15%, transparent) !important' },
     '.cm-placeholder': { color: 'color-mix(in srgb, currentColor 38%, transparent)' },
   });

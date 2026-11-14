@@ -1,3 +1,4 @@
+import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives';
 /**
  * 模型与思考强度菜单：官方 ModelSelect 座位（conversation.input.model 槽位）
  * 的触发器与两级 cell 菜单复刻。
@@ -17,7 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ModelCatalogModel, ModelProviderGroup, ModelSelection } from '../host-types';
 import { getSessionDirectory, type DirectorySnapshot } from '../modeldir';
 import { stash } from '../services';
-import { IconChevronOfficial } from '../icons';
+
 import { ModelLabel } from './ModelLabel';
 import { MenuCheck, MenuSurface } from './MenuSurface';
 import { useSnapshot } from './useSnapshot';
@@ -161,7 +162,7 @@ export function ModelMenu(props: ModelMenuProps): JSX.Element {
         <span className="dci-triggerLabel">{found ? renderCurrentName('trigger', found) : currentModelName}</span>
         {currentEffort ? <span className="dci-triggerEffort">{currentEffort}</span> : null}
         <span className="dci-chev" data-open={open}>
-          <IconChevronOfficial size={14} />
+          <IconChevronDownOutlineRegular size={14} />
         </span>
       </button>
 
@@ -176,7 +177,7 @@ export function ModelMenu(props: ModelMenuProps): JSX.Element {
                     {found ? renderCurrentName('menu', found) : currentModelName}
                   </span>
                   <span className="dci-cellChevron" style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
-                    <IconChevronOfficial size={14} />
+                    <IconChevronDownOutlineRegular size={14} />
                   </span>
                 </button>
                 {found?.model.reasoning ? (
@@ -184,7 +185,7 @@ export function ModelMenu(props: ModelMenuProps): JSX.Element {
                     <span className="dci-cellLabel">{t("menu.reasoning")}</span>
                     <span className="dci-cellValue">{currentEffort}</span>
                     <span className="dci-cellChevron" style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
-                      <IconChevronOfficial size={14} />
+                      <IconChevronDownOutlineRegular size={14} />
                     </span>
                   </button>
                 ) : null}

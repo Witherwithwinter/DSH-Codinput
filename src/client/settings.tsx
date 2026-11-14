@@ -1,3 +1,4 @@
+import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives';
 /**
  * 设置 → Codinput 分组：启用接管、显示行号、编辑器字体、发送/换行快捷键、
  * 默认视图。行结构与控件对齐官方设置（T1PP：标题 + 描述 + 发丝线 +
@@ -9,7 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { SlotRegisterOptions } from './host-types';
 import { DEFAULT_PREFS, loadPrefs, savePrefs, type CodinputPrefs, type Hotkey } from './prefs';
 import { formatCombo, comboFromEventLike } from './hotkey';
-import { IconChevronOfficial } from './icons';
+
 import { MenuSurface } from './components/MenuSurface';
 import { t, useT } from './i18n';
 
@@ -131,7 +132,7 @@ function Selector(props: {
         }}
       >
         {current?.label ?? value}
-        <IconChevronOfficial size={14} />
+        <IconChevronDownOutlineRegular size={14} />
       </button>
       {open && anchor ? (
         <MenuSurface anchor={anchor} initialRect={anchorRect} side="bottom" alignEnd onClose={() => setOpen(false)} minWidth={200}>

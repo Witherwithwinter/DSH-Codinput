@@ -23,26 +23,80 @@ import { loadPrefs, savePrefs, subscribePrefs, type CodinputPrefs } from '../pre
 import { useSidebarInputCarried } from '../sideinput';
 import { CodinputBall } from './ExpandBall';
 import { CodinputSurface } from './CodinputSurface';
-import { kitFromBarProps } from './slotEntry';
+import { useStableKit } from './slotEntry';
 
 /** ComposerBarOwnerProps 切面（官方 bar owner）。 */
 interface BarOwner {
   variant: 'hero' | 'composer';
+  /** rc.3：同一文档里可挂载多个 composer（main / embedded），文档级粘贴路由据此选举。 */
+  occurrence?: 'main' | 'embedded';
   blocked?: { readonly reason: string };
   disabled?: boolean;
   placeholder?: string;
 }
 
+/**
+ * rc.3 bar 注入面切面：`retry`（失败轮次重试，配合 conversationContinuation
+ * 投影驱动「继续生成」主按钮）与 `registerFileIntake`（文档级粘贴路由）。
+ */
+interface BarInjected {
+  retry?: (failureSeq: number) => void;
+  registerFileIntake?: (target: {
+    card: HTMLElement;
+    occurrence: 'main' | 'embedded';
+    accepts: () => boolean;
+    add: (files: readonly File[], directories?: ReadonlySet<File>) => void;
+  }) => () => void;
+}
+
 /** 槽位作用域里的 chat 会话钩子（ui-session chat 源贡献）。 */
-type BarProps = BarOwner & SessionMaybeStandard & { useChat?: <S>(sel: (s: unknown) => S) => S };
+type BarProps = BarOwner & BarInjected & SessionMaybeStandard & { useChat?: <S>(sel: (s: unknown) => S) => S };
+
+/**
+ * 安全读投影（rc.3 的 useProjection 支持选择器；旧宿主可能不认识该 key）。
+ * 调用序必须稳定：hook 本身无条件调用，只有内部 try/catch 兜错。
+ */
+function useSafeProjection<T>(useProjection: ((key: string, selector?: (value: any) => T) => T | undefined) | undefined,
+  key: string, selector?: (value: any) => T): T | undefined {
+  try {
+    return useProjection?.(key, selector);
+  } catch {
+    return undefined;
+  }
+}
 
 export function CodinputBar(props: BarProps): JSX.Element | null {
   const { variant, blocked, disabled, placeholder, sessionId, useInput, inputActions, useProjection, useChat, useSession } = props;
   const state = useInput((s) => s);
+  // ---- rc.3「继续生成 / 重试」信号（官方 primaryRetries 的输入面） ----
+  // 官方：retryableFailure = useProjection('conversationContinuation')，
+  // pendingHumanInput = inbox 里仍有用户待输入项；两者与 historyOpen /
+  // submissionPending / removed / subagent 一起决定主按钮是否变「继续生成」。
+  const retry = props.retry;
+  const retryableFailure = useSafeProjection(useProjection as never, 'conversationContinuation') as number | undefined;
+  const pendingHumanInput = useSafeProjection(useProjection as never, 'inbox', (inbox: any) => (
+    inbox?.['next-step']?.some((message: any) => message?.source?.kind === 'user') ?? false
+  )) === true;
+  const sessionSubagent = useSession ? useSession((s: any) => s?.subagent ?? null) : null;
+  const sessionHistoryOpen = useSession ? useSession((s: any) => s?.openState === 'open') === true : false;
+  const sessionSubmissionPending = useSession
+    ? useSession((s: any) => (s?.pendingSubmissions?.length ?? 0) > 0) === true
+    : false;
+  const sessionRemoved = useSession ? useSession((s: any) => s?.removed === true) === true : false;
+  const continueState = {
+    retry,
+    retryableFailure: typeof retryableFailure === 'number' ? retryableFailure : undefined,
+    pendingHumanInput,
+    historyOpen: sessionHistoryOpen,
+    submissionPending: sessionSubmissionPending,
+    removed: sessionRemoved,
+    subagentActive: sessionSubagent !== null,
+  };
+  const occurrence: 'main' | 'embedded' = props.occurrence ?? 'main';
   // conversation.input.left/.right 第三方条目的 standard props 原样面：宿主给
   // 本条目的 kit（standard 全集）减去 owner props——enhancer ✨/🎤 等按钮与
   // 左座读数按官方契约消费（sessionId + useSession/useInput + inputActions + t）。
-  const inputStandard = kitFromBarProps(props as unknown as Record<string, unknown>);
+  const inputStandard = useStableKit(props as unknown as Record<string, unknown>);
   // 官方 StatsPills 同款数据源：chat store 的 legacy 节点数组（选择器只取
   // 数组引用，派生换算在 stats.ts 的 useSessionStats 里做）。
   const chatNodes = useChat ? useChat((s: unknown) => (s as { legacy?: { nodes?: unknown } })?.legacy?.nodes) : undefined;
@@ -69,6 +123,9 @@ export function CodinputBar(props: BarProps): JSX.Element | null {
       hero={variant === 'hero'}
       chatNodes={chatNodes}
       float={floating}
+      continueState={continueState}
+      occurrence={occurrence}
+      registerFileIntake={props.registerFileIntake}
       onDragZonePointerDown={beginFloatDrag}
     />
   );

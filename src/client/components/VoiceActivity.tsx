@@ -26,7 +26,7 @@
  * 绝不半组装；条目崩溃仍由 EntryBoundary 隔离（只丢本座位）。
  */
 
-import { createElement, useMemo } from 'react';
+import { createElement, memo, useMemo } from 'react';
 import { EntryBoundary, entryInjectProps, firstComponentEntry, translatorFor, useSlotEntries } from './slotEntry';
 
 const ACTIVITY_SLOT = 'conversation.input.activity';
@@ -42,7 +42,7 @@ export interface VoiceActivityProps {
   onActiveChange(active: boolean): void;
 }
 
-export function VoiceActivity(props: VoiceActivityProps): JSX.Element | null {
+export const VoiceActivity = memo(function VoiceActivity(props: VoiceActivityProps): JSX.Element | null {
   const { sessionId, inputActions, locked, onActiveChange } = props;
   const entries = useSlotEntries(ACTIVITY_SLOT);
 
@@ -73,4 +73,5 @@ export function VoiceActivity(props: VoiceActivityProps): JSX.Element | null {
       onActiveChange,
     }),
   );
-}
+});
+

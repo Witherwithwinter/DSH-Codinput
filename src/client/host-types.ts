@@ -324,7 +324,39 @@ export interface ModelSelectionProjection {
 }
 
 export interface UseProjection {
-  (key: string): unknown;
+  /** 只读投影原值（宿主 0.2.x：useProjection(key)）。 */
+  <T = unknown>(key: string): T | undefined;
+  /** 带选择器的投影读取（rc.3 官方 InputBar 用法：useProjection('inbox', sel)）。 */
+  <T>(key: string, selector: (value: any) => T): T | undefined;
+}
+
+/**
+ * rc.3「继续生成 / 重试」的插件侧信号（bar 条目层用 useSession/useProjection
+ * 读取，交给表面层判断 primaryRetries——官方 InputBar 同构）。
+ */
+export interface ContinueState {
+  /** 官方 bar 注入面 retry(failureSeq)。 */
+  readonly retry: ((failureSeq: number) => void) | undefined;
+  /** conversationContinuation 投影（失败轮次序号）。 */
+  readonly retryableFailure: number | undefined;
+  /** inbox 仍有用户待输入项（官方 pendingHumanInput）。 */
+  readonly pendingHumanInput: boolean;
+  /** 会话为打开态（官方 historyOpen）。 */
+  readonly historyOpen: boolean;
+  /** 有提交在途（官方 submissionPending）。 */
+  readonly submissionPending: boolean;
+  /** 会话已移除（官方 removed）。 */
+  readonly removed: boolean;
+  /** 当前是子智能体会话（官方 subagent !== null）。 */
+  readonly subagentActive: boolean;
+}
+
+/** 官方 ComposerFileIntakeTarget 的消费切面（bar 注入 registerFileIntake）。 */
+export interface ComposerFileIntakeTarget {
+  readonly card: HTMLElement;
+  readonly occurrence: 'main' | 'embedded';
+  readonly accepts: () => boolean;
+  readonly add: (files: readonly File[], directories?: ReadonlySet<File>) => void;
 }
 
 /** session-maybe 槽位标准 props（我们消费的切面）。 */

@@ -1,3 +1,4 @@
+import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives';
 /**
  * 权限菜单：官方 PermissionSelect 复刻。事实源是宿主投影
  * useProjection("permissions")（{ currentValue, options }），触发器
@@ -17,9 +18,7 @@ import {
   permissionLabel,
   type PermissionProjection,
 } from '../permission';
-import {
-  IconChevronOfficial,
-  IconShieldBarsOfficial,
+import {IconShieldBarsOfficial,
   IconShieldCheckOfficial,
   IconShieldWriteOfficial,
   IconWarningOfficial,
@@ -31,6 +30,8 @@ export interface PermissionMenuProps {
   sessionId: string | undefined;
   actions: InputActions | undefined;
   currentDraft: string;
+  /** 取最新本地草稿（草稿交换退化时要回写「当下」内容，不能用渲染时快照）。 */
+  getCurrentDraft?(): string;
   useProjection: UseProjection | undefined;
   /** owner disabled（blocked/removed 场景锁住触发器）。 */
   disabled?: boolean;
@@ -48,7 +49,7 @@ function glyph(value: string): JSX.Element | undefined {
 }
 
 export function PermissionMenu(props: PermissionMenuProps): JSX.Element | null {
-  const { sessionId, actions, currentDraft, useProjection, disabled, onNotify } = props;
+  const { sessionId, actions, currentDraft, getCurrentDraft, useProjection, disabled, onNotify } = props;
   // 官方同款事实源：宿主投影（hook 顺序随 useProjection prop 存在性固定）。
   const permissions = useProjection
     ? (useProjection('permissions') as PermissionProjection | undefined)
@@ -90,7 +91,7 @@ export function PermissionMenu(props: PermissionMenuProps): JSX.Element | null {
   const submit = (id: string): void => {
     if (!sessionId) return;
     setPick(id);
-    applyPermission(sessionId, id, actions, currentDraft)
+    applyPermission(sessionId, id, actions, getCurrentDraft?.() ?? currentDraft)
       .then((outcome) => {
         if (!outcome.ok) onNotify?.('error', outcome.message ?? t('perm.switchFailed'));
       })
@@ -146,7 +147,7 @@ export function PermissionMenu(props: PermissionMenuProps): JSX.Element | null {
         ) : null}
         <span className="dci-triggerLabel">{currentLabel}</span>
         <span className="dci-chev" data-open={open}>
-          <IconChevronOfficial size={14} />
+          <IconChevronDownOutlineRegular size={14} />
         </span>
       </button>
 

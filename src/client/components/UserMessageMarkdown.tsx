@@ -33,6 +33,7 @@
  */
 
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { SlotRegisterOptions } from '../host-types';
 import { diagError } from '../diag';
 import { loadPrefs, subscribePrefs } from '../prefs';
@@ -45,7 +46,7 @@ import {
   type MarkdownImageTarget,
 } from '../markdown';
 import { FileGlyph, fileExtension, fileSizeText } from './AttachmentRail';
-import { ImageLightbox } from './ImageLightbox';
+import { ImageLightbox } from '@deepseek-ai/dsh-client-ui-primitives';
 
 /* ---------- 注册 ---------- */
 
@@ -692,15 +693,16 @@ function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element |
           {data.time !== undefined && messageClock(data.time) !== '' && (
             <span className="dci-umsg-time">{messageClock(data.time)}</span>
           )}
-          <button
-            type="button"
-            className="dci-umsg-action"
-            aria-label={copied ? t('umsg.copied') : t('umsg.copy')}
-            title={copied ? t('umsg.copied') : t('umsg.copy')}
-            onClick={onCopy}
-          >
-            {copied ? <CheckGlyph /> : <CopyGlyph />}
-          </button>
+          <Tooltip label={copied ? t('umsg.copied') : t('umsg.copy')} side="top" delayMs={500} portal>
+            <button
+              type="button"
+              className="dci-umsg-action"
+              aria-label={copied ? t('umsg.copied') : t('umsg.copy')}
+              onClick={onCopy}
+            >
+              {copied ? <CheckGlyph /> : <CopyGlyph />}
+            </button>
+          </Tooltip>
         </div>
         {lightbox ? (
           <ImageLightbox

@@ -25,7 +25,7 @@
  * 私有），现网无此类条目；如出现则降级为无 store props 渲染。
  */
 
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import {
   entryId,
@@ -49,7 +49,7 @@ export interface InputSlotSeatProps {
   excludeIds?: readonly string[] | undefined;
 }
 
-export function InputSlotSeat(props: InputSlotSeatProps): JSX.Element | null {
+export const InputSlotSeat = memo(function InputSlotSeat(props: InputSlotSeatProps): JSX.Element | null {
   const { slot, sessionId, standard, excludeIds } = props;
   const entries = useSlotEntries(slot);
   // 官方 list 合成：id 首占位去重 + order 升序（entries 快照引用稳定，直接 memo）。
@@ -59,7 +59,7 @@ export function InputSlotSeat(props: InputSlotSeatProps): JSX.Element | null {
   if (sessionId === undefined || rows.length === 0) return null;
 
   return <>{rows.map((entry, index) => renderSlotEntry(entry, entryId(entry, index), { sessionId, standard }))}</>;
-}
+});
 
 export interface InputSingleSlotProps {
   /** 官方单值子槽位全名（如 conversation.input.permission / .plan）。 */
@@ -77,6 +77,11 @@ export interface InputSingleSlotProps {
    * 缺省 null（槽位有占用者但无法镜像时按官方「画不出来」处理）。
    */
   fallback?: ReactNode;
+  /**
+   * 槽位**已声明但无占用者**时也渲染 fallback（缺省 false = 官方留空）。
+   * 用于「官方条目存在才镜像、否则保住旧自绘实现」的座位（附件行）。
+   */
+  fallbackOnMissing?: boolean;
 }
 
 /**
@@ -88,13 +93,14 @@ export interface InputSingleSlotProps {
  * 因此这里对「已声明 + 空」返回 null，绝不回退自绘控件；「未声明」由调用方
  * 用 `useSlotDeclaration` 区分后决定回退（旧宿主才回退 PermissionMenu）。
  */
-export function InputSingleSlot(props: InputSingleSlotProps): JSX.Element | null {
-  const { slot, sessionId, standard, ownerProps, fallback } = props;
+export const InputSingleSlot = memo(function InputSingleSlot(props: InputSingleSlotProps): JSX.Element | null {
+  const { slot, sessionId, standard, ownerProps, fallback, fallbackOnMissing } = props;
   const entries = useSlotEntries(slot);
   const occupant = useMemo(() => firstComponentEntry(entries), [entries]);
 
   // 官方门槛：无会话不画该座位（InputBar 的 sessionId 三元）。
-  if (sessionId === undefined || occupant === null) return null;
+  if (sessionId === undefined) return null;
+  if (occupant === null) return <>{fallbackOnMissing === true ? fallback ?? null : null}</>;
 
   // 让位可行性：inject 面必须在宿主 fiber 上下文里才算数（见 slotEntry）。
   // 不可复现时回退调用方给的兜底（permission 用自绘菜单保住旧功能）。
@@ -106,4 +112,4 @@ export function InputSingleSlot(props: InputSingleSlotProps): JSX.Element | null
     ownerProps,
     fallback,
   });
-}
+});

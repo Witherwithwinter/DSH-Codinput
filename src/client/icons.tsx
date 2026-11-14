@@ -170,18 +170,6 @@ export function IconSearch({ size, className }: IconProps): JSX.Element {
 
 // ---------- 官方图标（路径逐字取自宿主 primitives / ui-conversation，保证与官方输入框一致） ----------
 
-/** 官方 IconPlusOutline16（指令按钮，fill）。 */
-export function IconPlusOfficial({ size }: { size?: number }): JSX.Element {
-  return (
-    <svg width={size ?? 14} height={size ?? 14} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M8.64453 1.5V7.34961H14.5V8.65039H8.64453V14.5H7.34473V8.65039H1.5V7.34961H7.34473V1.5H8.64453Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
 /** 官方 IconPaperclipOutline16（slash 添加·文件 补位条目的 glyph；官方为 fill 路径自带描边轮廓）。 */
 export function IconPaperclipOfficial({ size }: { size?: number }): JSX.Element {
   return (
@@ -267,21 +255,6 @@ export function IconStopOfficial({ size }: { size?: number }): JSX.Element {
   return (
     <svg width={size ?? 16} height={size ?? 16} viewBox="0 0 16 16" aria-hidden="true">
       <rect x="3" y="3" width="10" height="10" rx="3" fill="currentColor" />
-    </svg>
-  );
-}
-
-/** 官方风格下拉 chevron（14，描边，随 open 旋转由外层 CSS 控制）。 */
-export function IconChevronOfficial({ size }: { size?: number }): JSX.Element {
-  return (
-    <svg width={size ?? 14} height={size ?? 14} viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <path
-        d="M3.5 5.75L7 9.25L10.5 5.75"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
     </svg>
   );
 }
