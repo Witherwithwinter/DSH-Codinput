@@ -29,76 +29,127 @@
 
 ## Features
 
-> **0.5.0 principle: never re-implement what the host already ships.** Anything the official composer already implements — the model selector with reasoning effort, the `/model` and `/permission` popups, `/` and `@` candidate menus, hover tooltips — is rendered as the **official entry / platform primitive itself**, so behaviour, pixels, keyboard handling and accessibility are the host's own and third-party plugins keep the official composer they depend on. Only the CodeMirror editor and the card chrome remain ours, aligned to the official UI value by value.
+The chat composer becomes an editor-style input panel: three mutually exclusive forms sharing one official input machine and one draft.
 
-**Three modes, one instance** — the input surface exists in exactly one of three states at any moment, and never coexists with the official composer:
+### Three forms (replicated official + plugin-owned)
 
-| Mode | How to enter | Behaviour |
+There is exactly one input entry at any time — it never coexists with the official composer:
+
+| Form | How to enter | Notes |
 | --- | --- | --- |
-| Normal `normal` | default | The takeover card sits in the composer's own place |
-| Floating `float` | drag the blank area of the card's top row | Pops out into a floating window: draggable, resizable from all four edges and four corners (position and size are remembered) |
-| Sidebar tab `side` | open the “Codinput” tab in the right sidebar | The input lives in the sidebar panel; **collapsing the sidebar does not give the composer back** — the round ball under the title bar brings it back; `/codinput` from the sidebar exits to the official composer and closes the tab |
+| Default `normal` | automatic | The takeover card sits in the original composer slot |
+| Floating `float` | drag the blank area of the card's top row | Detaches into a floating window: drag to move, resize from edges/corners (position and size remembered) |
+| Sidebar tab `side` | open the **Codinput** tab in the right sidebar | Input lives inside the sidebar panel; collapsing the sidebar **does not give the slot back** — a small ball below the header brings it back; typing `/codinput` inside the sidebar returns to the official composer and closes the tab |
 
-- **Editor**: line numbers (optional), current-line and gutter highlighting, soft wrap, Tab indentation, a line/column indicator, and an **edit + preview split** (live markdown, exactly half and half); **the editor always renders literal characters** (no ligatures — `->` / `//` stay as typed, which avoids host font-shaping differences and “missing character” misreads, and matches the preview / message plain-text rendering).
-- **Undo history that survives mode switches**: drag into floating mode, hop into the sidebar, come back — `Ctrl+Z` still works. All three modes share the same official input machine, whose draft is the single source of truth (it survives mode switches, `/codinput` exit/re-entry, plugin toggles and reloads).
-- **`/` `@`**: entirely the official trigger pipeline (track → official `inputTriggers` menu store → **the official `MenuView` entry itself**): candidate menu, drill-down, crumbs, skeletons and keyboard highlight are rendered by the host (no replica since 0.5.0); `/codinput` slots into the head of the commands section alphabetically; everything else keeps the official usage order. The popup is anchored to an official-shaped zero-height overlay strip on the card's top edge, so its geometry matches the official composer.
-- **Bottom control row (0.5.0, rc.3-aligned)**: `+` commands button, `conversation.input.permission` / `.plan` slot mirrors (official permission selector / plan chip), `input.left` / `.right` seats, **the model seat renders the official `ModelSelect` itself** (model + reasoning effort, search, drill-down, loading/failure strip), the voice activity seat (microphone), the official separate stop button and sending spinner, official stop / sending / steer·queue labels, `@container` narrow-width gaps and model-text compaction; **rc.3 Continue/Retry (0.5.0)**: with a failed turn and an otherwise clean composer, the primary button becomes the official Continue triangle and calls `retry(failureSeq)`; every button's hover tooltip is the host's official `Tooltip` primitive (500 ms, portal, `aria-describedby`). The line-number gutter reserves three digits so the text no longer shifts when the line count crosses a digit boundary.
-- **Attachment rail (0.5.0)**: renders the official `ComposerAttachments` entry itself — thumbnails/original-image lightbox, file cards, upload progress and failure retry, drop overlay and document-level drop listeners are all official; older hosts / irreproducible inject fall back to the self-drawn rail.
-- **Editor write policy (0.5.0, sustained-typing performance)**: local typing no longer round-trips the host per keystroke. The official `setDraft` is a whole-draft replacement (O(draft length), about 50–64 ms per call on a 600-line draft), and publishing every keystroke made holding Enter / Backspace visibly janky. The host draft is now synced on demand: 500 ms idle debounce, a synchronous flush + re-track before send / claim / menu picks, and a sync at the start of a `/` or `@` trigger token; plain typing only updates the local mirror, and button states (empty draft, send-disabled, Continue/Retry) stay immediate. Sustained typing on long drafts holds 60 fps.
-- **Model & reasoning effort**: the official `ModelSelect` drives the same shared model directory as `/model` (two-level menu, search, effort levels, toast/retry). **Permissions**: official presets plus the official RiskConfirmation modal for full access.
-- **Attachments**: slash Add · File (the takeover surface binds the shell's file-picker contract, so the entry keeps working while Codinput owns the composer), **paste images directly**, or **drop files onto the card** (clicking an image thumbnail opens the original-image lightbox, an ImageLightbox replica; the rail is a faithful replica of the official one: 64×64 image thumbnails, file cards with type glyph/name/size, upload spinner, progress bar, retry on failure).
-- **Voice input sync (official desktop app)**: when the official desktop composer ships a voice button, Codinput renders **the very same button in the very same place** — it renders the official voice component itself (mic trigger, recording waveform, transcription, setup prompt and all copy are official code); hosts without the native voice button (all web channels) render none.
-- **Performance & usage**: a replica of the official stats dock — turns/steps · tok/s, total tok · cache hit, plus the context-usage dial — with value-for-value parity in data and formatting, each opening a detail panel; available in all three modes. The three detail panels (session stats / token usage / context segments) are portal-positioned, follow scrolling and size changes, close on Escape or outside click, and only one is open at a time.
-- **User-message Markdown (0.3.7 / 0.4.0)**: messages sent by the user render as Markdown through the **same rendering pipeline as the editor preview** (unified in 0.4.0), while keeping the official bubble chrome — attachment rows, @file/@session//skill reference chips (clickable), copy button and timestamp, reference summary and hover reveal; **image attachments render through the official image slot (thumbnails + the official full-image lightbox on click), and raw HTML is escaped to text (chips cannot be forged)**. Settings → Codinput → User-message Markdown rendering (on by default); turning it off restores official plain text without a reload.
-- **Markdown rendering (0.4.0, Obsidian-style, fully bundled and offline)**: GFM tables (alignment, horizontally scrollable when wide) / task lists (read-only checkboxes, nesting) / strikethrough / autolinks; **footnotes** (superscripts + end-of-document footnote area + back-jump); **Obsidian callouts** (`> [!note|tip|warning|danger|info|success|question|quote]`, icons/colours/collapsible, readable in light and dark themes); Obsidian syntax `==highlight==`, `%%comments%%` (hidden, never mis-parsed inside code), `[[wikilink|alias]]` (chip, click copies the target), `![[file]]` (styled text fallback), image sizing `![alt|300](url)`; Markdown images open a lightbox on click. **Code blocks**: highlight.js with 46 languages + language label + copy button; **math**: KaTeX inline `$...$` and block `$$...$$` (20 woff2 fonts inlined as data URIs — **zero network requests**, failed formulas fall back to source); **Mermaid**: 13 diagram types (flowchart / sequence / class / state / ER / gantt / pie / journey / gitGraph / info / mindmap / timeline), lazily rendered when visible, follows the light/dark theme, `securityLevel:'strict'`, syntax errors and unsupported diagram types fall back to “source + error note”. Security: raw HTML is always escaped, external links get `target=_blank rel=noopener noreferrer`, `javascript:`/`data:` protocols are blocked, KaTeX runs with `trust:false`, and Mermaid SVGs go through DOMPurify.
-- **Plugin-page icon (0.3.7)**: the packaged `assets/icon.png` is exposed through the `package.json` top-level `icon` field (manifest-relative path, SVG/PNG/JPEG/WebP, 256 KiB max), so the installed-plugins list no longer falls back to the default image.
-- **Markdown body ligatures (0.4.0, on by default)**: the preview and user-message **body text uses the JetBrains Mono monospace font**, so `->` / `=>` / `//` etc. are drawn as ligature arrows (the DOM text and the sent message stay literal — no character replacement); it can be turned off in Settings (body returns to the reading font); **the editor keeps literal characters** (the host Chromium 152 CodeMirror ligature bug has no workaround). Code blocks and inline code use their own code font (**and also show the ligature arrows**).
-- **Settings**: Settings → Codinput (takeover on/off, line numbers, font, **Markdown body ligatures (on by default)**, **fully custom send / line-break shortcuts** via a recorder, default view); with the takeover off, **opening the Codinput tab in the right sidebar enables it directly**.
+Switching forms, leaving and re-entering via `/codinput`, disabling the plugin or restarting never loses the draft; the undo history survives form switches too — turn it into a floating card, open it in the sidebar and come back, `Ctrl+Z` still works.
+
+**Classification**: the default form's card chrome replicates the official composer card — the official InputBar's card shell is private JSX with no exported component; the floating and sidebar forms are plugin-owned (the host has no equivalent, so their chrome uses the official tokens).
+
+### Editor (plugin-owned)
+
+- CodeMirror 6: line numbers (toggleable), active-line and gutter highlight, soft wrap, Tab indent, line/column indicator. The editor renders characters literally (no font ligatures: `->`, `//` etc. stay as typed, avoiding the host's font-shaping quirks that read as "missing characters").
+- **Edit + preview split** (exactly half and half): Markdown renders live; the preview is only computed when open and refreshes after you stop typing.
+- **60 fps on long drafts**: typing never round-trips the host per keystroke — the draft is published to the official input machine on demand (idle debounce, plus a flush before send / completion). Holding Enter to add lines or Backspace to delete them no longer stutters.
+
+**Classification**: the editor and the split preview are plugin-owned — the official composer's editor is a private Lexical instance that cannot be exported or reused; only the theme colour, caret colour, gutter values, etc. match the official composer.
+
+### Official-parity input surface (official mirror)
+
+Rather than re-drawing what the host already ships, the official entries and platform primitives are mirrored:
+
+- **Model and reasoning effort**: renders the official `ModelSelect` itself (two-level root menu, search, drill-down, loading/failure strips, focus handoff), backed by the same official model directory as `/model`.
+- **`/` `@` and the `/model` / `/permission` popups**: the full official trigger pipeline — candidates and popups are rendered by the official `MenuView` / `PopupSelectView`, with the same geometry as the official composer; `/codinput` is slotted alphabetically at the head of the commands section.
+- **Permission / plan**: the official three permission presets (including the full-access risk confirmation) and the plan chip, mirrored from their official seats.
+- **Hover tooltips**: the host's official `Tooltip` primitive (500 ms, portal, `aria-describedby`).
+- **Attachment rail**: the official `ComposerAttachments` entry itself — thumbnails / original-image lightbox, file cards, upload progress and failure retry, drop overlay and document-level drop listeners.
+- **Voice button**: when the desktop host has a voice plugin enabled, the official voice component is rendered in the official position (recording, transcription and the not-ready guide are all official code).
+- **Continue / Retry**: with a failed turn and an otherwise clean input surface, the primary button becomes the official Continue triangle and calls `retry(failureSeq)`.
+- Every official bar sub-seat (`left` / `right` / `model` / `permission` / `plan` / `activity` / `overlay` / `attachments` / `composer.dock`) is mirrored with the official semantics, so third-party replace/append entries follow the official priority rules.
+
+### Toolbar (replicated official + official mirror)
+
+`+` commands button, model selector, permission selector, plan chip, voice button, separate send/stop buttons (spinning send state, separate stop button while running), official stop / sending / steer·queue labels and narrow-container spacing. Send and line-break hotkeys can be **recorded as any key combination** in Settings (defaults: Enter inserts a line break, Ctrl+Enter sends).
+
+**Classification**: the row container and the `+` / send / stop buttons replicate the official InputBar — that JSX lives inside the official entry, is not exported, and offers no registerable render point, so it is re-drawn value by value from the official CSS / icons / semantics; the model, permission, plan, voice and left/right seats inside it remain official-entry mirrors.
+
+### Attachments (official mirror + replicated official)
+
+Three intake paths — slash "Add · File", **pasted images**, **dragging files onto the card**; thumbnails and original-image preview (official lightbox), upload progress / failure status chips with retry.
+
+**Classification**: the attachment rail is the official `ComposerAttachments` entry mirror; the behaviour of the three intake paths replicates the official InputBar — its slash / paste / drag-and-drop handling is a private implementation that cannot be reused directly, so the entry points are rewritten after the official behaviour and wired back into the official attachment pipeline.
+
+### Markdown rendering (plugin-owned)
+
+The preview area and user messages share **one rendering pipeline**:
+
+- GFM tables (alignment, horizontally scrollable wide tables), task lists, strikethrough, autolinks, footnotes.
+- Obsidian callouts (note / tip / warning / danger / info / success / question / quote, collapsible, adequate contrast in light and dark), `==highlight==`, `%%comments%%`, `[[wikilink|alias]]` (a chip; clicking copies the target), image sizes `![alt|300](url)`, and a lightbox for images.
+- Code blocks: highlight.js highlighting for 46 languages, language label and copy button.
+- Math: KaTeX inline/block (20 woff2 fonts inlined as data URIs — **zero network requests**; invalid formulas fall back to the source).
+- Mermaid: 13 common diagram types (flowchart / sequence / class / state / ER / gantt / pie / journey / gitGraph / info / mindmap / timeline), lazy-rendered when visible, follows light/dark; syntax errors or unsupported diagram types fall back to "source + error notice".
+- Optional monospace ligatures for body text (on by default): previews and messages render `->` / `=>` / `//` ligatures with a monospace body font; the editor itself always stays literal. Turning the user-message Markdown switch off restores the official plain text without a reload.
+- Security: raw HTML is always escaped (no forged chips), external links get `target=_blank rel=noopener noreferrer`, `javascript:` / `data:` protocols are blocked, KaTeX runs with `trust:false`, Mermaid SVG is sanitized through DOMPurify.
+
+**Classification**: the rendering pipeline (marked / DOMPurify / KaTeX / Mermaid) is plugin-owned — the host offers no reusable Markdown renderer; the user-message bubble chrome replicates the official bubble structure (once the official user-text seat is taken over, the only render point left is the plugin's own).
+
+### Stats row (replicated official)
+
+Below the card, the official stats dock is replicated: turns/steps · tok/s, cumulative tokens · cache hit rate, and the context-occupancy ring, with values and formatting matching the official ones; click to open details (session stats / token usage / context breakdown) — portal-positioned, follows scrolling and resizing, closes on Escape or outside click. Available in all three forms.
+
+**Classification**: the official stats dock renders inside the official InputBar, so taking over the bar removes its render point, and the component is not exported either; it is replicated value by value from the official data derivation, formatting and CSS, and it takes over the readings of the official Activity / Usage pills (data still comes from the official projections / store).
+
+### Settings (replicated official + plugin-owned)
+
+Settings → Codinput: enable takeover, line numbers, font, Markdown monospace ligatures, send / line-break hotkey recording, default view. When takeover is off, opening the Codinput sidebar tab enables it again.
+
+**Classification**: the settings row structure and control values replicate the official settings page (the official settings page component is not exported, so the plugin can only register its own settings section and draw it itself); the hotkey recorder is plugin-owned.
 
 ## Installation
 
-Requires the host `@deepseek-ai/dsh` (see compatibility below).
+Requires **desktop DSH `0.2.2-rc.3`** (Electron). Host npm channels: `next` = `0.2.2-rc.3` (`latest` is still `0.2.2-rc.1`; the full feature set needs rc.3). The plugin injects a `dsh.client` bundle into the desktop renderer; `dsh web` and older hosts are no longer maintained (on older hosts the model/permission seats fall back to the self-drawn controls and the overlay popups are not rendered).
 
-### Method A: npm package
+### Method A: desktop plugin page (recommended)
 
-```bash
-dsh plugin --profile web add dsh-codinput
-```
+Open the desktop sidebar **Plugins** → **Add plugin** → search `dsh-codinput` → install. The plugin manager reads the package's `dsh.bundle` metadata, validates its bundled `cordis.patch.yml`, and appends the package to the profile's `bundles` — no manual patch lines.
 
-That single command is enough: `dsh plugin` goes through the official profile package manager, which reads this package's `dsh.bundle` metadata, validates the `cordis.patch.yml` it ships (`dsh.bundle.patch`), and appends the package name to the profile's `bundles` — no hand-written patch entry.
-
-Then start it with `dsh web` (if it is already running, just hard-reload the page — profiles default to `patchReload: live`).
-
-### Method B: GitHub source
+### Method B: npm package (equivalent CLI)
 
 ```bash
-dsh plugin --profile web add github:Witherwithwinter/DSH-Codinput
+dsh plugin --profile desktop add dsh-codinput
 ```
 
-The repository ships the built `lib/`, so a source install **does not need a local build** either. If pnpm asks for build authorisation (for example if you install your own fork with `lib/` removed), write the key it prints into the profile's `pnpm-workspace.yaml` and re-run:
+Replace `desktop` with your local profile name. Restart the desktop app afterwards (or hard-refresh the page; profiles default to `patchReload: live`).
+
+### Method C: GitHub source
+
+```bash
+dsh plugin --profile desktop add github:Witherwithwinter/DSH-Codinput
+```
+
+The repository ships the prebuilt `lib/`, so installing from source **requires no local build**. If pnpm asks for a build approval (e.g. you switched to your own fork and removed `lib/`), add the printed key to the profile's `pnpm-workspace.yaml` and re-run:
 
 ```yaml
 allowBuilds:
   esbuild@0.25.12: true
 ```
 
-### Method C: local source (development)
+### Method D: local source
 
 ```bash
 git clone https://github.com/Witherwithwinter/DSH-Codinput.git
-dsh plugin --profile web add link:/abs/path/to/DSH-Codinput
+dsh plugin --profile desktop add link:/abs/path/to/DSH-Codinput
 ```
 
-A `link:` install copies nothing, so `npm run build` plus a page reload is enough.
+A `link:` install does not copy files — run `npm run build` and refresh the page to pick up changes.
 
-### Method D: the equivalent manual config
+### Method E: the equivalent manual config
 
-To pin a version or maintain the profile by hand, the manual equivalent of **Method A** is (`~/.dsh/profiles/web/package.json`):
+To pin a version in the profile or maintain it by hand, the equivalent of **Method A** is (`~/.dsh/profiles/desktop/package.json`):
 
 ```jsonc
 {
   "dependencies": {
-    "dsh-codinput": "^0.4.1"          // for local development: "link:/abs/path/to/DSH-Codinput"
+    "dsh-codinput": "^0.5.0"          // local development: "link:/abs/path/to/DSH-Codinput"
   },
   "dsh": {
     "profile": {
@@ -107,92 +158,22 @@ To pin a version or maintain the profile by hand, the manual equivalent of **Met
         "@deepseek-ai/dsh-web-app",
         "dsh-codinput"                // ← append last
       ],
-      "patchReload": "live"           // after rebuilding lib/client.js, just reload the page
+      "patchReload": "live"           // lib/client.js changes apply on page refresh
     }
   }
 }
 ```
 
-After editing the profile by hand, run `pnpm install` inside the profile directory (or `dsh plugin --profile web install`), then `dsh web`.
+After editing the config by hand, run `pnpm install` in the profile directory (or `dsh plugin --profile desktop install`) and start the desktop app.
 
-## Compatibility
+## Theme / skin
 
-### Desktop DSH `0.2.2-rc.3` (the only target since 0.5.0)
+Codinput ships no palette of its own: every colour comes from the host's `--dsw-*` design tokens (light/dark follows the host). How theme/skin plugins coexist with Codinput:
 
-- ✅ **Supported**: the desktop (Electron) DSH `0.2.2-rc.3`. Every official composer capability — model selector with reasoning effort, `/model` and `/permission` popups, `/` `@` candidate menus, hover tooltips — is **mirrored from the official 0.2.2-rc.3 client entries and platform primitives** instead of being re-implemented (see [CHANGELOG 0.5.0](./CHANGELOG.md)).
-- ⚠️ **No longer maintained**: the browser host (`dsh web`) and hosts older than `0.2.2-rc.3` are no longer verification targets. On older hosts the model/permission seats fall back to the 0.4.x self-drawn controls, and the composer overlay popups (which need the official client entries) are not drawn at all.
-- The per-version records below are kept as history.
-
-The host publishes **rc** builds on npm: `latest` is the current stable rc, `next` the following rc, `alpha` further ahead (as of 2026-11-15: `latest` = `0.2.2-rc.1`, `next` = `0.2.2-rc.3`, `alpha` = `0.2.2-alpha.3`). 0.5.0 needs rc.3 for its full feature set; a plain install gets it once rc.3 is promoted to `latest`.
-
-| Host version | Status |
-| --- | --- |
-| Desktop app (Electron, `0.2.2-rc.3`) | ✅ 0.5.0 target: verified on an isolated `@deepseek-ai/dsh@0.2.2-rc.3` host with headless Edge CDP probes (official overlay / model / attachment seats, three-digit gutter, official Tooltip, on-demand draft publishing and long-draft typing performance, session-switch draft safety); final desktop eyeballing per [TESTING.md](./TESTING.md) §8.0 by the user |
-| Desktop app (Electron, `0.2.2-rc.1`) | ✅ 0.4.0 target snapshot: the bottom control row, microphone, user-message images and drafts were checked value by value against that version's official packages (npm `@deepseek-ai/dsh@0.2.2-rc.1`, the same version bundled in the desktop `app.asar`) and verified on an isolated web host of the same version with headless Edge probes (see CHANGELOG); 0.4.0 was additionally run on an isolated desktop instance (Electron 44.7 / Chromium 152, separate `--user-data-dir` plus a copied `DSH_HOME`, never touching a live instance) to verify literal-character rendering (ligatures removed) and typing regressions; final desktop eyeballing is confirmed by the user. The `0.2.1-rc.2` voice end-to-end run recorded in 0.3.2 still holds |
-| web `0.2.0-rc.2` | ✅ Verified on a real instance (this machine's earlier web host; the slot mirrors, model-seat delegation, user-message Markdown and three-panel exclusivity from 0.3.5–0.3.7 were verified on this build with Chromium automation probes; the 0.3.8 portal-panel placement/Escape/outside-close and Markdown hardening were additionally re-checked in an isolated host with headless Edge; the 0.4.0 draft retention on `/codinput` exit, ligature and floating/sidebar candidate-menu flyout were verified on this build in an isolated host with headless Edge probes — see CHANGELOG) |
-| web `0.2.2-rc.1` | ✅ Verified on a real instance (0.3.9 menu-fix pass 33/33 assertions; the 0.4.0 bottom-row parity, microphone seat, official image thumbnails + lightbox, single official question-reply card, and the prefs migration / stats boundary work were verified on this build in an isolated host with headless Edge probes; 0.4.0's Markdown rendering upgrade — unified pipeline / GFM / footnotes / callouts / Obsidian syntax / image sizing and lightbox / code highlighting + copy / KaTeX (offline inlined fonts) / Mermaid with 13 diagram types — was fully verified on this build in an isolated host with headless Edge probes, see CHANGELOG; the 0.4.1 issue #8 sub-seat fix (third-party `composer.dock` entries mirrored, unmirrored-seat audit) was verified on this build in an isolated host with `dsh-cost-meter@1.9.64` / `dsh-context@0.84.1`) |
-| `0.1.7-rc.2` | ✅ Verified on a real instance (the acrylic candidate menu, the relocated context meter and the dock row layout are aligned to this build) |
-| `0.1.5-rc.2` | ✅ Verified on a real instance |
-| `0.1.6-alpha.2` | ✅ Current development baseline; every feature verified end to end |
-| others (current `latest` = `0.2.2-rc.1`; `next` = `0.2.2-rc.3`, the 0.5.0 target) | untested; older hosts lack the rc.2 tokens, so the fallback chain keeps each host's official look |
-
-For `0.1.7-rc.2` / web `0.2.0-rc.2`, on top of the real-instance run, the official CSS for the candidate menu, the context meter, the stats dock and the user-message bubble were extracted value by value from the corresponding version's client packages (`dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation` / `dsh-client-ui-chat`) and checked against the replicas. The contracts this plugin relies on were verified per version: the slots it uses (`conversation.composer.bar`, `sidebar.right.pane.tab`, `settings.section`, plus `conversation.chat.node` and the `conversation.input.*` sub-seats), the `sidebarRight` / `sidebarRightTabs` / `locale` services and `openTabIn`, the sidebar expansion planner (dockkit `planSetExpanded`), the file-picker and tab-close contracts (`shell.bindFilePicker` / `tab.actions.close`), and the official primitives the replicas are copied from (`fileSizeText` / `fileExtension` and the attachment glyph paths, byte for byte); the 0.3.9 menu fix was additionally verified on an isolated web `0.2.2-rc.1` host with headless Edge automation (33/33 assertions); the 0.4.0 draft retention, ligature and candidate-menu flyout work was verified on an isolated web `0.2.0-rc.2` host with headless Edge automation; the 0.4.0 bottom-row parity, microphone, user-message image lightbox and prefs/stats work was verified on an isolated web `0.2.2-rc.1` host with headless Edge automation; 0.4.0 was additionally verified on an isolated desktop Electron 44.7 (Chromium 152) instance for literal-character rendering (no ligatures; `->` / `//` stay as typed) and typing regressions; 0.4.0's Markdown rendering upgrade was fully verified on an isolated web `0.2.2-rc.1` host with headless Edge probes (GFM / footnotes / callouts / Obsidian syntax / image sizing and lightbox / code highlighting + copy / offline KaTeX / Mermaid / security / consistency and regressions), with the final desktop eyeballing confirmed by the user. The desktop `0.2.2-rc.1` build is the same package version as that isolated host. For how to re-run this on another channel, see the “Verifying on another channel” section of [TESTING.md](./TESTING.md).
-
-The plugin leans on host internals (slot shadowing, `useTabInfo`, `sidebarRight`, `--dsw-*` tokens). Every call site guards with `typeof` checks and degrades gracefully, but a major host upgrade can still break it. **After upgrading the host, walk through [TESTING.md](./TESTING.md).**
-
-### Theme / skin plugin compatibility (for skin authors)
-
-Codinput ships no colors of its own: every color comes from the host's `--dsw-*` design tokens (light/dark follows the host). How theme/skin plugins for the host get along with Codinput:
-
-- **Overriding host tokens restyles everything at once** — once you override `--dsw-*` variables, Codinput's card, menus, buttons and badges follow along with the official UI; no per-plugin adaptation needed. Note the host defines its tokens on `body` (`body[data-ds-dark-theme]`), so overrides must live on that same level: ones written on `:root` are shadowed by the `body` definitions.
-- **Values the official UI hardcodes, Codinput hardcodes too** (the white foreground of the send-button icon, the purple of the context meter's tools segment, etc.) — value-for-value parity with how the official UI behaves under a reskin. These do not follow tokens; that is expected.
-- **To target Codinput precisely**: every element uses the stable `dci-` class prefix (card `.dci-card`, send button `.dci-send`, menus `.dci-menu` / `.dci-slash-menu`, stats row `.dci-stat-root`, recall ball `.dci-ball`, …) — use them directly as skin selectors. The plugin injects its styles once as `<style id="dsh-codinput-styles">`; skin styles injected later win by normal CSS specificity.
-- The editor (CodeMirror) font is a user preference (monospace stack by default) and does not follow skin fonts; its colors do follow the tokens.
-
-## Known limitations
-
-- `/` `@` candidates come from host directories (skills / commands / files / sessions); when the host provides none, the menu is empty — the plugin cannot fill that in.
-- **The editor has no syntax highlighting** (the preview, messages and code blocks do have highlight.js highlighting) and **no Esc behaviour** — deliberate product decisions (this is an input panel, not a code reader; the edit side stays plain and WYSIWYG).
-- **Markdown rendering is fully bundled and offline-first** (0.4.0): KaTeX fonts, highlight.js and Mermaid all ship with the plugin with zero runtime network requests; the trade-off is `lib/client.js` growing from ~540KB to ~3.4MB (gzip ~1.1MB).
-- **Mermaid bundles only 13 common diagram types**: the other 24 (sankey, xychart, kanban, quadrantChart, …) are not shipped and fall back to “source + error note”; the ELK / cytoscape layout engines are not shipped either (licence and size), so diagrams requesting ELK fall back to dagre as mermaid itself does.
-- **`[[wikilink]]` is a styled chip (click copies the target name)**, with no repository navigation (the host has no such target); `![[image]]` likewise only degrades to styled text and never loads repository files.
-- **Raw HTML in Markdown is always escaped** (security decision): unlike Obsidian, `<div>` / `<script>` etc. are shown as visible text — never executed, never part of the layout.
-- While a Codinput sidebar tab exists the composer is hidden entirely (single input surface rule; browsing another tab in the same pane does not bring it back). The official stats dock and context dial live inside the official composer, so they disappear with it and the replicated stats row takes over.
-- **Third-party sub-seat mirroring boundary (0.5.0)**: **every official bar child seat is mirrored** — `input.left` / `.right` / `.model` (with its `.label` / `.options` children) / `.permission` / `.plan` / `.activity` / `.overlay` / `.attachments` / `composer.dock`. The **model, overlay and attachments seats render the official entry itself** (official `ModelSelect`, `MenuView` / `PopupSelectView` / `FeedbackDialog`, `ComposerAttachments`), so third-party replace/append entries take effect by the official priority rules; `composer.dock` mirrors only **third-party** entries (the host's own `ActivityPill` / `UsagePill` are covered by Codinput's data row, so mirroring the whole seat would duplicate them). Host-side reason: the official slot authorises only the entry that declares a child to render it (one live owner per declaration), so shadowing `composer.bar` orphans its children and there is no native passthrough — a takeover plugin can only mirror each seat's entries (`conversation.input.dock` sits outside the bar and is unaffected). Missing entries / irreproducible `inject` / component crashes fall back per seat (model→self-drawn chip, permission→self-drawn menu, attachments→self-drawn `AttachmentRail`) with `slot.inject` / `slot.entry` diagnostics — never blank, never crashing.
-- **Desktop DSH only**: the browser host (`dsh web`) is no longer a verification target; the plugin still ships as a `dsh.client` bundle (the desktop renderer loads the same bundle, no extra configuration).
-- **Composer popups depend on the official overlay-seat client entries**: on desktop `0.2.2-rc.3`, `/model`, `/permission` and the `/` `@` candidate menus are rendered by the official `MenuView` / `PopupSelectView`; older hosts have no such entries and the plugin no longer draws self-built fallbacks.
-- **rc.3 “Continue / Retry” is wired (0.5.0)**: when a failed turn exists and the composer is otherwise clean, the primary button becomes the official Continue triangle and calls `retry(failureSeq)`, mirroring the official `primaryRetries` conditions item by item. An isolated host without an API key cannot produce a failed turn, so the desktop eyeball check remains per [TESTING.md](./TESTING.md) §8.0.
-- **Attachments and paste use the official pipeline (0.5.0)**: the rail renders the official `ComposerAttachments`, and the composer card registers with the host's document paste route (in-editor paste stays with the plugin, the rest of the card yields to the official route). `uploadFailureText` is an approximation of the official `attachmentErrorText`; real clipboard paste still needs a manual check (synthetic events carry no routable clipboard data).
-- Duplicating the “Codinput” tab into a second split pane shows a notice instead of a second editor (the input surface stays unique).
-- The floating gesture only keeps “drag back to the composer area = normal”; “drag into the right sidebar = sidebar mode” was dropped by product decision.
-- After a page reload, if the sidebar layout restores a Codinput tab that has not been opened yet, the composer shows up first — dockkit mounts restored tab bodies lazily; opening the tab once restores the sidebar carry.
-- **No font ligatures in the editor**: `->`, `//` etc. are drawn literally (no arrow / merged glyphs). Reason: ligature glyphs read as “missing characters”, and DSH desktop `0.2.2-rc.1` (Electron 44.7 / Chromium 152) has a `calt` shaping bug (the first cell of a ligature followed by any subsequent character is drawn blank) that no CSS can reliably work around; the preview / message area is plain text anyway, so the editor now matches it — what you see is what is stored.
-
-## Development
-
-```bash
-npm install
-npm run build        # release bundle → lib/client.js (minified)
-npm run build:dev    # unminified + inline sourcemap (readable TypeScript in the browser)
-npm run typecheck
-```
-
-- `src/client/` holds the whole client side; host APIs are described by local structural types (zero runtime dependency on the host — only `react`/`react-dom` are treated as platform externals).
-- `lib/index.js` is the host half (a bare mounting carrier); `lib/client.js` comes from the build and is **committed alongside the source** (that is what lets a source install skip building).
-- **CI is a static gate only**: `npm ci` + `tsc --noEmit` + the release build + artifact checks (bundle non-empty, contains `__ModuleLoader__.load`, no inline sourcemap). It never loads a page or connects to the host, so it gives **zero coverage of runtime behaviour** — that lives in the manual checklist in [TESTING.md](./TESTING.md).
-- Diagnostics (also present in production): `window.__dshCodinputDebug / __dshCodinputErrs / __dshCodinputSessionId / __dshCodinputTriggers / __dshCodinputKeyboard / __dshCodinputShell / __dshCodinputCtx`.
-- Dev helpers: `node scripts/extract-official-css.mjs <host client.js> [out.css]` extracts an official CSS module verbatim (used to replicate official styling value by value).
-
-### Host facts worth knowing before changing code
-
-- **Takeover point**: `conversation.composer.bar` (a `single` slot; `priority:-1` shadows the official entry). Disposing the entry restores the official composer untouched.
-- **Single input surface**: a sidebar tab body **counts as carrying the input the moment it mounts** (not based on visibility — collapsing the sidebar is CSS hiding plus a translate, the body stays mounted). The main entry renders `null` accordingly, and the mode is derived as `carrying ? 'side' : prefs.mode`, so coexistence is impossible by construction. The carry claim lives on the body's lifetime, so the tab definition sets `keepMounted: true`: dockkit unmounts inactive tab bodies by default, and switching to another tab in the same pane would drop the claim and bring the composer back (same switch the official browser tab uses; note a tab restored after a reload only mounts its body once it has been activated).
-- **Undo history**: switching modes remounts the editor, so `EditorState` is cached per session (`take/putEditorSnapshot`); extension callbacks go through a module-level hooks slot so a reused state never calls into an unmounted instance's props.
-- **Official-side writes** (pick / claim / submit-clears) carry `externalAnnotation` + `Transaction.addToHistory.of(false)`, so undo only ever reverts what you typed.
-- **Drawing a circle needs `corner-shape: round`**: the host root sets `corner-shape: superellipse(1.5)` globally, so a plain `border-radius:50%` renders as a rounded square.
-- **The ball occupies no slot**: `conversation.session.header.corner` is the official sidebar expand button's seat (a `single` slot — taking it would remove the official button), so the ball is portalled to `body` and positioned from the measured header rect.
-- **The slash File entry lives on the filePicker binding**: the official `file` contribution's `available` reads `shell.canPickFiles()`, and the picker is bound by the official InputBar when it mounts (`bindFilePicker`) and unbound on unmount — the takeover surface must re-bind it on mount (`attachments.bindSessionFilePicker`) or the entry disappears. **Never register a same-name contribution**: the host rejects duplicates at `register` time, fail-loud.
-- **Closing a tab goes through the tab-domain action face**: `useTabInfo().tab.actions.close()` closes the tab itself (dockkit semantics; with a single docked tab it lays a guide down and collapses). To locate the session, do not use the diagnostic `__dshCodinputSessionId` (surface unmounts null it) — read the carry snapshot from the sideinput bus.
+- **Overriding host tokens changes everything** — the card, menus, buttons, badges and the official UI all follow the overridden `--dsw-*` variables, no separate adaptation needed. Note that the host defines the tokens on `body` (`body[data-ds-dark-theme]`); override them on the same layer — declarations on `:root` are overridden by the definitions on `body`.
+- **Values the official UI hard-codes are hard-coded the same way in Codinput** (the white foreground of the send icon, the purple of the context meter's tools segment, …), keeping exact parity with the official look under skins — these do not follow tokens by design.
+- **To target Codinput precisely**: every element carries a stable `dci-` class prefix (card `.dci-card`, send button `.dci-send`, settings menu `.dci-menu`, stats row `.dci-stat-root`, recall ball `.dci-ball`, …) usable as skin selectors; the plugin injects its styles once into `<style id="dsh-codinput-styles">`, so a skin injected afterwards can override with normal CSS specificity.
+- The editor (CodeMirror) font is a user preference (a monospace stack by default) and does not follow the skin's font; its colours do follow tokens.
 
 ## Third-party attribution
 

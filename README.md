@@ -27,11 +27,13 @@
   </tr>
 </table>
 
-## 特性
+## 功能
 
-> **0.5.0 原则：能不复刻就不复刻。** 输入面凡是官方有实现的（模型选择器与推理等级、`/model` `/permission` 弹层、`/` `@` 候选、悬停提示），一律**镜像官方条目/平台原语**——行为、像素、键盘、无障碍天然与官方一致，也不会改写第三方插件依赖的官方输入框行为；只有 CodeMirror 编辑器和卡片外观由本插件承担，且逐像素对齐官方。
+把聊天输入框换成编辑器式输入面板：三态单实例，共用同一台官方输入机与同一份草稿。
 
-**三态单实例**——输入入口只有三种形态，任一时刻恰好一个，绝不与官方输入框共存：
+### 三种形态（复刻官方 + 插件自有）
+
+输入入口只有三种形态，任一时刻恰好一个，绝不与官方输入框共存：
 
 | 形态 | 进入方式 | 说明 |
 | --- | --- | --- |
@@ -39,66 +41,115 @@
 | 悬浮 `float` | 按住卡片顶部行空白区拖动 | 脱出为悬浮窗：可拖动位置、可拖边界/角落缩放（位置与尺寸记忆） |
 | 侧栏标签 `side` | 打开右侧栏的「Codinput」标签 | 输入在侧栏面板内；**侧栏收起不让位**，由标题栏下方的圆形小球唤回；侧栏里 `/codinput` 直接退回官方输入框并关闭本标签 |
 
-- **编辑器**：行号（可关）、当前行与行号高亮、软换行、Tab 缩进、行列指示，**编辑 + 预览分屏**（markdown 实时渲染，严格对半）；**编辑器按字面字符渲染**（不做字体连字：`->`、`//` 等原样显示，避免宿主字体 shaping 差异造成「丢字符」误判，也与预览 / 消息区的纯文本渲染一致）。
-- **撤销历史跨形态保留**：拖成悬浮、切到侧栏再回来，`Ctrl+Z` 依旧有效——三态共用同一台官方输入机，草稿即唯一事实源（形态切换、`/codinput` 退出再进入、插件禁用、重启都不丢）。
-- **`/` `@` `$` 触发管线**：完全走官方链路（track → 官方 inputTriggers menu store → **官方 `MenuView` 条目本体**）：候选菜单、钻取、crumbs、骨架屏、键盘高亮都由宿主官方实现渲染（0.5.0 起不再自绘），`/codinput` 按字典序排入指令节首，其余保持官方使用序；弹层以卡片顶边的官方同构 overlay 锚点为基准，与官方输入框同几何。
-- **底部工具行（0.5.0，rc.3 对齐）**：`+` 指令钮、`conversation.input.permission` / `.plan` 槽位镜像（官方权限选择器 / 计划 chip）、`input.left` / `.right` 座位、**模型座直接渲染官方 `ModelSelect`（模型 + 推理等级、搜索、下钻、加载/失败条带全官方）**、语音 activity 座位（麦克风钮）、运行中 sending 态的独立停止钮与旋转发送钮、官方式 stop / sending / steer·queue 标签、`@container` 窄宽间距与模型文字 compact 收起；**rc.3 的「继续生成 / 重试」（0.5.0）**：失败轮次且输入面干净时主按钮变官方 Continue 三角并调用 `retry(failureSeq)`；所有按钮悬停提示使用宿主官方 `Tooltip` 原语（500ms、portal、`aria-describedby`）。行号栏固定预留三位宽度，行数跨位数不再让正文横向抖动。
-- **附件行（0.5.0）**：渲染官方 `ComposerAttachments` 条目本体——缩略图/原图灯箱、文件卡、上传进度与失败重试、拖放浮层、文档级拖放监听全官方；旧宿主/不可复现时回退自绘轨道。
-- **编辑器写入策略（0.5.0，连打性能）**：本地输入期间**不逐键往返宿主**。官方 `setDraft` 是整篇替换（O(草稿长度)，600 行 ≈ 50–64ms/次），逐键上报会让「长按回车换行 / 长按删除删行」明显卡顿。现在宿主草稿按需同步：停手 500ms 去抖、发送/claim/候选菜单 pick 前同步 flush + 重新 track、触发词（`/` `@`）起点先对齐；纯输入只走插件本地镜像，按钮形态（空草稿/发送禁用/继续生成）即时更新。长草稿连打稳定 60fps。
-- **模型与权限**：模型与思考强度读官方共享目录（与 `/model` 同一状态源）；权限为官方三预设，含完全权限的风险确认模态。
-- **附件**：slash「添加 · 文件」、**粘贴图片**、**拖文件进卡片**三条路径；点图片缩略图弹**原图预览**（官方 ImageLightbox 同构）；上传中/失败有状态芯片，失败可整卡重试。
-- **语音输入同步（官方桌面版）**：官方桌面版的输入框带语音按钮时，Codinput 在一模一样的位置渲染**一模一样的按钮**——直接渲染官方语音组件本体（麦克风钮、录音波形、转写、未就绪引导与文案全部是官方代码）；原生没有语音按钮的宿主（web 端各版本）同样不渲染。
-- **性能与用量**：复刻官方 stats dock——轮次/步数 · tok/s、累计 tok · 缓存命中、上下文占用小圈，取数与格式化逐值同官方，均可点开详情面板；三形态都有。三枚详情面板（会话统计 / Token 用量 / 上下文分段）经 portal 定位、滚动与尺寸变化跟随，Escape 与点外关闭，任意时刻至多一个展开。
-- **用户消息 Markdown（0.3.7 / 0.4.0）**：右侧自己发出的消息按 Markdown 排版，与编辑器预览共用**同一套渲染管线**（0.4.0 起统一），保留官方气泡形态——附件行、@文件/@会话//技能 引用 chip（可点开）、复制钮与时间戳、引用摘要、悬停显形；**带图消息的图片附件走官方图片槽位渲染（缩略图 + 点击官方大图灯箱），原始 HTML 一律按文本转义（不可伪造 chip）**。设置 → Codinput「用户消息 Markdown 渲染」开关默认开，关闭即还原官方纯文本、无需刷新页面。
-- **Markdown 渲染（0.4.0，Obsidian 风格，全内置离线）**：GFM 表格（对齐、宽表可横向滚动）/ 任务清单（只读勾选、嵌套）/ 删除线 / 自动链接；**脚注**（上标 + 文末脚注区 + 回跳）；**Obsidian Callouts**（`> [!note|tip|warning|danger|info|success|question|quote]`，图标/配色/可折叠，浅深色对比度均 ≥ 标准）；Obsidian 扩展语法 `==高亮==`、`%%注释%%`（隐藏、不误伤代码）、`[[wikilink|别名]]`（chip，点击复制目标）、`![[file]]`（样式化降级文本）、图片尺寸 `![alt|300](url)`；Markdown 图片点击打开大图灯箱。**代码块**：highlight.js 46 种语言高亮 + 语言标签 + 复制按钮；**数学公式**：KaTeX 行内 `$...$` / 块级 `$$...$$`（20 个 woff2 字体内联 data URI，**零网络请求**，错误公式回退原文）；**Mermaid**：13 类图表（flowchart / sequence / class / state / ER / gantt / pie / journey / gitGraph / info / mindmap / timeline），可见时懒渲染、浅深色跟随、`securityLevel:'strict'`，语法错误或未内置图类型回退「源码 + 错误提示」。安全：原始 HTML 一律转义、外链 `target=_blank rel=noopener noreferrer`、`javascript:`/`data:` 协议拦截、KaTeX `trust:false`、Mermaid SVG 过 DOMPurify。
-- **插件页图标（0.3.7）**：包内 `assets/icon.png` 经 `package.json` 顶层 `icon` 字段接入宿主插件列表（manifest 相对路径、限 SVG/PNG/JPEG/WebP、≤256 KiB），已装插件不再落默认图。
-- **Markdown 正文等宽连字（0.4.0，默认开）**：预览与用户消息的**正文改用 JetBrains Mono 等宽字体**，`->`/`=>`/`//` 等靠字体连字显示成箭头/连字（DOM 与发送内容仍是原文，不是字符替换）；设置里可关（关后正文恢复普通阅读字体）；**编辑器输入框保持字面**（宿主 Chromium 152 的 CodeMirror 连字 bug 无解）。代码块与行内代码使用各自代码字体（**同样显示连字箭头**）。
-- **设置**：设置 → Codinput——启用接管、行号、字体、**Markdown 等宽连字（默认开）**、发送/换行快捷键**任意组合录制**、默认视图；未启用时**打开右侧栏的 Codinput 标签即直接启用**。
+形态切换、`/codinput` 退出再进入、插件禁用、重启都不丢草稿；撤销历史跨形态保留——拖成悬浮、切到侧栏再回来，`Ctrl+Z` 依旧有效。
+
+**性质**：普通形态的卡片外观复刻官方 composer card——官方 InputBar 的卡片外壳是私有 JSX，没有导出组件；悬浮与侧栏形态为插件自有（官方无对应物，容器 chrome 取官方 token）。
+
+### 编辑器（插件自有）
+
+- CodeMirror 6：行号（可关）、当前行与行号高亮、软换行、Tab 缩进、行列指示；编辑器按字面字符渲染（不做字体连字：`->`、`//` 等原样显示，避免宿主字体 shaping 差异造成「丢字符」误判）。
+- **编辑 + 预览分屏**（严格对半）：Markdown 实时渲染；预览只在开启时计算、停手后刷新。
+- **长草稿连打稳定 60 fps**：本地输入不逐键往返宿主，草稿按需同步官方输入机（停手去抖 + 发送/补全前同步），长按回车换行、长按删除不再卡顿。
+
+**性质**：编辑器与预览分屏为插件自有——官方输入框是私有的 Lexical 编辑器，无法导出复用；只有主题色、光标色、行号栏等取值对齐官方输入区。
+
+### 与官方一致的输入面（官方镜像）
+
+不重画官方已有的组件，而是镜像官方条目/平台原语：
+
+- **模型与推理等级**：直接渲染官方 `ModelSelect`（两段式根菜单、搜索、下钻、加载/失败条带、焦点归还）；读取与 `/model` 同一份官方模型目录。
+- **`/` `@` 与 `/model` `/permission` 弹层**：完全走官方触发管线，候选菜单与弹层由官方 `MenuView` / `PopupSelectView` 渲染，几何与官方输入框一致；`/codinput` 按字典序排入指令节首。
+- **权限 / 计划**：官方三档权限（含完全权限风险确认）与计划 chip，按官方座位镜像。
+- **悬停提示**：宿主官方 `Tooltip` 原语（500 ms、portal、`aria-describedby`）。
+- **附件行**：官方 `ComposerAttachments` 条目本体——缩略图/原图灯箱、文件卡、上传进度与失败重试、拖放浮层与文档级拖放监听。
+- **语音按钮**：桌面版启用语音插件时，在官方同位置渲染官方语音组件本体（录音、转写、未就绪引导全官方）。
+- **继续生成 / 重试**：失败轮次且输入面干净时主按钮变官方 Continue 三角，调用 `retry(failureSeq)`。
+- 官方 bar 的全部子座位（`left` / `right` / `model` / `permission` / `plan` / `activity` / `overlay` / `attachments` / `composer.dock`）均按官方语义镜像，第三方替换/追加条目照官方优先级生效。
+
+### 工具行（复刻官方 + 官方镜像）
+
+`+` 指令钮、模型选择、权限选择、计划 chip、语音按钮、发送/停止双按钮（发送瞬间旋转态、运行中独立停止钮）、官方 stop / sending / steer·queue 文案、窄容器自适应间距。发送与换行快捷键可在设置里**任意组合录制**（默认 Enter 换行、Ctrl+Enter 发送）。
+
+**性质**：行容器与 `+` / 发送 / 停止按钮复刻官方 InputBar——这层 JSX 在官方条目内部、不导出，也没有可注册的渲染点，只能按官方 CSS / 图标 / 语义逐值重画；其中的模型、权限、计划、语音与左右座仍是官方条目镜像。
+
+### 附件（官方镜像 + 复刻官方）
+
+slash「添加 · 文件」、**粘贴图片**、**拖文件进卡片**三条路径；缩略图与原图预览（官方灯箱同构）、上传中/失败状态芯片与失败重试。
+
+**性质**：附件行是官方 `ComposerAttachments` 条目镜像；三条入口的行为复刻官方 InputBar——slash / 粘贴 / 拖放的处理逻辑是官方私有实现，无法直接复用，只能按官方行为重写入口并接回官方附件链路。
+
+### Markdown 渲染（插件自有）
+
+预览区与用户消息共用**同一套渲染管线**：
+
+- GFM 表格（对齐、宽表可横向滚动）、任务清单、删除线、自动链接、脚注。
+- Obsidian Callouts（note / tip / warning / danger / info / success / question / quote，可折叠，浅深色对比度达标）、`==高亮==`、`%%注释%%`、`[[wikilink|别名]]`（chip，点击复制目标）、图片尺寸 `![alt|300](url)`、图片点开大图灯箱。
+- 代码块：highlight.js 46 种语言高亮 + 语言标签 + 复制按钮。
+- 数学公式：KaTeX 行内/块级（20 个 woff2 字体内联 data URI，**零网络请求**，错误公式回退原文）。
+- Mermaid：13 类常用图表（flowchart / sequence / class / state / ER / gantt / pie / journey / gitGraph / info / mindmap / timeline），可见时懒渲染、浅深色跟随，语法错误或未内置图类型回退「源码 + 错误提示」。
+- 正文可选等宽连字（设置默认开）：预览与消息正文用等宽字体显示 `->`/`=>`/`//` 等连字；编辑器输入框始终保持字面。用户消息 Markdown 开关关闭即还原官方纯文本、无需刷新。
+- 安全：原始 HTML 一律转义（不可伪造 chip）、外链 `target=_blank rel=noopener noreferrer`、`javascript:`/`data:` 协议拦截、KaTeX `trust:false`、Mermaid SVG 过 DOMPurify。
+
+**性质**：渲染管线（marked / DOMPurify / KaTeX / Mermaid）为插件自有——官方没有可复用的 Markdown 渲染入口；用户消息气泡的形态按官方气泡结构复刻（官方 user-text 座位被接管后，渲染点只剩插件自己的）。
+
+### 数据行（复刻官方）
+
+卡片下方复刻官方 stats dock：轮次/步数 · tok/s、累计 tok · 缓存命中、上下文占用小圈，取数与格式化逐值同官方；可点开详情面板（会话统计 / Token 用量 / 上下文分段），portal 定位、跟随滚动与尺寸、Escape 与点外关闭。三形态都有。
+
+**性质**：官方 stats dock 渲染在官方 InputBar 内部，接管 bar 后渲染点消失，组件也不对外导出；只能按官方取数、格式化与 CSS 逐值复刻，并接管官方 Activity / Usage 胶囊的读数（数据仍取官方投影 / store）。
+
+### 设置（复刻官方 + 插件自有）
+
+设置 → Codinput：启用接管、行号、字体、Markdown 等宽连字、发送/换行快捷键录制、默认视图；未启用时**打开右侧栏的 Codinput 标签即直接启用**。
+
+**性质**：设置行结构与控件取值复刻官方设置页（官方设置页组件不导出，插件只能注册自己的设置分区并自绘）；快捷键录制器为插件自有。
 
 ## 安装
 
-要求：宿主 `@deepseek-ai/dsh`（版本见下方[兼容性](#兼容性)）。
+要求：**桌面版 DSH `0.2.2-rc.3`**（Electron）。宿主 npm 频道：`next` = `0.2.2-rc.3`（`latest` 仍是 `0.2.2-rc.1`，完整能力需 rc.3）。插件以 `dsh.client` 客户端 bundle 注入桌面渲染层；`dsh web` 与更早宿主不再维护（旧宿主上模型/权限座回退自绘兜底，输入区弹层不渲染）。
 
-### 方法 A：npm 包
+### 方法 A：桌面版插件页（推荐）
 
-```bash
-dsh plugin --profile web add dsh-codinput
-```
+打开桌面版侧栏「插件」→「添加插件」→ 搜索 `dsh-codinput` → 安装。插件管理器会读包内的 `dsh.bundle` 元数据、校验自带的 `cordis.patch.yml`，并把包名追加进 profile 的 `bundles`，不需要手写任何 patch 行。
 
-一条命令就够：`dsh plugin` 走官方 profile 包管理，装完会读这个包的 `dsh.bundle` 元数据、校验它自带的 `cordis.patch.yml`（`dsh.bundle.patch`），并把包名追加进 profile 的 `bundles`——不需要手写任何 patch 行。
-
-然后 `dsh web` 启动（已在跑的话强刷页面即可，profile 默认 `patchReload: live`）。
-
-### 方法 B：GitHub 源码
+### 方法 B：npm 包（等价 CLI）
 
 ```bash
-dsh plugin --profile web add github:Witherwithwinter/DSH-Codinput
+dsh plugin --profile desktop add dsh-codinput
 ```
 
-仓库里带着构建产物 `lib/`，所以装源码同样**不需要本地构建**。如果 pnpm 提示需要构建授权（例如你换成自己的 fork 且删掉了 `lib/`），按它打印的键名写进 profile 的 `pnpm-workspace.yaml` 后重跑：
+`--profile desktop` 按你本地的 profile 名替换。装完重启桌面版（或强刷页面；profile 默认 `patchReload: live`）。
+
+### 方法 C：GitHub 源码
+
+```bash
+dsh plugin --profile desktop add github:Witherwithwinter/DSH-Codinput
+```
+
+仓库里带着构建产物 `lib/`，装源码同样**不需要本地构建**。如果 pnpm 提示需要构建授权（例如你换成自己的 fork 且删掉了 `lib/`），按它打印的键名写进 profile 的 `pnpm-workspace.yaml` 后重跑：
 
 ```yaml
 allowBuilds:
   esbuild@0.25.12: true
 ```
 
-### 方法 C：本地源码（开发）
+### 方法 D：本地源码
 
 ```bash
 git clone https://github.com/Witherwithwinter/DSH-Codinput.git
-dsh plugin --profile web add link:/abs/path/to/DSH-Codinput
+dsh plugin --profile desktop add link:/abs/path/to/DSH-Codinput
 ```
 
 `link:` 安装不会复制文件，改完 `npm run build` 刷新页面即生效。
 
-### 方法 D：等价的手写配置
+### 方法 E：等价的手写配置
 
-想在 profile 里锁版本、或要手工维护时，等价于**方法 A** 的是（`~/.dsh/profiles/web/package.json`）：
+想在 profile 里锁版本、或要手工维护时，等价于**方法 A** 的是（`~/.dsh/profiles/desktop/package.json`）：
 
 ```jsonc
 {
   "dependencies": {
-    "dsh-codinput": "^0.4.1"          // 本地开发用 "link:/abs/path/to/DSH-Codinput"
+    "dsh-codinput": "^0.5.0"          // 本地开发用 "link:/abs/path/to/DSH-Codinput"
   },
   "dsh": {
     "profile": {
@@ -113,87 +164,16 @@ dsh plugin --profile web add link:/abs/path/to/DSH-Codinput
 }
 ```
 
-改完手工配置后，在 profile 目录里 `pnpm install`（或 `dsh plugin --profile web install`），再 `dsh web`。
+改完手工配置后，在 profile 目录里 `pnpm install`（或 `dsh plugin --profile desktop install`），再启动桌面版。
 
-## 兼容性
-
-### 桌面版 DSH `0.2.2-rc.3`（0.5.0 起的唯一目标）
-
-- ✅ **当前支持**：桌面版（Electron）DSH `0.2.2-rc.3`。输入面的官方能力——模型选择器与推理等级、`/model` 与 `/permission` 弹层、`/` `@` 候选菜单、悬停提示——**全部镜像官方 0.2.2-rc.3 客户端条目与平台原语**，不再自绘等价款（细节见 [CHANGELOG 0.5.0](./CHANGELOG.md)）。
-- ⚠️ **不再维护**：`dsh web`（浏览器宿主）与 `0.2.2-rc.3` 之前的宿主不再作为验证目标。旧宿主上模型座/权限座会回退到 0.4.x 的自绘兜底控件；输入区弹层（overlay 座）依赖官方客户端包注册的条目，旧宿主上不会自绘（不支持）。
-- 下列按版本保留的历史验证记录仅作回溯。
-
-宿主通过 npm 发的是 **rc** 版本：`latest` 是当前稳定 rc、`next` 是下个 rc、`alpha` 更超前（2026-11-15 实测：`latest` = `0.2.2-rc.1`，`next` = `0.2.2-rc.3`，`alpha` = `0.2.2-alpha.3`）。0.5.0 的完整能力需要 rc.3；普通用户等 rc.3 转 `latest` 后即可直接装到。
-
-| 宿主版本 | 状态 |
-| --- | --- |
-| 桌面版（Electron，`0.2.2-rc.3`） | ✅ 0.5.0 目标版本：以隔离宿主 `@deepseek-ai/dsh@0.2.2-rc.3` + 无头 Edge CDP 探针验收（官方 overlay / 模型 / 附件座位、行号三位预留、官方 Tooltip、按需写回与长草稿连打性能、切会话草稿安全）；桌面实机目检按 [TESTING.md](./TESTING.md) §8.0 由用户确认 |
-| 桌面版（Electron，`0.2.2-rc.1`） | ✅ 0.4.0 目标快照：底部工具行 / 麦克风 / 用户消息图片 / 草稿等均以该版官方包（npm `@deepseek-ai/dsh@0.2.2-rc.1`，与桌面 `app.asar` 同版本）逐值核对，并在同版本隔离 web 宿主以无头 Edge 探针验收（见 CHANGELOG）；0.4.0 另在隔离桌面实例（Electron 44.7 / Chromium 152，独立 `--user-data-dir` + 复制 `DSH_HOME`，不触碰在用实例）实测编辑器字面渲染（移除连字）与输入回归；桌面端最终目检由用户实机确认。0.3.2 记录的 `0.2.1-rc.2` 语音输入端到端实测仍有效 |
-| web `0.2.0-rc.2` | ✅ 实机实测通过（本机此前 web 宿主；0.3.5–0.3.7 的座位镜像、模型座让位、用户消息 Markdown 与三面板互斥均在此版本以 Chromium 自动化探针实测；0.3.8 的 portal 面板定位/Escape/点外关闭与 Markdown 安全硬化另在隔离宿主以无头 Edge 探针复核；0.4.0 的 `/codinput` 退出草稿保留、连字与悬浮/侧栏候选菜单四向浮层同在此版本以隔离宿主 + 无头 Edge 探针验收，见 CHANGELOG） |
-| web `0.2.2-rc.1` | ✅ 实机实测通过（0.3.9 菜单修复专项 33/33 断言；0.4.0 的底部工具行逐值对齐 / 麦克风座位 / 带图消息官方缩略图+灯箱 / 问答回执仅官方一处 / prefs 迁移与统计边界均在此版本隔离宿主以无头 Edge 探针验收；0.4.0 的 Markdown 渲染升级——统一管线 / GFM / 脚注 / callouts / Obsidian 语法 / 图片尺寸与灯箱 / 代码高亮+复制 / KaTeX（离线字体内联）/ Mermaid 13 图——同在此版本隔离宿主以无头 Edge 全量验收，见 CHANGELOG；0.4.1 的 issue #8 子座位修复（`composer.dock` 第三方条目镜像 + 未镜像座位审计）同在此版本隔离宿主以 `dsh-cost-meter@1.9.64` / `dsh-context@0.84.1` 实测） |
-| `0.1.7-rc.2` | ✅ 实机实测通过（候选菜单亚克力、上下文小圈挪位、dock 行布局即为此版对齐） |
-| `0.1.5-rc.2` | ✅ 实机实测通过 |
-| `0.1.6-alpha.2` | ✅ 开发基线，全部功能端到端实测通过 |
-| 其它（现网 `latest` = `0.2.2-rc.1`；`next` = `0.2.2-rc.3`，即 0.5.0 目标） | 未实测；旧宿主无 rc.2 新 token，回退链自动保持各版官方原形态 |
-
-对 `0.1.7-rc.2` / web `0.2.0-rc.2`，除实机验证外，还从对应版本的客户端包（`dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation` / `dsh-client-ui-chat`）逐值提取了候选菜单、上下文小圈、stats dock 与用户消息气泡的官方 CSS 核对；桌面 `0.2.1-rc.3` 另从该版 `app.asar` 取出官方 CSS Modules 与主题 token 做静态逐值核对。插件依赖的契约按版本核对过：用到的槽位（`conversation.composer.bar`、`sidebar.right.pane.tab`、`settings.section`，以及 `conversation.chat.node` 与 `conversation.input.*` 子座）、`sidebarRight` / `sidebarRightTabs` / `locale` 服务与 `openTabIn`、侧栏展开规划（dockkit `planSetExpanded`）、文件拾取与 tab 关闭契约（`shell.bindFilePicker` / `tab.actions.close`）、以及复刻所依据的官方原语（`fileSizeText` / `fileExtension` 与附件 glyph 路径，逐字一致）；0.3.9 的菜单修复另在隔离 web `0.2.2-rc.1` 上以无头 Edge 自动化探针验收（33/33 断言通过）；0.4.0 的草稿保留、连字与候选菜单浮层在隔离 web `0.2.0-rc.2` 上以无头 Edge 自动化探针验收；0.4.0 的 bottom row 逐值对齐 / 麦克风 / 用户消息图片灯箱 / prefs 迁移与统计边界在隔离 web `0.2.2-rc.1` 上以无头 Edge 自动化探针验收；0.4.0 另在隔离桌面 Electron 44.7（Chromium 152）实例上实测编辑器字面渲染（`->`、`//` 原样显示、不再有合并字形）与输入回归；0.4.0 的 Markdown 渲染升级在隔离 web `0.2.2-rc.1` 宿主以无头 Edge 全量验收（GFM/脚注/callouts/Obsidian 语法/图片尺寸与灯箱/代码高亮+复制/KaTeX 离线/Mermaid/安全/一致性与回归），桌面最终目检由用户实机确认。插件对宿主内部结构的依赖较多（槽位遮蔽、`useTabInfo`、`sidebarRight`、`--dsw-*` 令牌），代码里处处用 `typeof` 守卫 + `try/catch` 降级，但宿主大版本升级仍可能失效。**升级宿主后请按 [TESTING.md](./TESTING.md) 走一遍冒烟清单。**
-
-### 主题 / 皮肤插件兼容（皮肤作者必读）
+## 主题 / 皮肤
 
 Codinput 不自带配色：全部颜色取自宿主的 `--dsw-*` 设计 token（亮暗主题随宿主切换）。给宿主做主题/皮肤的插件与 Codinput 的相处方式：
 
 - **改宿主 token 即全盘生效**——覆写 `--dsw-*` 变量后，Codinput 的卡片、菜单、按钮、徽章与官方 UI 一同跟随，无需单独适配。注意宿主把 token 定义在 `body`（`body[data-ds-dark-theme]`）上，覆写要写在同一层：写在 `:root` 会被 `body` 上的定义盖掉。
 - **官方写死的值 Codinput 同样写死**（发送钮图标的前景白、上下文仪表 tools 分段的紫等），与官方在换肤下的表现保持逐值一致——这些不跟 token 变，属预期行为。
-- **要精确点妆 Codinput**：所有元素类名都是稳定的 `dci-` 前缀（卡片 `.dci-card`、发送钮 `.dci-send`、菜单 `.dci-menu` / `.dci-slash-menu`、数据行 `.dci-stat-root`、唤回小球 `.dci-ball` 等），可直接作皮肤选择器；插件样式一次性注入 `<style id="dsh-codinput-styles">`，皮肤在其后注入即可按常规 CSS 权重覆盖。
+- **要精确点妆 Codinput**：所有元素类名都是稳定的 `dci-` 前缀（卡片 `.dci-card`、发送钮 `.dci-send`、设置菜单 `.dci-menu`、数据行 `.dci-stat-root`、唤回小球 `.dci-ball` 等），可直接作皮肤选择器；插件样式一次性注入 `<style id="dsh-codinput-styles">`，皮肤在其后注入即可按常规 CSS 权重覆盖。
 - 编辑器（CodeMirror）的字体是用户偏好（默认等宽栈），不跟随皮肤字体；其颜色同样走 token。
-
-## 已知限制
-
-- `/` `@` 的候选内容来自宿主目录（技能 / 命令 / 文件 / 会话）；宿主不提供时为空，插件侧无法补。
-- **编辑器没有语法高亮**（预览与消息区/代码块有 highlight.js 高亮）、**没有 Esc 功能**——产品决策（输入面板不是代码阅读器，编辑侧保持纯文本可见即所得）。
-- **Markdown 渲染全内置、离线优先**（0.4.0）：KaTeX 字体、highlight.js、Mermaid 全部随插件打包，运行时零网络请求；代价是 `lib/client.js` 体积从 ~540KB 增至 ~3.4MB（gzip ~1.1MB）。
-- **Mermaid 只内置 13 种常用图类型**：其余 24 种（如 sankey、xychart、kanban、quadrantChart 等）不随包分发，渲染时回退「源码 + 错误提示」；ELK / cytoscape 布局引擎未分发（许可与体积原因），请求 ELK 的图按 mermaid 官方逻辑回退 dagre。
-- **`[[wikilink]]` 是样式化 chip（点击复制目标名）**，不做仓库文件跳转（宿主没有对应导航目标）；`![[图片]]` 同理只做样式化文本降级，不会加载仓库文件。
-- **Markdown 里的原始 HTML 一律转义**（安全决策）：与 Obsidian 允许内联 HTML 不同，`<div>`/`<script>` 等按可见文本显示，不执行、不参与排版。
-- **Codinput 标签存在期间主输入整体隐藏**（唯一输入入口约定，浏览同栏其他标签也不恢复）；官方 stats dock 与上下文小圈都渲染在官方输入框内部，因此随之消失、由本插件的复刻数据行接管。
-- **第三方子座位的镜像边界（0.5.0）**：**官方 bar 的全部子座位都已镜像**——`input.left` / `.right` / `.model`（含 `.label` / `.options` 子座）/ `.permission` / `.plan` / `.activity` / `.overlay` / `.attachments` / `composer.dock`。其中**模型、overlay、附件三座直接渲染官方条目本体**（官方 `ModelSelect`、`MenuView` / `PopupSelectView` / `FeedbackDialog`、`ComposerAttachments`），第三方对它们的替换/追加条目按官方优先级语义生效；`composer.dock` 只取**第三方**条目（官方 `ActivityPill` / `UsagePill` 由自绘数据行承担，整座镜像会重复）。宿主侧原因：官方 slot 只授权「声明该 child 的条目」渲染它（每个声明只能有一个存活 owner），遮蔽 `composer.bar` 后子座位成孤儿，没有原生转发可用，接管者只能镜像条目（`conversation.input.dock` 在 bar 之外，不受影响）。条目缺失/inject 不可复现/组件崩溃时按座位回退：模型座→自绘芯片、权限座→自绘菜单、附件→自绘 `AttachmentRail`，并在 `__dshCodinputErrs` 留 `slot.inject` / `slot.entry` 诊断，不空不崩。
-- **只维护桌面版 DSH**：浏览器宿主 `dsh web` 不再作为验证目标；插件仍以 `dsh.client` 客户端 bundle 注入（桌面版渲染层使用同一份 bundle，无需额外配置）。
-- **输入区弹层依赖官方 overlay 座位的客户端条目**：`/model`、`/permission`、`/` `@` 候选在 0.2.2-rc.3 桌面版由官方 `MenuView` / `PopupSelectView` 渲染；旧宿主上这些官方条目不存在，本插件不再自绘兜底。
-- **rc.3「继续生成 / 重试」已接入（0.5.0）**：失败轮次且输入面干净时主按钮变官方 Continue 三角并调用 `retry(failureSeq)`，条件逐项对齐官方 `primaryRetries`；无 API Key 的隔离宿主无法制造失败轮次，实机复验按 [TESTING.md](./TESTING.md) §8.0。
-- **附件/粘贴的官方链路（0.5.0）**：附件行渲染官方 `ComposerAttachments`；宿主文档级粘贴路由已注册（编辑器内粘贴仍由插件落地，卡片其它区域让位官方）。`uploadFailureText` 为官方 `attachmentErrorText` 的近似文案；真实剪贴板粘贴需实机目检（合成事件不携带可路由的剪贴板数据）。
-- 同一 pane 复制出第二个「Codinput」标签时，第二个面板只出提示、不渲染第二个编辑面（输入入口唯一）。
-- 悬浮模式的手势只保留「拖回底部输入区 = 普通」；「拖入右侧栏 = 侧栏模式」已按产品决策舍弃。
-- 页面重载后，若侧栏布局恢复了 Codinput 标签但尚未被点开过，主输入会先出现——dockkit 对重载恢复的标签是惰性挂载，点一次标签即恢复侧栏承载。
-- **编辑器不做字体连字**：`->`、`//` 等按字面字符显示（不再显示成箭头/合并字形）。原因：连字字形会造成「丢字符」的视觉误判，且 DSH 桌面 `0.2.2-rc.1`（Electron 44.7 / Chromium 152）的 `calt` shaping bug（连字 + 后续任意字符时把连字第一格画空）无法用 CSS 稳定规避；预览 / 消息区本就是纯文本，编辑器与之一致，所见即所存。
-
-## 开发
-
-```bash
-npm install
-npm run build        # 压缩产物 → lib/client.js（发布用）
-npm run build:dev    # 未压缩 + 内联 sourcemap（浏览器里直接看 TS 源码）
-npm run typecheck
-```
-
-- `src/client/` 是全部客户端源码；宿主 API 用本地结构类型描述（运行时零宿主依赖，只把 `react`/`react-dom` 当平台外部模块）。
-- `lib/index.js` 是宿主半边（纯挂载载体）；`lib/client.js` 由构建产出，并**入库随源码一起发**（源码安装才能免构建）。
-- **CI 只做静态把关**：`npm ci` + `tsc --noEmit` + 发布构建 + 产物自检（bundle 非空、含 `__ModuleLoader__.load`、无内联 sourcemap）。它不加载页面、不连宿主，**运行时行为零覆盖**——行为验证走 [TESTING.md](./TESTING.md) 的手动清单。
-- 诊断口（调试用，生产也在）：`window.__dshCodinputDebug / __dshCodinputErrs / __dshCodinputSessionId / __dshCodinputTriggers / __dshCodinputKeyboard / __dshCodinputShell / __dshCodinputCtx`。
-- 开发辅助脚本：`node scripts/extract-official-css.mjs <宿主某包 client.js> [out.css]` 抽取官方 CSS module 原文，用于逐值复刻。
-
-### 改代码前值得先知道的宿主事实
-
-- **接管点**：`conversation.composer.bar`（single 槽位，`priority:-1` 遮蔽官方条目）。卸载条目即官方输入框原样恢复。
-- **遮蔽 ≠ 渲染**：官方 InputBar 条目在自己的条身体内声明并渲染 `conversation.input.*` 子座位（`left` / `right` / `model` / `activity` / `permission` / `plan` / …）。Codinput 遮蔽 bar 条目后，这些座位**声明还在、第三方注册照常成功、条目还是赢家**，但没有任何 `renderSlot` 会读它们——表现是「插件装了、不报错、永不上屏」。解法是在自绘工具行的**对应位置**按官方语义复刻合成（`InputLeftSlot` / `InputRightSlot` 走 list 座，`ModelSlot` 走 single 座）。
-- **单值座让位判据**：宿主动态包守卫对非 chain 槽位的第三方 register **强制**分配页内遮蔽秩（`options.priority` 为唯一负数）并给 fiber 名打 `dyn/` 前缀；出厂占用者（如 client-ui-model-selection 的 ModelSelect）不带 priority（≡0）。`ModelSlot` 只镜像「第三方遮蔽者」，出厂占位继续由自绘模型芯片代表。
-- **第三方 inject 的 ctx 边界**：条目的 `inject(sessionId)` 必须在宿主 fiber 上下文里调用；插件侧直接调会丢条目所属插件的 ctx 绑定，依赖 `ctx.*` 服务面的 inject 会抛 `without inject`（实测 dsh-model-accordion 的 `directoryFor`）。单值座据此走 `entryInjectFailed` 预检，失败即降级回自绘芯片。
-- **唯一输入入口**：侧栏标签 body **挂载即承载**（不是按可见性——收起侧栏是 CSS 隐藏 + translate，body 仍挂载），主条目据此渲染 `null`；形态由 `承载 ? 'side' : prefs.mode` 派生，构造上不可能并存。承载声明挂在 body 生命周期上，因此标签定义必须 `keepMounted: true`：dockkit 默认会把非激活标签的 body 卸载，一旦切到同栏其他标签声明就消失、主输入回来（官方浏览器标签同款开关；注意重载后恢复的标签要**激活过一次** body 才挂载）。
-- **撤销历史**：三态切换会重挂载编辑器，故按会话暂存 `EditorState`（`take/putEditorSnapshot`）；扩展回调走模块级 hooks 槽，避免复用旧 state 时调到已卸载实例的 props。
-- **官方侧灌入**（pick/claim/提交清空）用 `externalAnnotation` + `Transaction.addToHistory.of(false)`：不进撤销栈，撤销只记用户自己敲的内容。
-- **画圆要写 `corner-shape: round`**：宿主根节点设了 `corner-shape: superellipse(1.5)`（全局超椭圆），只写 `border-radius:50%` 会渲染成圆角方。
-- **小球不占槽位**：`conversation.session.header.corner` 是官方侧栏展开按钮的座位（single，占它会把官方按钮顶掉），故小球 portal 到 body、量标题栏矩形定位到标题栏下方。
-- **slash「文件」行靠 filePicker 绑定活着**：官方 file 贡献的 `available` 读 `shell.canPickFiles()`，而 filePicker 由官方 InputBar 挂载时 `bindFilePicker` 绑上、卸载解绑——接管面挂载时必须补绑（`attachments.bindSessionFilePicker`），否则该行消失。**不要注册同名 contribution**：宿主 `register` 时即查重、直接 fail-loud。
-- **关标签走 tab 域动作面**：`useTabInfo().tab.actions.close()` 关自己标签（dockkit 语义，唯一 docked 标签时自动垫 guide）；会话定位别用诊断 `__dshCodinputSessionId`（表面卸载会清成 null），用 sideinput 总线的承载快照。
 
 ## 第三方归属
 
