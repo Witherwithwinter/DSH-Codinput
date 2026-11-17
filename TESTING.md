@@ -47,7 +47,7 @@
 
 ## 3. 触发管线与菜单
 
-- [ ] 输入 `/` → normal 形态候选菜单在卡片上方弹出（`bottom = 卡片顶 − 4`、`max-height = min(400, 卡片 top − 16)`）；侧栏 / 悬浮态改为 portal 到 body 的 `position: fixed` 四向自适应浮层——落在卡片周围空位（右侧栏优先左侧对话区），**与卡片零交叠、不遮编辑区**、完整在视口内（margin 12）、内容超高时菜单内滚动；拖动悬浮卡 / 缩放窗口 / 拉伸侧栏时菜单跟随；组标题本地化
+- [ ] 输入 `/` → normal 形态候选菜单在卡片上方弹出（`bottom = 卡片顶 − 4`、`max-height = min(400, 卡片 top − 16)`）；float / side 形态由插件自适应宿主（`.dci-overlay-anchor[data-adaptive]`，固定定位、`data-mode="dd"` + `data-placement` 标出选位方向）在卡片四周空位里选位——**与卡片零交叠、不遮编辑区**、完整在视口内（margin 12）、内容超高时菜单内滚动（侧栏优先落在右侧栏左侧对话区）；拖动悬浮卡 / 缩放窗口 / 拉伸侧栏时菜单跟随；组标题本地化
 - [ ] 输入 `@` → 文件/会话候选、section 小节标题、钻取（Tab/chevron）、crumbs 正常
 - [ ] 菜单打开时 ↑↓/Enter/Tab 由菜单消费；**菜单关闭时 Enter 是换行**（不被吞）
 - [ ] 鼠标点击候选能补全；卡片内按下不关闭菜单
@@ -120,12 +120,12 @@ DSH_HOME=/tmp/dsh-rc-home /tmp/dsh-rc/node_modules/.bin/dsh web --port 3081 --no
 - [ ] **模型选择器（#1，官方效果）**：点工具行右侧模型座 → **不闪动**（触发钮不出现焦点环跳变、卡片不重排）；根菜单是官方两段式「模型 / 推理等级」，进入后有官方搜索框（目录 >4 条时）、分组吸顶标题、勾选态与加载图案；`↑↓` / `Enter` / `Tab` / `Esc` / `Shift+Tab` 行为与官方输入框一致；选中后触发钮显示「模型 · 推理等级」，焦点回到触发钮但无焦点环。
 - [ ] **模型目录一致**：同一会话里 `/model` 弹层与工具行模型座显示同一组提供方/模型/推理等级，任一处切换后另一处跟随；目录加载失败时出现官方重试条带。
 - [ ] **`/model` 与 `/permission` 弹层（#2，官方效果）**：输入 `/model` 或 `/permission`（或从 `/` 候选里选）→ 弹层以官方 `PopupSelectView` 样式浮出卡片上方（卡片全宽、材质/圆角/阴影/动画与官方一致）；搜索过滤、清除按钮、`Tab` 确认 / `Shift+Tab` 关闭、`↑↓` 环绕、点外部关闭；`/permission` 的 Full access 行有官方风险确认弹窗。
-- [ ] **`/` `@` 候选菜单**：输入 `/` 或 `@` → 官方 `MenuView` 样式（分组标题、crumbs、骨架行、右侧描述），键盘高亮跟随；`Esc` 关闭且焦点留在编辑器；悬浮/侧栏形态下同样以卡片顶边为锚点浮出、不被裁剪。
+- [ ] **`/` `@` 候选菜单**：输入 `/` 或 `@` → 官方 `MenuView` 样式（分组标题、crumbs、骨架行、右侧描述），键盘高亮跟随；`Esc` 关闭且焦点留在编辑器；normal 形态以卡片顶边为锚点浮出；float / side 形态由自适应宿主四向选位（浮层可见、不被裁剪、不遮编辑区），见 §8.1。
 - [ ] **行号三位预留（#3）**：粘贴/键入让行数从 9→10、99→100 时，**正文不横向位移**（行号栏宽度恒定）；999 行内不抖，超过 999 行栏宽自然增长；关掉行号设置后编辑区宽度正常。
 - [ ] **悬停提示（#4，官方效果）**：工具行 添加/停止/发送、卡片右上角编辑/预览开关、侧栏唤回小球、数据行上下文胶囊、用户消息复制钮——鼠标悬停约 500ms 后出现官方 Tooltip（深色气泡、上/下方自动避让、`aria-describedby` 生效、无原生 `title` 双提示）；键盘 Tab 聚焦也能触发。
 - [ ] **座位完整性**：`permission` / `plan` 芯片、`input.left` / `.right` 第三方按钮、语音麦克风、`composer.dock` 第三方条目（如 cost-meter）仍正常显示；**overlay 座位的第三方条目（如 `dsh-context` 的上下文弹层）现在也应可见**（0.4.1 时不可见）。
 - [ ] **第三方模型座替换**：装 `dsh-accordion` 一类注册 `conversation.input.model` 的插件 → 由官方优先级语义决定赢家（第三方遮蔽时显示其 UI）；其 `inject` 在插件侧不可复现时回退自绘芯片并在 `__dshCodinputErrs` 记 `slot.inject`（不空、不崩）。
-- [ ] **诊断口**：`window.__dshCodinputErrs` 为空、console 无 `slot.unmirrored` / 组件崩溃类告警；`window.__dshCodinputShell.bar === 'mounted'`。
+- [ ] **诊断口**：`window.__dshCodinputErrs` 为空、console 无 `slot.unmirrored` / 组件崩溃类告警；`window.__dshCodinputShell.bar` 为 `'registered'`（首屏挂载后的最终态；`'mounted'` 是同一注册链的中间态，二者都算健康）。
 - [ ] **继续生成 / 重试（0.5.0）**：制造一次失败轮次（无效 Key / 断网发送）→ 草稿与附件皆空、会话打开、无「待回答问题」时，主按钮变官方 **Continue 三角 + 工具提示「继续生成」**；点击后重新提交空输入重试该轮并回到 sending/正常态。反例：草稿非空、附件非空、运行中、inbox 有待用户输入、有在途提交时**不应**出现 Continue（保持发送/停止）。
 - [ ] **附件行官方链路（0.5.0）**：拖文件/图片进卡片 → 渲染**官方**缩略图/文件卡（不是自绘 `dci-attach-*` 样式）、上传进度与失败重试、点击缩略图出官方原图灯箱；拖放时出现官方 DropOverlay；`__dshCodinputErrs` 为空。
 - [ ] **文档级粘贴（0.5.0）**：不聚焦编辑器时（点一下卡片空白/工具行）粘贴文件 → 文件进入本 composer 草稿附件（桌面/浏览器实机验证；合成事件不携带可路由剪贴板数据，不算）。
@@ -133,6 +133,24 @@ DSH_HOME=/tmp/dsh-rc-home /tmp/dsh-rc/node_modules/.bin/dsh web --port 3081 --no
 - [ ] **页面生命周期兜底（0.5.0 终版）**：长草稿里输入最后几个字符后 **500ms 内立即刷新/关闭窗口**（或最小化）→ 桌面端重新打开后草稿包含最后字符、其它插件读到的草稿不滞后（web 隔离宿主本身不持久化草稿，刷新即空属宿主行为，不算失败；但手动派发 `pagehide` 后宿主草稿应立即更新）。
 - [ ] **第三方座位（0.5.0 终版）**：装 `dsh-context@0.84.1` 与 `@knyazevai/dsh-client-ui-attachment@0.2.6` → `/context` 弹层可打开、附件 rail 正常渲染（拖放/删除/失败重试），**normal / float / side 三种形态各看一遍** overlay 锚点几何（弹层不被裁剪、不错位）；`__dshCodinputErrs` 与 console 为空；出现 `slot.entry` 类错误即算失败。
 - [ ] **已知未覆盖（不算失败）**：附件失败提示文案用官方 `attachmentErrorText` 的近似值；`conversation.composer.dock` 仍只镜像第三方条目（官方 Activity/Usage 胶囊由自绘数据行承担）。
+
+## 8.1 0.5.1（形态回归修复）验收
+
+**前提**：0.5.1 的 overlay 定位只改 float / side 形态：normal 仍是官方 in-card 几何（`.dci-overlay-anchor` 零高绝对条 + 官方 `bottom: calc(100% + 4px)`）。float / side 的锚点带 `data-adaptive`，打开官方下拉条目时宿主变固定定位并带 `data-mode="dd"` / `data-placement`（top/bottom/left/right），可直接在 DevTools 断言。
+
+- [ ] **normal 形态不回归**：`/` 候选在卡片上方弹出，`menu.bottom ≈ card.top − 4`、宽度 ≈ 卡片宽；`/model`、`/permission` 弹层与 0.5.0 一致。
+- [ ] **float 形态自适应**：拖成悬浮 → 输入 `/`：菜单完整在视口内、与卡片零交叠（极小窗口放不下最小可用尺寸时允许少量重叠）；宿主 `data-mode="dd"`、`data-placement` 按空间选择（卡片在中部优先生上/下方）。把悬浮卡拖到视口顶部（或 `localStorage` 里 `dsh-codinput.prefs.v3` 的 `floatY` 设为 8 后刷新）→ 菜单改到下方/侧方（`data-placement` ≠ `top`），**高度不为 0、不被裁剪**；拖动悬浮卡 / 缩放窗口时菜单跟随；`Esc` / 点外关闭后宿主恢复隐藏（无残留）。
+- [ ] **side 形态可用**：打开右侧栏 Codinput 标签 → 输入 `/`：菜单可见（不被侧栏裁剪）、`data-placement="left"`、菜单右边缘 ≤ 右侧栏 pane 左边缘（落在左侧对话区）、完整在视口内；`/model`、`/permission`、`@` 候选同样；点菜单行可补全（`draftRev` CAS 命中）。
+- [ ] **side 形态 rc.3 对等**：制造失败轮次 → 侧栏形态主按钮同样出现官方 Continue 三角（点击重试）；不聚焦编辑器时粘贴文件 → 文件进入本 composer 草稿（文档级路由由侧栏注册）；`__dshCodinputErrs` 为空。
+- [ ] **草稿跨形态（重点）**：
+  - 打字后**立即**（<500ms）拖成悬浮 / 切到侧栏 / 拖回普通 → 文本一字不少、宿主草稿一致；再切回仍一致。
+  - 打字后**同一帧**点发送（或按发送快捷键）→ 正常发送（不出现「消息没发 / 走了插话队列」）。
+  - 退出接管（`/codinput`）→ 在官方输入框里改动草稿 → 重新进入接管 → 编辑器显示官方输入框里的最新草稿（不是退出前的旧稿、无 `/codinput` token 残留）。
+  - 侧栏内 `/codinput` 退出 → 官方输入框草稿保留、标签自动关闭；重开标签草稿仍在。
+  - 会话 A 打字后立刻切 B 再切回 A → A 草稿完整（不串到 B）。
+- [ ] **第三方 overlay 条目**：装 `dsh-context` → float / side 下 `/context` 弹层可打开（fixed/portal 类条目保持自身定位）。
+- [ ] **诊断**：`window.__dshCodinputErrs` 空；`.dci-overlay-anchor[data-adaptive]` 只有当前形态一个，空闲时 `visibility: hidden`。
+> **可选的隔离宿主自动化探针（0.5.1 起）**：`node scripts/verify/probe.mjs` 会自建隔离 `dsh web`（`@deepseek-ai/dsh@0.2.2-rc.3`）与无头 Edge，跑上面 normal / float / side / 草稿四项断言并输出 `scripts/verify/out/latest.json` + 截图（零 npm 依赖；本机需已装 rc.3 CLI 与 Edge，详见 `scripts/verify/README.md`）。它替代不了下面的人工清单（桌面语音/真实剪贴板/真机视觉仍要目检），但可直接卡住本次修复的几何与草稿回归。
 
 ## 8. 0.3.8 / 0.3.9 / 0.4.0 新功能与回归
 
@@ -151,7 +169,7 @@ DSH_HOME=/tmp/dsh-rc-home /tmp/dsh-rc/node_modules/.bin/dsh web --port 3081 --no
 
 - [ ] **`/codinput` 退出草稿保留**：见第 1 节「侧栏内 /codinput 退出」与第 2 节「`/codinput` 退出不丢草稿」两条（三条退出入口都要过）。
 - [ ] **字体连字**：0.4.0 起已移除（见第 2 节「编辑器字面渲染」）。
-- [ ] **候选菜单四向浮层**：见第 3 节第一条；重点断言 float / side 下菜单为 body 直接子节点、`position: fixed`、与 `.dci-card` rect 零交叠；normal 形态几何不回归（0.3.9 已验收值）。
+- [ ] **候选菜单四向浮层**：见第 3 节第一条；0.5.1 起 float / side 下菜单由卡片内固定自适应宿主（`.dci-overlay-anchor[data-adaptive]`，`data-mode="dd"` / `data-placement`）定位——与 `.dci-card` rect 零交叠、完整在视口；normal 形态几何不回归（0.3.9 已验收值）。
 - [ ] **草稿跨退出/进入**：`/codinput` 退出 → 重新 `/codinput` 进入 → 编辑器恢复退出前草稿；无 `/codinput` token 残留。
 
 **0.3.9 菜单定位与开合（PR #5）**
@@ -220,7 +238,7 @@ flowchart LR
 - [ ] **脚注**：正文上标可点 → 跳到文末脚注区对应项；重复引用正常；预览与用户消息各自独立不串 id。
 - [ ] **Callouts**：`note/tip/warning/danger/info/success/question/quote` 8 类图标+配色+标题正确；`[!warning]-` 默认收起、`[!note]+` 展开；未知类型按 note 蓝族回退；普通 `>` 引用**不带** callout 样式；浅色/深色主题下标题与图标对比度足够（≥3:1）。
 - [ ] **Obsidian 语法**：`==高亮==` 显示高亮底色；`%%注释%%`（单行/多行/连续）隐藏，代码块/行内代码里的 `%%` 原样保留，未闭合 `%%` 按普通文本；`[[目标]]` / `[[目标|别名]]` 为 chip，点击复制目标名（不允许导航跳转）；`![[图片.png]]` 显示为样式化文本、不尝试加载文件。
-- [ ] **图片**：`![图|300](http)` 宽度 300（`width` 属性保留）；点击预览/用户消息中的图片打开 `.dci-lightbox[role=dialog]`，Esc 关闭；相对路径/`data:` 图片降级为 alt 文本（不破图）。
+- [ ] **图片**：`![图|300](http)` 宽度 300（`width` 属性保留）；点击预览中的图片打开官方 `ImageLightbox` 原图预览（`role=dialog`，Esc / 背板 / 关闭钮可关），用户消息里的图片走官方 `MessageImages` 灯箱；相对路径/`data:` 图片降级为 alt 文本（不破图）。
 - [ ] **代码块（扩展渲染）**：46 种语言子集高亮（`code` 带 `hljs language-*`），语言标签正确，未知语言不高亮但正常显示；复制按钮点击后剪贴板内容 = 代码原文，有「已复制」反馈。
 - [ ] **数学公式（扩展渲染）**：行内 `$E=mc^2$` 与块级 `$$\int$$` 渲染为 `.katex`；错误公式显示原文 + 错误样式不崩；`$5 and $10`、`\$9` 不误判为公式；**DevTools Network 无任何外联请求**（字体 data URI 内置）。
 - [ ] **Mermaid（扩展渲染）**：```mermaid flowchart / sequence 渲染出 SVG；可见时才渲染（懒加载）；浅色/深色主题切换后图表重新渲染且可读；语法错误回退「源码 + 错误提示」；未内置图类型（如 sankey）同样回退不崩；渲染后滚动/高度正常、不遮挡后续内容。

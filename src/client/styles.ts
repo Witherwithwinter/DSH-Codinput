@@ -35,6 +35,17 @@ const CSS = `
    （/model、/permission 等弹层）以它为包含块、用 bottom:calc(100% + 4px) 浮出
    卡片上方——几何与官方输入框一致（见 CodinputSurface 的 OVERLAY_SLOT）。 */
 .dci-overlay-anchor { position: absolute; inset: 0 0 auto; height: 0; }
+/* float / side 形态：官方 overlay 座位锚点改为固定自适应宿主（见 overlay-host.ts）。
+   官方 MenuView / PopupSelectView 以包含块顶边为底边锚点向上长；普通形态完全交给
+   官方几何，float/side 形态下 hook 逐帧量卡片四周空位选位并注入 left/top/width，
+   同时把官方 useAnchoredMaxHeight 的视口钳制改由 --dci-overlay-maxh 控制
+   （官方把 max-height 写在 React 内联样式上，这里用 !important 覆盖为宿主算好的
+   可用高度——否则悬浮窗被拖到视口顶部/侧栏里时菜单会被官方压成 0 高或裁掉）。 */
+.dci-overlay-anchor[data-adaptive] { position: fixed; inset: auto; left: 0; top: 0; z-index: 950;
+  width: 0; height: 0; visibility: hidden; }
+.dci-overlay-anchor[data-adaptive][data-mode="dd"] > [data-dci-overlay-dd] {
+  max-height: var(--dci-overlay-maxh, 400px) !important;
+}
 /* 主模式 surface 复刻官方 composer root：侧向 clearance 内缩 + 底部 4px，
    卡片与数据行由数据行自身 padding-top 定距（官方 root 无 gap，dock 上边距 4px）。
    side/float 形态自带铺满布局，不参与。 */

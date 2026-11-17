@@ -17,7 +17,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { SessionStandard, SidebarTabInfo, SlotRegisterOptions } from './host-types';
-import { claimSidebarInput, subscribeSidebarTabClose, useSidebarCarryOwner, type SidebarCarry } from './sideinput';
+import { claimSidebarInput, subscribeSidebarTabClose, useSidebarCarryOwner, useSidebarInputCarried, type SidebarCarry } from './sideinput';
+import { useBarInjected } from './barinject';
+import { useContinueState } from './continuation';
 import { loadPrefs, savePrefs, subscribePrefs } from './prefs';
 import { diagError, diagWindow } from './diag';
 import { CodinputSurface } from './components/CodinputSurface';
@@ -104,6 +106,14 @@ export function SidebarCodinputBody(props: SessionStandard & { useTabInfo?: () =
   const inputStandard = useStableKit(props as unknown as Record<string, unknown>, ['useTabInfo']);
   // 会话运行中：侧栏形态的主按钮同样变停止（官方同款）。
   const running = useSession ? useSession((s: unknown) => (s as { running?: boolean } | undefined)?.running) === true : false;
+  // rc.3「继续生成 / 重试」与文档级粘贴路由：侧栏树拿不到 bar 条目注入面，
+  // 经 barinject 取遮蔽条目转存的同一份（官方只注入 bar 条目，见 barinject.ts）。
+  // 开标签即启用时 bar 条目可能晚于本 body 挂载：useBarInjected 订阅变化后重取。
+  const barInjected = useBarInjected(sessionId);
+  // 首帧承载判定：claim 在 effect 里才生效，本 body 先渲染时 carried=false。
+  // 不先挂编辑面，避免与尚未卸载的主输入面出现一帧「双 EditorPane / 双 fileIntake」。
+  const carried = useSidebarInputCarried(sessionId);
+  const continueState = useContinueState({ retry: barInjected?.retry, useProjection, useSession });
   useT();
   // 注入 hook 的有无逐渲染稳定（渲染器 useMemo 绑定），条件调用合规。
   const info = useTabInfo ? useTabInfo() : undefined;
@@ -186,6 +196,10 @@ export function SidebarCodinputBody(props: SessionStandard & { useTabInfo?: () =
       </div>
     );
   }
+  if (!carried) {
+    // 承载声明尚未生效（首帧 effect 之前）：先留空，避免与主输入面重叠一帧。
+    return <></>;
+  }
 
   return (
     <div
@@ -204,6 +218,9 @@ export function SidebarCodinputBody(props: SessionStandard & { useTabInfo?: () =
         useProjection={useProjection}
         inputStandard={inputStandard}
         running={running}
+        continueState={continueState}
+        registerFileIntake={barInjected?.registerFileIntake}
+        occurrence={barInjected?.occurrence}
         side={true}
       />
     </div>

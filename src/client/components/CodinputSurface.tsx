@@ -34,6 +34,7 @@ import { ImageLightbox } from '@deepseek-ai/dsh-client-ui-primitives';
 import { Toolbar } from './Toolbar';
 import { StatsRowMemo } from './StatsRow';
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives';
+import { useAdaptiveOverlayHost } from './overlay-host';
 
 /**
  * 官方 overlay 座位（`conversation.input.overlay`，list/session）：宿主官方
@@ -151,6 +152,17 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
   /** 拖文件悬停卡片时的落区提示（松手即入草稿附件）。 */
   const [dropActive, setDropActive] = useState(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
+  /** 官方 overlay 座位锚点（float/side 形态下由 overlay-host 改为固定自适应宿主）。 */
+  const overlayHostRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * 官方 overlay 座位的几何：normal 形态完全交给官方（in-card 零高绝对锚点）；
+   * float / side 形态改用本插件的自适应宿主——官方 MenuView / PopupSelectView
+   * 以「包含块顶边」为底边向上长，悬浮窗被拖到视口顶部时官方钳制会把菜单压成
+   * 0 高，侧栏里则被 pane 的 overflow 裁剪；自适应宿主逐帧量卡片四周空位选位
+   * （左/右位优先落在侧栏左侧对话区），不遮编辑区、不与卡片重叠。
+   */
+  const overlayAdaptive = side === true || float === true;
+  useAdaptiveOverlayHost(overlayHostRef, cardRef, overlayAdaptive);
   const viewRef = useRef<EditorView | null>(null);
   const caretRef = useRef<number | null>(null);
   const previewRef = useRef<HTMLDivElement | null>(null);
@@ -284,7 +296,10 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
     // 发送读的是宿主输入机里的草稿：本地输入期间草稿还没上报，先同步最后一版。
     editorCtlRef.current?.flush();
     const st = state;
-    const draftEmpty = draftRef.current.trim() === '';
+    // 判空用编辑器同步读取（draftRef 只跟 rAF 回调更新：最后一笔输入与发送同帧时
+    // 会读到上一拍的旧文本，把刚打的字当空草稿误走 Steer）。
+    const liveDraft = editorCtlRef.current?.getDraft() ?? draftRef.current;
+    const draftEmpty = liveDraft.trim() === '';
     const noAttachments = !st || st.attachmentIds.length === 0;
     if (draftEmpty && noAttachments) {
       keyboard?.steerQueue(); // 空草稿：发送手势转队列全量 Steer
@@ -502,7 +517,11 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
             贴卡片顶边的绝对定位条）。官方弹层以它为包含块 + 底边锚点浮出卡片上方。
             指针按下先同步草稿：菜单行 pick / claim 会立刻读写宿主草稿并按
             span.draftRev 做 CAS，纯输入期间宿主草稿是按需同步的，必须先补齐。 */}
-        <div className="dci-overlay-anchor" data-composer-overlay onPointerDownCapture={onOverlayPointerDown}>
+        <div className="dci-overlay-anchor" data-composer-overlay
+          data-adaptive={overlayAdaptive ? '' : undefined}
+          ref={overlayHostRef}
+          onPointerDownCapture={onOverlayPointerDown}
+        >
           {sessionId !== undefined ? (
             <InputSlotSeat slot={OVERLAY_SLOT} sessionId={sessionId} standard={inputStandard} />
           ) : null}

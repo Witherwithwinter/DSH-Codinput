@@ -2,6 +2,39 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.5.1] — 2026-11-17（修复 0.5.0 三处形态回归，补齐侧栏形态的 rc.3 能力）
+
+修复 0.5.0「官方条目镜像」改造后暴露的回归（用户报障：悬浮形态 slash 面板不能自适应调整位置、右侧栏形态触发不了 slash 面板、切换形态偶发草稿丢失/不同步），并把 0.5.0 只在主输入形态上接的 rc.3 能力补到侧栏形态。
+
+### 修复
+
+- **悬浮形态 `/` `@` 候选与 `/model` `/permission` 弹层不能自适应位置（报障 #1）**：0.5.0 改为官方条目内联渲染后，官方 `bottom: calc(100% + 4px)` 的「向上长 + 只钳顶部」假设在悬浮卡片上不成立——卡片被拖到视口顶部时官方 `useAnchoredMaxHeight` 会把菜单压成 0 高，菜单也可能落到视口外。新增 `src/client/components/overlay-host.ts`：**只在 float / side 形态**把 overlay 锚点改为卡片内的固定定位自适应宿主（normal 形态几何完全不动），逐帧量卡片矩形，在卡片上/下/左/右四向选位（沿用 0.4.x 验收算法：优先能完整容纳、按空间取最大，都放不下时压缩到该侧空间并在菜单内滚动），菜单夹进视口、与卡片零交叠（极小窗口放不下最小可用尺寸时允许少量重叠，与 0.4.x 验收口径一致）、跟随悬浮拖动/缩放与窗口变化；官方条目的 DOM/键盘/焦点/无障碍与「点卡片内不关闭」语义保持原样（宿主仍在 `[data-composer-card]` 子树内，官方 dismiss 的 `closest` 判定不受影响）。官方 `useAnchoredMaxHeight` 的应用级上限在自适应宿主下改由 `--dci-overlay-maxh` 覆盖。
+- **右侧栏（side）形态 `/` 候选与弹层不可见（报障 #2）**：侧栏卡片铺满右侧栏 pane，官方绝对定位浮层被 pane 的 `overflow:auto` 裁剪。自适应宿主让浮层落到**右侧栏左侧的对话区**（`data-placement="left"`；该侧放不下时退上/下/右侧），完整在视口内、不遮编辑区；`/model`、`/permission` 与第三方 overlay 下拉条目同样生效。
+- **切换形态草稿丢失 / 不同步（报障 #3）**：
+  - 编辑器挂载不再从空文档起步：按「快照 / 实时文档 / 宿主草稿」三方对账——刷新页面、首次开启接管、切回会话、退出后再进入都以宿主草稿或实时镜像起步（0.5.0 的空起步会让首键顶掉持久化草稿）；
+  - 形态切换跨 React 树不是原子操作（侧栏 body 可能先挂载、主输入面下一拍才卸载）：新增同键挂载实例计数 + 实时文档镜像（`cm.ts` 的 `enterEditor` / `leaveEditor` + `liveDocs`），新实例先挂载时用实时文档而不是空/旧快照起步；
+  - 旧实例卸载不再回写过期文本：只有「仍持有该会话最新文档」的实例才 publish / 暂存快照，共享句柄（`editorCtlRef` / `viewRef`）按身份清理；
+  - 新增卸载时宿主读数（published / stale）区分「同一提交内重挂载的滞后回声」与「离开期间官方侧被外部改写」：滞后回声本地优先，外部改写（在官方输入框里改过、`/codinput` token 剥离、提交清空、其它插件 `setDraft`）宿主优先，不再互相吞字。
+- **发送按钮同帧丢输入**：发送手势的判空改用编辑器同步读取（`EditorControl.getDraft()`）。修复「最后一笔输入与点击发送落在同一帧」时 `draftRef` 还是上一拍的空文本、误走队列 Steer 导致消息不发的问题。
+- **侧栏形态补 rc.3 能力（0.5.0 遗漏）**：`conversation.composer.bar` 注入面里的 `retry` 与 `registerFileIntake` 经 `barinject.ts` 按会话转存给侧栏 body，`ContinueState` 抽到 `continuation.ts` 两处共用——侧栏形态现在也有官方**「继续生成 / 重试」主按钮**与**文档级粘贴路由**；开标签即启用时 bar 条目晚于侧栏 body 挂载也能等到注入面。契约自检 `check:popup` 增加对应断言。
+
+### 验证
+
+- `npm run check:popup` / `npm run build` / `npm run typecheck` 三门禁通过；`lib/client.js` 由当前源码重建（发布构建、无 sourcemap）。
+- 隔离宿主 `@deepseek-ai/dsh@0.2.2-rc.3` + 无头 Edge CDP 三形态探针（normal / float / side，`scripts/verify/probe.mjs`）**23/23 全通过**（`__dshCodinputErrs` 与 console 全空）：
+  - normal：`/` 候选在卡片上方（`bottom = card top − 4`、宽度 = 卡片宽），`/model` 弹层同官方几何，Esc 关闭；
+  - float（`floatY=16/655/floatX=12`）：自适应宿主 `data-mode="dd"` + `data-placement=bottom/top/right`，菜单 400px 高、完整在视口、与卡片零交叠、跟随拖动（拖动中重新选位 right→bottom）；`/model` 弹层同宿主；
+  - side：卡片在右侧栏 tab 内，`/` 候选与 `/model` 弹层 `data-placement=left`，菜单右边缘 772 ≤ pane 左边缘 775（落在对话区），400px 高不被裁剪；
+  - 草稿：normal→float→normal、normal→side（含关标签回 normal）编辑器与官方草稿一致；输入后 **18ms** 拖成悬浮（<500ms）不丢字；float→normal 拖回不丢字。
+- 桌面实机按 `TESTING.md` §8.1 目检（Continue 重试需真实失败轮次、侧栏文档级粘贴需真实剪贴板）。
+
+### 已知限制（0.5.1）
+
+- 自适应宿主只接管官方下拉形态（绝对定位、左右贴边的 `MenuView` / `PopupSelectView`）；第三方 overlay 条目若是自定义绝对定位浮层，仍由其自身几何决定。
+- 附件入口仍走插件草稿附件链路：桌面端拖**文件夹** / 非图片路径引用行为与官方输入框（bar 注入的 `addFiles`）不完全一致（0.5.0 起的既有范围）。
+- 悬浮 / 侧栏容器若被第三方以 `transform` 包裹（非常规布局），宿主会按实测包含块回补坐标；若该祖先同时 `overflow` 裁剪，浮层仍可能被裁（与官方 InputBar 内联浮层同源限制）。
+- 侧栏形态的 bar 注入面（`retry` / `registerFileIntake`）按**当前会话**转存：分栏里同时存在多个会话的 Codinput 标签时，非当前会话的标签不保证拿到这两个注入面（Continue/文档级粘贴在该标签内可能缺席）。
+
 ## [0.5.0] — 2026-11-14（含 rc.3 Continue/Retry、附件座、文档级粘贴补齐）
 
 补上 0.5.0 遗留的已知缺口（「还有什么已知的也要补上」），全部延续「能不复刻就不复刻」原则：
@@ -93,6 +126,7 @@
   - **行号三位预留**：仅 1 行时行号栏宽度即 39px（= `calc(3ch + 16px)`，默认等宽字体），证明 ≤999 行内不会随位数变化。
 - 桌面实机终检（用户侧）：强刷页面后按 `TESTING.md` §8.0 清单目检模型/推理选择器、`/model`、`/permission`、行号与悬停提示。
 
+[0.5.1]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.4.1...v0.5.0
 
 ## [0.4.1] — 2026-11-13

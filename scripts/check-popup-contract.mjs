@@ -102,9 +102,8 @@ if (!/registerFileIntake\(/.test(surface)) {
 if (!/continueState=|primaryRetries=\{primaryRetries\}/.test(surface) || !/onRetry=\{onRetry\}/.test(surface)) {
   errors.push('CodinputSurface must implement rc.3 primaryRetries and pass {primaryRetries, onRetry} to the Toolbar');
 }
-if (!bar.includes("'conversationContinuation'")) {
-  errors.push('CodinputBar must read the rc.3 conversationContinuation projection for Continue/Retry');
-}
+// Continue/Retry 信号自 0.5.1 起抽到共享读取面（bar 与侧栏形态共用，见第 8 节）：
+// bar 经 useContinueState 接入，投影键在 continuation.ts 里。
 if (!toolbar.includes('IconTriangleRightFillRegular') || !toolbar.includes("tBar('tool.continue')")) {
   errors.push('Toolbar must render the official continue triangle primitive and the host-locale continue label when primaryRetries');
 }
@@ -132,6 +131,57 @@ if (!toolbar.includes('onBeforeHostAction?.()')) {
 }
 if (!surface.includes('draftText={draftText}')) {
   errors.push('CodinputSurface must drive composer buttons from the local draft mirror (draftText)');
+}
+
+// ---- 7. float / side 形态：官方 overlay 自适应宿主 ----
+// 0.5.0 官方条目在 float（悬浮窗可拖到视口顶部）与 side（右侧栏 pane 裁剪）下失去
+// 官方「永远在视口底部」的定位假设；CodinputSurface 必须把 anchor 交给
+// useAdaptiveOverlayHost（normal 仍用官方 in-card 几何），并保留自适应宿主 CSS
+// 契约（fixed 宿主 + 由 --dci-overlay-maxh 覆盖官方 max-height 钳制）。
+const overlayHostUrl = new URL('../src/client/components/overlay-host.ts', import.meta.url);
+const overlayHost = await readFile(overlayHostUrl, 'utf8').catch(() => '');
+if (!overlayHost.includes('useAdaptiveOverlayHost')) {
+  errors.push('src/client/components/overlay-host.ts must export useAdaptiveOverlayHost (float/side adaptive overlay host)');
+}
+for (const token of ['choosePlacement', 'buildCandidates', 'SIDE_MAX_WIDTH', 'CARD_GAP']) {
+  if (!overlayHost.includes(token)) errors.push(`overlay-host.ts must keep the four-direction placement algorithm (missing ${token})`);
+}
+if (!surface.includes('useAdaptiveOverlayHost(') || !surface.includes('data-adaptive={overlayAdaptive')) {
+  errors.push('CodinputSurface must hand the overlay anchor to useAdaptiveOverlayHost and mark it data-adaptive');
+}
+if (!styles.includes('.dci-overlay-anchor[data-adaptive]') || !styles.includes('var(--dci-overlay-maxh')) {
+  errors.push('styles.ts must keep the adaptive overlay host rules (fixed host + --dci-overlay-maxh override)');
+}
+
+// ---- 8. 形态功能对等：side 形态 rc.3 信号 + 发送同步读 ----
+// side 形态的输入面在侧栏树里，拿不到 bar 条目注入面——必须经 barinject 转存、
+// 用共享 continuation 读取面合成 continueState，并注册文档级粘贴路由；否则侧栏
+// 永远没有「继续生成」、未聚焦编辑器时粘贴文件没有落点（0.5.0 的缺口）。
+const sidebarUrl = new URL('../src/client/sidebar.tsx', import.meta.url);
+const barinjectUrl = new URL('../src/client/barinject.ts', import.meta.url);
+const continuationUrl = new URL('../src/client/continuation.ts', import.meta.url);
+const [sidebar, barinject, continuation] = await Promise.all([
+  readFile(sidebarUrl, 'utf8'),
+  readFile(barinjectUrl, 'utf8').catch(() => ''),
+  readFile(continuationUrl, 'utf8').catch(() => ''),
+]);
+if (!bar.includes('setBarInjected(')) {
+  errors.push('CodinputBar must stash the rc.3 bar inject face for the side form (setBarInjected)');
+}
+if (!sidebar.includes('useBarInjected(') || !sidebar.includes('continueState={continueState}') || !sidebar.includes('registerFileIntake={barInjected?.registerFileIntake}')) {
+  errors.push('SidebarCodinputBody must consume the stashed bar inject face: continueState + registerFileIntake');
+}
+if (!continuation.includes("'conversationContinuation'") || !continuation.includes('pendingHumanInput') || !bar.includes('useContinueState(')) {
+  errors.push('bar/continuation must read the rc.3 conversationContinuation + inbox projections for Continue/Retry');
+}
+if (!continuation.includes('useContinueState') || !sidebar.includes("from './continuation'")) {
+  errors.push('Sidebar and bar must share the rc.3 continue/retry read face (continuation.ts)');
+}
+if (!barinject.includes('retry') || !barinject.includes('registerFileIntake')) {
+  errors.push('barinject.ts must relay retry + registerFileIntake');
+}
+if (!editorPane.includes('getDraft(): string') || !surface.includes('editorCtlRef.current?.getDraft()')) {
+  errors.push('EditorPane control must expose getDraft() and the send gesture must read it synchronously (same-frame typing+send race)');
 }
 
 if (errors.length > 0) {

@@ -58,7 +58,7 @@
 不重画官方已有的组件，而是镜像官方条目/平台原语：
 
 - **模型与推理等级**：直接渲染官方 `ModelSelect`（两段式根菜单、搜索、下钻、加载/失败条带、焦点归还）；读取与 `/model` 同一份官方模型目录。
-- **`/` `@` 与 `/model` `/permission` 弹层**：完全走官方触发管线，候选菜单与弹层由官方 `MenuView` / `PopupSelectView` 渲染，几何与官方输入框一致；`/codinput` 按字典序排入指令节首。
+- **`/` `@` 与 `/model` `/permission` 弹层**：完全走官方触发管线，候选菜单与弹层由官方 `MenuView` / `PopupSelectView` 渲染，普通形态几何与官方输入框一致；悬浮 / 侧栏形态由插件自适应宿主四向选位（不被容器裁剪、不遮编辑区，侧栏落在右侧栏左侧对话区），`/codinput` 按字典序排入指令节首。
 - **权限 / 计划**：官方三档权限（含完全权限风险确认）与计划 chip，按官方座位镜像。
 - **悬停提示**：宿主官方 `Tooltip` 原语（500 ms、portal、`aria-describedby`）。
 - **附件行**：官方 `ComposerAttachments` 条目本体——缩略图/原图灯箱、文件卡、上传进度与失败重试、拖放浮层与文档级拖放监听。
@@ -149,7 +149,7 @@ dsh plugin --profile desktop add link:/abs/path/to/DSH-Codinput
 ```jsonc
 {
   "dependencies": {
-    "dsh-codinput": "^0.5.0"          // 本地开发用 "link:/abs/path/to/DSH-Codinput"
+    "dsh-codinput": "^0.5.1"          // 本地开发用 "link:/abs/path/to/DSH-Codinput"
   },
   "dsh": {
     "profile": {

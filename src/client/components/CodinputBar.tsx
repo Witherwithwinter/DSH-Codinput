@@ -21,6 +21,8 @@ import { createPortal } from 'react-dom';
 import type { SessionMaybeStandard, SlotRegisterOptions } from '../host-types';
 import { loadPrefs, savePrefs, subscribePrefs, type CodinputPrefs } from '../prefs';
 import { useSidebarInputCarried } from '../sideinput';
+import { setBarInjected, clearBarInjected } from '../barinject';
+import { useContinueState } from '../continuation';
 import { CodinputBall } from './ExpandBall';
 import { CodinputSurface } from './CodinputSurface';
 import { useStableKit } from './slotEntry';
@@ -52,46 +54,27 @@ interface BarInjected {
 /** 槽位作用域里的 chat 会话钩子（ui-session chat 源贡献）。 */
 type BarProps = BarOwner & BarInjected & SessionMaybeStandard & { useChat?: <S>(sel: (s: unknown) => S) => S };
 
-/**
- * 安全读投影（rc.3 的 useProjection 支持选择器；旧宿主可能不认识该 key）。
- * 调用序必须稳定：hook 本身无条件调用，只有内部 try/catch 兜错。
- */
-function useSafeProjection<T>(useProjection: ((key: string, selector?: (value: any) => T) => T | undefined) | undefined,
-  key: string, selector?: (value: any) => T): T | undefined {
-  try {
-    return useProjection?.(key, selector);
-  } catch {
-    return undefined;
-  }
-}
 
 export function CodinputBar(props: BarProps): JSX.Element | null {
   const { variant, blocked, disabled, placeholder, sessionId, useInput, inputActions, useProjection, useChat, useSession } = props;
   const state = useInput((s) => s);
-  // ---- rc.3「继续生成 / 重试」信号（官方 primaryRetries 的输入面） ----
-  // 官方：retryableFailure = useProjection('conversationContinuation')，
-  // pendingHumanInput = inbox 里仍有用户待输入项；两者与 historyOpen /
-  // submissionPending / removed / subagent 一起决定主按钮是否变「继续生成」。
-  const retry = props.retry;
-  const retryableFailure = useSafeProjection(useProjection as never, 'conversationContinuation') as number | undefined;
-  const pendingHumanInput = useSafeProjection(useProjection as never, 'inbox', (inbox: any) => (
-    inbox?.['next-step']?.some((message: any) => message?.source?.kind === 'user') ?? false
-  )) === true;
-  const sessionSubagent = useSession ? useSession((s: any) => s?.subagent ?? null) : null;
-  const sessionHistoryOpen = useSession ? useSession((s: any) => s?.openState === 'open') === true : false;
-  const sessionSubmissionPending = useSession
-    ? useSession((s: any) => (s?.pendingSubmissions?.length ?? 0) > 0) === true
-    : false;
-  const sessionRemoved = useSession ? useSession((s: any) => s?.removed === true) === true : false;
-  const continueState = {
-    retry,
-    retryableFailure: typeof retryableFailure === 'number' ? retryableFailure : undefined,
-    pendingHumanInput,
-    historyOpen: sessionHistoryOpen,
-    submissionPending: sessionSubmissionPending,
-    removed: sessionRemoved,
-    subagentActive: sessionSubagent !== null,
-  };
+  // ---- rc.3「继续生成 / 重试」信号（与侧栏形态共用同一读取面） ----
+  // 官方 primaryRetries 的输入面：conversationContinuation 投影 + inbox 待输入项
+  // + useSession 的 openState/pendingSubmissions/removed/subagent + bar 注入 retry。
+  // 抽到 continuation.ts 是因为 side 形态的输入面在侧栏树里，也要同一组信号。
+  const continueState = useContinueState({ retry: props.retry, useProjection, useSession });
+  // bar 注入面转存给侧栏形态：side 时输入面渲染在另一棵 React 树，拿不到
+  // retry / registerFileIntake（官方只注入 bar 条目）。本条目在 side 形态仍
+  // 挂载（渲染唤回小球），故在挂载期把注入面按会话转存（见 barinject.ts）。
+  useEffect(() => {
+    const face = {
+      retry: props.retry,
+      registerFileIntake: props.registerFileIntake,
+      occurrence: props.occurrence ?? 'main',
+    };
+    setBarInjected(sessionId, face);
+    return () => clearBarInjected(sessionId, face);
+  }, [sessionId, props.retry, props.registerFileIntake]);
   const occurrence: 'main' | 'embedded' = props.occurrence ?? 'main';
   // conversation.input.left/.right 第三方条目的 standard props 原样面：宿主给
   // 本条目的 kit（standard 全集）减去 owner props——enhancer ✨/🎤 等按钮与

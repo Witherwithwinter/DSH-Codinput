@@ -58,7 +58,7 @@ Switching forms, leaving and re-entering via `/codinput`, disabling the plugin o
 Rather than re-drawing what the host already ships, the official entries and platform primitives are mirrored:
 
 - **Model and reasoning effort**: renders the official `ModelSelect` itself (two-level root menu, search, drill-down, loading/failure strips, focus handoff), backed by the same official model directory as `/model`.
-- **`/` `@` and the `/model` / `/permission` popups**: the full official trigger pipeline — candidates and popups are rendered by the official `MenuView` / `PopupSelectView`, with the same geometry as the official composer; `/codinput` is slotted alphabetically at the head of the commands section.
+- **`/` `@` and the `/model` / `/permission` popups**: the full official trigger pipeline — candidates and popups are rendered by the official `MenuView` / `PopupSelectView`; geometry matches the official composer in normal form, while float/side form uses the plugin's adaptive host that picks the best side around the card (never clipped, never covering the editor, and landing in the chat area left of the right sidebar), with `/codinput` slotted alphabetically at the head of the commands section.
 - **Permission / plan**: the official three permission presets (including the full-access risk confirmation) and the plan chip, mirrored from their official seats.
 - **Hover tooltips**: the host's official `Tooltip` primitive (500 ms, portal, `aria-describedby`).
 - **Attachment rail**: the official `ComposerAttachments` entry itself — thumbnails / original-image lightbox, file cards, upload progress and failure retry, drop overlay and document-level drop listeners.
@@ -149,7 +149,7 @@ To pin a version in the profile or maintain it by hand, the equivalent of **Meth
 ```jsonc
 {
   "dependencies": {
-    "dsh-codinput": "^0.5.0"          // local development: "link:/abs/path/to/DSH-Codinput"
+    "dsh-codinput": "^0.5.1"          // local development: "link:/abs/path/to/DSH-Codinput"
   },
   "dsh": {
     "profile": {

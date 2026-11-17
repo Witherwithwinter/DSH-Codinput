@@ -39,6 +39,12 @@ import {
   clearActiveEditorHooks,
   takeEditorSnapshot,
   putEditorSnapshot,
+  readEditorDoc,
+  rememberEditorDoc,
+  enterEditor,
+  leaveEditor,
+  rememberDetachedHost,
+  takeDetachedHost,
   externalAnnotation,
 } from '../cm';
 import { reportTrack, arbitrateForMenu, adjudicateSpace } from '../triggers';
@@ -52,6 +58,11 @@ export interface EditorControl {
   flush(): void;
   /** flush + 用当前光标重新上报触发管线（pick/claim 的 draftRev CAS 需要）。 */
   flushAndTrack(): void;
+  /**
+   * 同步读编辑器里最新文本（本地事实源）。界面侧的 draftRef 只跟 rAF 回调更新，
+   * 「最后一笔输入 + 同一帧点发送」会读到上一拍的旧值（误判空草稿走 Steer）。
+   */
+  getDraft(): string;
 }
 
 export interface EditorPaneProps {
@@ -125,6 +136,11 @@ export function EditorPane(props: EditorPaneProps): JSX.Element {
   const latestTextRef = useRef('');
   /** 最近一次同步给宿主的草稿（外部回写的比对基准：相等即「自己的回声/过期投影」）。 */
   const lastPublishedRef = useRef('');
+  /**
+   * 挂载时本地文档已领先并立即补写给宿主：宿主 prop 在回声到达前可能仍是补写前
+   * 的旧值。对账必须忽略这一次「过期回声」，否则会把刚恢复的本地文档顶回旧值。
+   */
+  const supersededHostDraftRef = useRef<string | null>(null);
   /** 外部回写 effect 用的同步口（挂载 effect 内填充；避免两处闭包重复实现）。 */
   const flushRef = useRef<() => void>(() => {});
   /** 空闲同步定时器。 */
@@ -256,6 +272,8 @@ export function EditorPane(props: EditorPaneProps): JSX.Element {
         // O(n) 的整篇替换（600 行 ≈ 52 ms），连按 Enter/Backspace 时每键
         // 一次会把主线程占满——这正是「长按换行卡顿」的根因。
         latestTextRef.current = text;
+        // 实时镜像：同会话的重叠挂载要据此拿到最新文档（而不是空/旧快照）。
+        rememberEditorDoc(key, text);
         scheduleIdlePublish();
       },
       onCaret: (text: string, caret: number): void => {
@@ -300,23 +318,72 @@ export function EditorPane(props: EditorPaneProps): JSX.Element {
     };
     // 绑定本实例的逻辑回调（模块级单槽，恢复旧 state 时也走当前实例）。
     setActiveEditorHooks(hooks);
-    // 按会话取回上次离开时的编辑器（含撤销历史）；没有则新建。
+    // ---- 挂载对账：快照 / 实时文档 / 宿主草稿 ----
+    // 两个不变量：
+    // 1. 同键重叠挂载（形态切换跨 React 树，旧实例尚未卸载）：宿主草稿 props 可能
+    //    还是旧投影，实时文档镜像才是最新本地内容 —— 本地优先，并立即补写宿主；
+    // 2. 干净挂载（无重叠：刷新页面 / 首次开启接管 / 切回会话 / 退出后再进入）：
+    //    官方输入机是唯一事实源。快照存在且与宿主草稿不一致 = 离开期间官方侧被
+    //    外部改写（在官方输入框里改过、命令 token 剥离、提交清空……），必须让宿主赢；
+    //    一致则沿用快照（保住撤销历史 / 选区 / 滚动）。
+    // 反例（0.5.0）：全新挂载一律从空文档起步 + 挂载时把 lastPublished 对齐宿主，
+    // 对账 effect 早退 —— 编辑器空着而宿主有草稿，首键就把持久化草稿顶掉。
+    const concurrent = enterEditor(key);
+    const hostAtMount = props.state?.draft ?? '';
     const restored = takeEditorSnapshot(key);
+    const liveDoc = readEditorDoc(key);
+    const snapshotDoc = restored === undefined ? undefined : restored.state.doc.toString();
+    const localDoc = concurrent
+      ? (liveDoc ?? snapshotDoc ?? hostAtMount)
+      : (snapshotDoc ?? liveDoc ?? hostAtMount);
+    // 上次卸载时记录的宿主读数：判「同一提交重挂载的滞后回声」还是「离开期间
+    // 宿主被外部改写」。
+    const detached = takeDetachedHost(key);
+    // 本地优先的判定：
+    // - 重叠窗口（新实例先挂载，旧实例尚未卸载）：宿主 props 一定可能滞后；
+    // - 无快照可作基准的新鲜挂载（刷新 / 首次启用）：以实时镜像或宿主起步；
+    // - 宿主 props 恰是旧实例 flush 前的值（同一提交内重挂载的滞后投影）。
+    // 其余「干净挂载 + 快照」情形宿主优先：快照与宿主不一致 = 离开期间被外部改写。
+    // 滞后回声窗口：只认「同一提交内重挂载」的瞬间（属性/大小与旧投影相同）。
+    // 超过窗口的记录是历史快照——期间用户可能已在官方输入框里把草稿改回旧的
+    // stale 值，此时再本地优先会把已删除的尾巴复活（/codinput 退出后删字再进入）。
+    const staleEcho = detached !== undefined
+      && Date.now() - detached.at < 300
+      && hostAtMount === detached.stale
+      && detached.stale !== detached.published;
+    const adoptLocal = concurrent || snapshotDoc === undefined || staleEcho;
+    const seedDoc = adoptLocal ? localDoc : hostAtMount;
+    const reuseSnapshot = restored !== undefined && seedDoc === snapshotDoc;
     const view = new EditorView({
-      state: restored?.state ?? createEditorState(createEditorExtensions({
-        lineNumbers: prefs.lineNumbers,
-        fontFamily: prefs.fontFamily,
-        placeholder,
-        editable: true,
-      }), ''),
+      state: reuseSnapshot && restored !== undefined
+        ? restored.state
+        : createEditorState(createEditorExtensions({
+          lineNumbers: prefs.lineNumbers,
+          fontFamily: prefs.fontFamily,
+          placeholder,
+          editable: true,
+        }), seedDoc),
       parent: host,
     });
-    if (restored) view.scrollDOM.scrollTop = restored.scrollTop;
+    if (reuseSnapshot && restored !== undefined) view.scrollDOM.scrollTop = restored.scrollTop;
     viewRef.current = view;
     // 本地镜像初始化：编辑器文档为准；宿主草稿只作为「已同步」基准。
     latestTextRef.current = view.state.doc.toString();
-    lastPublishedRef.current = props.state?.draft ?? '';
-    if (props.editorCtlRef) props.editorCtlRef.current = { flush: flushDraft, flushAndTrack };
+    lastPublishedRef.current = hostAtMount;
+    rememberEditorDoc(key, latestTextRef.current);
+    // 本地领先（重叠窗口的滞后宿主投影 / 无快照但实时镜像更新 / 上次未同步尾巴）：
+    // 立即补写宿主，并记住被顶掉的旧值——回声到达前的那次对账要忽略它。
+    if (latestTextRef.current !== hostAtMount) {
+      supersededHostDraftRef.current = hostAtMount;
+      publish(latestTextRef.current);
+      // 宿主此刻可能还没就绪（publish 空转）：停手后补一次，保证最终一致。
+      scheduleIdlePublish();
+    } else {
+      supersededHostDraftRef.current = null;
+    }
+    // 控制面身份：重叠挂载时旧实例的卸载不得把新实例的控制面清空（见 cleanup）。
+    const ctl: EditorControl = { flush: flushDraft, flushAndTrack, getDraft: () => latestTextRef.current };
+    if (props.editorCtlRef) props.editorCtlRef.current = ctl;
     props.onDraftText?.(latestTextRef.current);
     // 行列指示按恢复后的选区初始化（否则要先动一下才显示真实位置）。
     const head = view.state.selection.main.head;
@@ -328,20 +395,35 @@ export function EditorPane(props: EditorPaneProps): JSX.Element {
       window.removeEventListener('pagehide', onPageHide);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       flushRef.current = () => {};
-      // 收尾：把本会话最后一版本地草稿写回**本会话**（mountActions），不是新会话。
       clearIdle();
-      if (mountActions && latestTextRef.current !== lastPublishedRef.current) {
-        publish(latestTextRef.current, mountActions);
+      // ---- 收尾不变量：只有「仍是该会话最新文档」的实例才允许回写 ----
+      // 形态切换不是原子的：新实例（侧栏 body）可能先挂载、并已用实时文档继续
+      // 编辑，旧实例（主输入面）下一拍才卸载。此时旧实例的 latestText 是「过去」：
+      // 回写宿主会顶掉新实例的内容，暂存快照还会在下次挂载时把它又盖回来。
+      // 判据：实时镜像已被刷新成别的文档（新实例在编辑）=> 本实例已过期，
+      // 宿主/快照都不写；新实例卸载时会负责它自己的那一份。
+      const liveDocNow = readEditorDoc(key);
+      if (liveDocNow === undefined || liveDocNow === latestTextRef.current) {
+        rememberEditorDoc(key, latestTextRef.current);
+        // 把本会话最后一版本地草稿写回**本会话**（mountActions），不是新会话。
+        const staleHost = lastPublishedRef.current;
+        if (mountActions && latestTextRef.current !== lastPublishedRef.current) {
+          publish(latestTextRef.current, mountActions);
+        }
+        // 记录「宿主应持有 / 写前投影」：同树重挂载的 props 滞后回声据此识别。
+        rememberDetachedHost(key, latestTextRef.current, staleHost);
+        // 暂存编辑器状态（撤销栈 + 选区 + 文档 + 滚动），下次挂载原样装回。
+        putEditorSnapshot(key, { state: view.state, scrollTop: view.scrollDOM.scrollTop });
       }
       if (trackRafRef.current !== 0) {
         cancelAnimationFrame(trackRafRef.current);
         trackRafRef.current = 0;
       }
       pendingTrackRef.current = null;
-      if (props.editorCtlRef) props.editorCtlRef.current = null;
-      viewRef.current = null;
-      // 暂存编辑器状态（撤销栈 + 选区 + 文档 + 滚动），下次挂载原样装回。
-      putEditorSnapshot(key, { state: view.state, scrollTop: view.scrollDOM.scrollTop });
+      // 重叠挂载时新实例可能已经接管了这两个共享句柄：按身份判断，别清别人的。
+      if (props.editorCtlRef && props.editorCtlRef.current === ctl) props.editorCtlRef.current = null;
+      if (viewRef.current === view) viewRef.current = null;
+      leaveEditor(key);
       view.destroy();
       clearActiveEditorHooks(hooks);
     };
@@ -357,7 +439,21 @@ export function EditorPane(props: EditorPaneProps): JSX.Element {
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
-    if (hostDraft === lastPublishedRef.current) return;
+    if (hostDraft === lastPublishedRef.current) {
+      // 宿主已对齐本地：挂载补写后的「过期回声」窗口到此结束。
+      supersededHostDraftRef.current = null;
+      return;
+    }
+    // 挂载时本地文档领先并已立即补写宿主：host prop 的这次旧值只是补写前的过期
+    // 回声（不是外部改写），忽略它；若补写当时宿主还没就绪，这里补同步一次。
+    if (hostDraft === supersededHostDraftRef.current) {
+      // 一次性窗口：只忽略「补写后的第一次对账」看到的旧值；之后再出现同值
+      // 就是真正的外部改写，按常规对账处理（例如宿主回退到旧草稿）。
+      supersededHostDraftRef.current = null;
+      if (latestTextRef.current !== lastPublishedRef.current) flushRef.current();
+      return;
+    }
+    supersededHostDraftRef.current = null;
     // 本地还有未同步文本（用户正在输入）：外部整篇写入不覆盖用户输入，先把本地
     // 草稿交给宿主（宿主会以本插件文本回流；其它插件的整篇 setDraft 让位）。
     // pick/claim/提交清空等宿主动作前都会先 flushAndTrack，到这里时不会 dirty。
@@ -392,6 +488,8 @@ export function EditorPane(props: EditorPaneProps): JSX.Element {
       selection: { anchor: caretAt },
       scrollIntoView: true,
     });
+    // 外部回写同样是本地文档：刷新实时镜像（重叠挂载的下一实例以它起步）。
+    rememberEditorDoc(key, hostDraft);
     liveRef.current.onDraftText?.(hostDraft);
   }, [hostDraft]);
 
