@@ -5,6 +5,8 @@
 真实操作页面，验证三形态（normal / float / side）下官方 slash 菜单与 /model 弹层的
 几何、自适应选位，以及草稿跨形态保留。
 
+另有独立一条**会话切换探针** `probe-switch.mjs`：切走再切回同一会话后，官方 `/` 候选菜单必须仍能唤出（0.5.2 回归），见下文「会话切换探针」。
+
 - 宿主版本：@deepseek-ai/dsh@0.2.2-rc.3（与 README/TESTING 的目标桌面版同版本）
 - 浏览器：系统 Edge（默认 C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe）
 - 依赖：Node >= 22（全局 fetch/WebSocket）；不装 playwright、不装新 npm 包
@@ -33,6 +35,9 @@
     node scripts/verify/probe.mjs --keep-open
     node scripts/verify/probe.mjs --headful
 
+    # 会话切换回归：A→B→A 后 slash 菜单是否仍能唤出（独立 home、端口 3098）
+    node scripts/verify/probe-switch.mjs
+
 **重建 lib/client.js 后必须重启宿主**（或直接用自包含模式，每次都会新起宿主）：
 宿主在启动时从 link 路径装载插件产物，刷新页面不会换一份新 bundle。
 
@@ -50,6 +55,15 @@
 | DCI_HOST_PORT | 3099 | 自起宿主端口 |
 | CDP_PORT | 9342 | Edge DevTools 端口 |
 | CODINPUT_EDGE | 系统 Edge 路径 | 浏览器可执行文件 |
+
+## 会话切换探针（probe-switch.mjs）
+
+复现并卡住 0.5.2 修复的回归：宿主在会话「切走再切回」时会重建该会话的 binding / scope，官方触发管线控制器随之换代；插件镜像座位的 inject 结果若按 `sessionId` 永久缓存，`MenuView` 会一直订阅上一代已关闭的 menu store——`/` 菜单状态 open 但面板不出现（无报错，刷新页面恢复）。
+
+- 独立 `DSH_HOME`：`%TEMP%/dsh-verify-switch/home`（不与 `probe.mjs` 的单会话基线互相污染），宿主端口默认 3098。
+- 首次运行会自建默认 Workspace，并用**本地 mock Messages 端点** + `dsh headless` 各跑一轮，造出两个**非空**会话（blank 会话不出现在宿主侧栏名单里）；不联网、不消耗真凭据。
+- 断言：W1 首个会话 `/` 菜单 / W2 切到第二个会话后 / W3 **切回**（A→B→A，报障点）/ W4 再一轮往返 / W5 切回后 `/model` 弹层 / W6 无插件错误；结果写 `scripts/verify/out/switch-latest.json`。
+- 红/绿记录：未修复产物（v0.5.1）W3、W4 红（菜单 6s 内不出现）；修复产物 6/6 绿。
 
 ## 断言矩阵
 
@@ -86,8 +100,11 @@ data-mode="dd"、data-placement="top|bottom|left|right"，并用 CSS 变量 --dc
 
 ## 已知边界 / 排错
 
-- 隔离 DSH_HOME 无 API Key：/model 弹层内容为空态（「暂无可用模型」），但弹层本体是官方
-  PopupSelectView，几何/选位照常可断言；这是刻意不接入模型的最小环境。
+- 隔离宿主以**占位凭据**启动（`probe-host.mjs` 注入 `DEEPSEEK_API_KEY=dci-verify-placeholder`
+  与本地丢弃端口 `DEEPSEEK_BASE_URL=http://127.0.0.1:9`）：不读真实凭据、请求不出本机。
+  这样做是为了避开首次运行的凭据门——该模态会盖住输入面并吞掉探针的合成键入
+  （历史 N1/F/S 类偶发失败即此）。`/model` 弹层内容随宿主内置目录变化，断言只看弹层
+  本体（官方 PopupSelectView）的几何/选位。
 - 侧栏用快捷键 Ctrl+Shift+B 展开，再点侧栏指南页的 [data-sidebar-right-guide-entry="codinput"]
   打开 Codinput 标签（均为官方 UI，不走内部 store 注入）。
 - 形态切换的两条路径都覆盖：normal<->float 的**刷新路径**（写 dsh-codinput.prefs.v3 + reload，

@@ -52,6 +52,7 @@
 - [ ] 菜单打开时 ↑↓/Enter/Tab 由菜单消费；**菜单关闭时 Enter 是换行**（不被吞）
 - [ ] 鼠标点击候选能补全；卡片内按下不关闭菜单
 - [ ] 工具行 `plus` 按钮能程序化唤起 `/` 菜单
+- [ ] **切换会话后 slash 仍能唤出（0.5.2 回归点）**：至少两个有内容的会话，A→B→A（可再来一轮 A→B→A）后输入 `/` → 候选菜单每次都在；同一轮往返后 `/model`、`/permission` 弹层也照常打开。该 bug **不报错**（`__dshCodinputErrs` 为空、面板就是不出现，刷新页面恢复），所以「没报错」不算通过。自动化：`node scripts/verify/probe-switch.mjs`（W1–W6）。
 
 ## 4. 工具行控件
 
@@ -151,6 +152,16 @@ DSH_HOME=/tmp/dsh-rc-home /tmp/dsh-rc/node_modules/.bin/dsh web --port 3081 --no
 - [ ] **第三方 overlay 条目**：装 `dsh-context` → float / side 下 `/context` 弹层可打开（fixed/portal 类条目保持自身定位）。
 - [ ] **诊断**：`window.__dshCodinputErrs` 空；`.dci-overlay-anchor[data-adaptive]` 只有当前形态一个，空闲时 `visibility: hidden`。
 > **可选的隔离宿主自动化探针（0.5.1 起）**：`node scripts/verify/probe.mjs` 会自建隔离 `dsh web`（`@deepseek-ai/dsh@0.2.2-rc.3`）与无头 Edge，跑上面 normal / float / side / 草稿四项断言并输出 `scripts/verify/out/latest.json` + 截图（零 npm 依赖；本机需已装 rc.3 CLI 与 Edge，详见 `scripts/verify/README.md`）。它替代不了下面的人工清单（桌面语音/真实剪贴板/真机视觉仍要目检），但可直接卡住本次修复的几何与草稿回归。
+
+## 8.2 0.5.2（切换会话后 slash 回归）验收
+
+**根因**：镜像座位的 inject 结果曾按 `sessionId` 永久缓存。宿主在会话重新驻留时重建该会话的 binding / scope，触发管线控制器换代；`MenuView` 仍订阅上一代已关闭的 menu store——菜单状态 open 但面板永不渲染（无报错）。修复后缓存按「会话绑定代」失效，同一代内仍只绑定一次。
+
+- [ ] **两轮会话往返**：打开两个有聊天记录的会话，A→B→A→B→A；每次回到会话后输入 `/`，候选菜单都要出现（空查询的完整分组）。
+- [ ] **其他镜像座位**：往返切换后 `/model`、`/permission` 打开正常；模型座 / 权限座控件不空白、不显示旧会话的值；附件行照常渲染。
+- [ ] **形态无关**：同样往返在悬浮（拖成悬浮卡）与侧栏（Codinput 标签）形态下各做一遍，菜单仍出现。
+- [ ] **诊断口径**：不要以「没报错」当通过——该 bug 全程无异常；以面板是否出现为准。
+- 自动化：`node scripts/verify/probe-switch.mjs`（W1–W6；首次运行自建独立 `DSH_HOME` 的 Workspace，并用本地 mock 模型跑两次 `dsh headless` 造两个非空会话；与 `probe.mjs` 的隔离 home 分开）。
 
 ## 8. 0.3.8 / 0.3.9 / 0.4.0 新功能与回归
 

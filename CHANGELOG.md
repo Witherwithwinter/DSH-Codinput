@@ -2,6 +2,20 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.5.2] — 2026-11-18（修复切换会话后 `/` 候选面板不再出现）
+
+### 修复
+
+- **切换会话两次后 slash 面板唤不出（报障：对话 1 → 对话 2 → 对话 1 后输入 `/` 无菜单）**：根因是镜像座位的 inject 结果缓存（`src/client/components/slotEntry.tsx` 的 `entryInjectCache`）只按 `sessionId` 缓存。宿主在会话重新驻留时会重建该会话的 scope / binding（`sessions.binding` 换新对象），官方触发管线控制器随之换代；缓存的 inject 面仍指向上一代控制器——编辑器在**新**控制器的 menu store 上 track 出 open，`MenuView` 却订阅上一代已关闭的 store，于是「状态 open、面板永不渲染」（无任何报错，刷新页面即恢复）。现缓存按 **sessionId × 会话绑定代** 失效：代变即重新 inject。
+- 同一机制下所有镜像座位一并受益：overlay 座位里的 slash 菜单 / `/model`、`/permission` 弹层 / feedback 弹窗，以及模型座、权限/计划座、附件座；顺带修掉「inject 一次性失败被永久缓存」（同一代内仍只尝试一次，换代重试）。
+- 这类失效没有异常可抓（`__dshCodinputErrs` 全程为空、`slot.inject` 无诊断），不能以「没报错」判定正常；诊断口只反映 `slot.entry` / `slot.inject` 一类硬失败。
+
+### 验证
+
+- 新增 `scripts/verify/probe-switch.mjs`：隔离宿主 + 本地 mock Messages 端点 + `dsh headless` 造两个**非空**会话 + 无头 Edge，往返 A→B→A 与 A→B→A→B→A 后断言 `/` 菜单每次都在、切回后 `/model` 弹层照常打开。**红/绿双向验证**：未修复产物（v0.5.1）W3/W4 红（菜单 6s 内不出现，控制器状态却是 open），修复产物 6/6 全绿。
+- `npm run check:popup` / `npm run typecheck` / `npm run build` 三门禁通过；`lib/client.js` 由当前源码重建。
+- 原三形态探针 `scripts/verify/probe.mjs` 在修复产物上 **23/23 全通过**。运行中定位到该探针长期偶发失败（首帧/侧栏键入不落、清草稿失败）的真实原因：隔离宿主没有凭据时会弹「开始使用」凭据门，模态盖住输入面并吞掉合成键入。现 `scripts/verify/lib/probe-host.mjs` 给隔离宿主注入**占位凭据**（不读真实凭据、端点指向本机丢弃端口，不联网），该 flake 消失；用未修复产物对照亦复现同一 flake，与本次改动无关。
+
 ## [0.5.1] — 2026-11-17（修复 0.5.0 三处形态回归，补齐侧栏形态的 rc.3 能力）
 
 修复 0.5.0「官方条目镜像」改造后暴露的回归（用户报障：悬浮形态 slash 面板不能自适应调整位置、右侧栏形态触发不了 slash 面板、切换形态偶发草稿丢失/不同步），并把 0.5.0 只在主输入形态上接的 rc.3 能力补到侧栏形态。
@@ -126,6 +140,7 @@
   - **行号三位预留**：仅 1 行时行号栏宽度即 39px（= `calc(3ch + 16px)`，默认等宽字体），证明 ≤999 行内不会随位数变化。
 - 桌面实机终检（用户侧）：强刷页面后按 `TESTING.md` §8.0 清单目检模型/推理选择器、`/model`、`/permission`、行号与悬停提示。
 
+[0.5.2]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.4.1...v0.5.0
 

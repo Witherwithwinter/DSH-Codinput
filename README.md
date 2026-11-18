@@ -149,7 +149,7 @@ dsh plugin --profile desktop add link:/abs/path/to/DSH-Codinput
 ```jsonc
 {
   "dependencies": {
-    "dsh-codinput": "^0.5.1"          // 本地开发用 "link:/abs/path/to/DSH-Codinput"
+    "dsh-codinput": "^0.5.2"          // 本地开发用 "link:/abs/path/to/DSH-Codinput"
   },
   "dsh": {
     "profile": {

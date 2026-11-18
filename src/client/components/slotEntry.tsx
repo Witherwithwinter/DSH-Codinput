@@ -293,8 +293,37 @@ export function standardHookPropName(name: string): string {
 interface InjectBound {
   props: Record<string, unknown> | null;
   failed: boolean;
+  /**
+   * 本次 inject 结果所属的「会话绑定代」（Host 的 SessionBinding / Agent scope
+   * 对象）。Host 在会话重新驻留时会重建 scope 与 binding——切走再切回同一会话
+   * 就是最常见的触发路径。条目 inject 返回的控制器/服务面属于某一代，跨代复用
+   * 旧 props 会把条目订阅钉死在已 dispose 的实例上：slash 面板不出现的根因就是
+   * 「触发管线在**新**控制器的 menu store 上 open，而 MenuView 订阅的是上一代
+   * 已关闭的旧 store」——状态 open 但面板永远渲染不出来（控制台无报错）。
+   * 因此缓存必须按代失效，代变即重新 inject（失败结果同样按代重试）。
+   */
+  token: unknown;
 }
 const entryInjectCache = new WeakMap<object, Map<string, InjectBound>>();
+
+/**
+ * 会话绑定代标记：同一份驻留期间引用稳定，重新驻留时换新对象。
+ *
+ * 优先取 `sessions.binding`（Host 侧按它缓存每会话控制器，正是 inject 面漂移
+ * 的同一根轴）；服务未就绪或会话暂不可解析时退化为 `sessions.scope`，再退化
+ * 为 null——null 与任何真实对象都不相等，下一次能解析出来即重新 inject。
+ */
+function sessionGeneration(sessionId: string): unknown {
+  try {
+    const sessions = stash.sessions;
+    if (sessions === undefined) return null;
+    const binding = sessions.binding?.(sessionId);
+    if (binding !== undefined && binding !== null) return binding;
+    return sessions.scope?.(sessionId) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 function boundInject(entry: SlotEntryLike, sessionId: string): InjectBound {
   let perSession = entryInjectCache.get(entry);
@@ -302,9 +331,10 @@ function boundInject(entry: SlotEntryLike, sessionId: string): InjectBound {
     perSession = new Map();
     entryInjectCache.set(entry, perSession);
   }
+  const token = sessionGeneration(sessionId);
   const cached = perSession.get(sessionId);
-  if (cached) return cached;
-  let bound: InjectBound = { props: null, failed: false };
+  if (cached !== undefined && cached.token === token) return cached;
+  let bound: InjectBound = { props: null, failed: false, token };
   try {
     const face = entry.inject?.(sessionId);
     if (face && typeof face === 'object') {
@@ -317,11 +347,11 @@ function boundInject(entry: SlotEntryLike, sessionId: string): InjectBound {
         const hook = snapshotHookFor(source);
         if (hook) rest[standardHookPropName(name)] = hook;
       }
-      bound = { props: rest, failed: false };
+      bound = { props: rest, failed: false, token };
     }
   } catch (error) {
     diagError('slot.inject', error);
-    bound = { props: null, failed: true };
+    bound = { props: null, failed: true, token };
   }
   perSession.set(sessionId, bound);
   return bound;

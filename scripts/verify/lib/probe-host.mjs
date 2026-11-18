@@ -41,8 +41,17 @@ export function prepareHost(repo) {
 
 export function startHost(host) {
   return new Promise(resolvePromise => {
+    // A credential placeholder keeps the isolated Host off the first-run credential
+    // gate: that modal covers the composer and swallows the probe's synthetic typing
+    // (the historical N1/F/S flake). The endpoint is a local discard port, so no
+    // request ever leaves the machine and no real credential is read.
+    const isolatedEnv = Object.assign({}, process.env, {
+      DSH_HOME: host.hostHome.split('/').join('\\'),
+      DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY || 'dci-verify-placeholder',
+      DEEPSEEK_BASE_URL: process.env.DEEPSEEK_BASE_URL || 'http://127.0.0.1:9',
+    })
     const child = spawn(process.execPath, [host.bin, 'web', '--port', String(host.port), '--no-open'], {
-      env: Object.assign({}, process.env, { DSH_HOME: host.hostHome.split('/').join('\\') }),
+      env: isolatedEnv,
       cwd: host.hostHome,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
