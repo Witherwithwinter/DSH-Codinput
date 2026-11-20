@@ -67,19 +67,20 @@ alongside this repository's LICENSE file.
 
   - Markdown 渲染依赖的传递依赖（均随 bundle 内置；完整许可文本见各 npm 包内 LICENSE）：
     dagre-d3-es 7.0.14 (MIT)、lodash-es 4.18.1 (MIT)、marked 16.4.2 (MIT，
-    与既有 marked 15.0.12 并存)、marked 15.0.12 (MIT)、dompurify 3.4.17
-    (MPL-2.0 OR Apache-2.0，本项目按 Apache-2.0 条款使用)、roughjs 4.6.6 (MIT)、
+    Mermaid 嵌套版本，与顶层 marked 15.0.12 并存)、roughjs 4.6.6 (MIT)、
     dayjs 1.11.23 (MIT)、khroma 2.1.0 (MIT)、stylis 4.4.0 (MIT)、ts-dedent 2.3.0
     (MIT)、es-toolkit 1.53.2 (MIT)、@iconify/utils 3.1.7 (MIT)、
     @braintree/sanitize-url 7.1.2 (MIT)、d3 7.9.2 及 d3-* 子模块 (ISC；
     d3-ease 为 BSD-3-Clause，Copyright 2010-2026 Mike Bostock / 2001 Robert Penner)。
     以上各包版权归其上游贡献者所有。
 
-  构建期裁剪说明：Mermaid 仅内置 13 种常用图类型（flowchart / sequence / class /
-  state / er / gantt / pie / journey / gitGraph / info / mindmap / timeline），未内置
-  图类型在渲染时回退为「源码 + 错误提示」；ELK（elkjs，EPL-2.0 OR
-  GPL-3.0-or-later）与 cytoscape 布局依赖已被构建脚本排除，**未**随本包分发。
+  构建期裁剪说明：Mermaid 仅内置 13 个图加载器（12 类常用图表：flowchart-v2 /
+  flowchart-elk / sequence / classDiagram / stateDiagram / er / gantt / pie /
+  journey / gitGraph / info / mindmap / timeline），未内置图类型在渲染时回退为
+  「源码 + 错误提示」；ELK（elkjs，EPL-2.0 OR GPL-3.0-or-later）与 cytoscape
+  布局依赖已被构建脚本排除，**未**随本包分发。
 
-  以上版本为本仓库 v0.4.0 的 package-lock.json 锁定值（含 Markdown 渲染新增
-  依赖）。react / react-dom 为宿主平台模块（bundle external，未随本包分发），
-  esbuild / typescript 仅为构建期开发依赖，均不在内置清单内。
+  以上版本均与当前 package-lock.json（v0.5.3）锁定值核对一致，全部内置依赖均
+  声明在 devDependencies（终端用户安装 0 运行时传递依赖）。react / react-dom 与
+  @deepseek-ai/dsh-client-ui-primitives 为宿主平台模块（bundle external，未随
+  本包分发），esbuild / typescript 仅为构建期开发依赖，均不在内置清单内。
