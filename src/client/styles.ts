@@ -87,10 +87,7 @@ const CSS = `
 .dci-body[data-split="true"] .dci-preview { will-change: transform; }
 .dci-editor-wrap { position: relative; flex: 1 1 100%; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; }
 .dci-editor-wrap[data-solo="true"] { flex-basis: 100%; }
-.dci-cm-host { flex: 1; min-height: 0; overflow-y: auto; }
-.dci-cm-host .cm-editor { height: 100%; background: transparent; }
-.dci-pos { position: absolute; right: 10px; bottom: 6px; font-size: 11px; color: var(--dsw-alias-label-caption, currentColor); opacity: 0.75;
-  pointer-events: none; font-variant-numeric: tabular-nums; z-index: 3; }
+.dci-cm-host { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
 /* Markdown 排版（.dci-preview 预览排版 + .dci-md 扩展块）已迁到
    src/client/markdown/styles.ts，由本文件末尾拼接 markdownStyles 注入。 */
@@ -197,12 +194,6 @@ const CSS = `
 
 .dci-empty { padding: 10px; color: var(--dsw-alias-label-tertiary, currentColor); text-align: left; }
 
-.dci-confirm { min-width: 0; padding: 8px; }
-.dci-confirm > label { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; color: var(--dsw-alias-label-primary, inherit);
-  cursor: pointer; font-size: 13px; line-height: 20px; }
-.dci-confirm > label input { flex: none; width: 16px; height: 16px; margin: 2px 0 0;
-  accent-color: var(--dsw-alias-button-primary-fill, currentColor); cursor: pointer; }
-
 /* ===== 模型/推理等级 cell 行（官方 ModelSelection .cell）===== */
 .dci-cell { box-sizing: border-box; width: auto; min-width: 100%; height: 40px; color: var(--dsw-alias-label-primary, inherit);
   cursor: pointer; text-align: left; background: transparent; border: none; border-radius: 10px;
@@ -212,21 +203,6 @@ const CSS = `
 .dci-cellValue { text-overflow: ellipsis; white-space: nowrap; text-align: right; min-width: 0;
   color: var(--dsw-alias-label-tertiary, currentColor); flex: auto; overflow: hidden; }
 .dci-cellChevron { color: var(--dsw-alias-label-tertiary, currentColor); flex: none; display: inline-flex; }
-
-/* ===== 完全权限确认（官方 RiskConfirmation 语义）===== */
-.dci-confirm-warning { display: flex; align-items: flex-start; gap: 10px; color: var(--dsw-alias-label-secondary, currentColor);
-  font-size: 14px; line-height: 22px; padding: 6px 8px 0; }
-.dci-confirm-warning svg { flex: none; margin-top: 2px; color: var(--dsw-alias-state-error-primary, #d54941); }
-.dci-confirm-warning p { margin: 0; }
-.dci-confirm-ack { display: flex; align-items: flex-start; gap: 10px; margin: 14px 8px 0; cursor: pointer;
-  color: var(--dsw-alias-label-primary, inherit); font-size: 14px; line-height: 22px; }
-.dci-confirm-ack input { flex: none; width: 16px; height: 16px; margin: 3px 0 0;
-  accent-color: var(--dsw-alias-button-primary-fill, currentColor); cursor: pointer; }
-.dci-btn { border: 1px solid var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 22%, transparent)); border-radius: 10px;
-  background: transparent; color: inherit; padding: 6px 14px; cursor: pointer; font-size: 14px; line-height: 20px; }
-.dci-btn[data-primary="true"] { background: var(--dsw-alias-button-primary-fill, color-mix(in srgb, currentColor 85%, transparent));
-  color: var(--dsw-alias-label-primary-foreground, #fff); border-color: transparent; }
-.dci-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* ===== 草稿附件轨（官方 ComposerAttachments/AttachmentRail/FileCard 逐值复刻）=====
  * 值取自官方 dsh-client-ui-attachment：轨道 gap 10 / 隐藏滚动条 / 64px 项；

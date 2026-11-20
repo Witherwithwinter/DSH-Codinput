@@ -78,109 +78,11 @@ export function IconEye({ size, className }: IconProps): JSX.Element {
   );
 }
 
-export function IconTerminalSquare({ size, className }: IconProps): JSX.Element {
-  return svg(
-    <>
-      <path d="m7 11 2-2-2-2" />
-      <path d="M11 13h4" />
-      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-    </>,
-    size,
-    className,
-  );
-}
-
-export function IconPaperclip({ size, className }: IconProps): JSX.Element {
-  return svg(
-    <path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551" />,
-    size,
-    className,
-  );
-}
-
-export function IconShield({ size, className }: IconProps): JSX.Element {
-  return svg(
-    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />,
-    size,
-    className,
-  );
-}
-
-export function IconChevronDown({ size, className }: IconProps): JSX.Element {
-  return svg(<path d="m6 9 6 6 6-6" />, size, className);
-}
-
-export function IconArrowUp({ size, className }: IconProps): JSX.Element {
-  return svg(
-    <path d="m5 12 7-7 7 7" />,
-    size,
-    className,
-  );
-  // 竖线由外层圆形按钮构图补足：这里仅箭头，竖线单独画在按钮内。
-}
-
-export function IconArrowUpFull({ size, className }: IconProps): JSX.Element {
-  return svg(
-    <>
-      <path d="m5 12 7-7 7 7" />
-      <path d="M12 19V5" />
-    </>,
-    size,
-    className,
-  );
-}
-
-export function IconStop({ size, className }: IconProps): JSX.Element {
-  return svg(<rect x="7" y="7" width="10" height="10" rx="1.5" />, size, className);
-}
-
 export function IconX({ size, className }: IconProps): JSX.Element {
   return svg(<path d="M18 6 6 18M6 6l12 12" />, size, className);
 }
 
-export function IconFile({ size, className }: IconProps): JSX.Element {
-  return svg(
-    <>
-      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
-      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-    </>,
-    size,
-    className,
-  );
-}
-
-export function IconFolder({ size, className }: IconProps): JSX.Element {
-  return svg(
-    <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />,
-    size,
-    className,
-  );
-}
-
-export function IconSearch({ size, className }: IconProps): JSX.Element {
-  return svg(
-    <>
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-    </>,
-    size,
-    className,
-  );
-}
-
 // ---------- 官方图标（路径逐字取自宿主 primitives / ui-conversation，保证与官方输入框一致） ----------
-
-/** 官方 IconPaperclipOutline16（slash 添加·文件 补位条目的 glyph；官方为 fill 路径自带描边轮廓）。 */
-export function IconPaperclipOfficial({ size }: { size?: number }): JSX.Element {
-  return (
-    <svg width={size ?? 14} height={size ?? 14} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M5.5498 9.75V5H6.9502V9.75C6.9502 10.3299 7.4201 10.7998 8 10.7998C8.5799 10.7998 9.0498 10.3299 9.0498 9.75V4.5C9.0498 2.9536 7.7964 1.7002 6.25 1.7002C4.7036 1.7002 3.4502 2.9536 3.4502 4.5V9.75C3.4502 12.2629 5.4871 14.2998 8 14.2998C10.5129 14.2998 12.5498 12.2629 12.5498 9.75V4H13.9502V9.75C13.9502 13.0361 11.2861 15.7002 8 15.7002C4.71391 15.7002 2.0498 13.0361 2.0498 9.75V4.5C2.04981 2.1804 3.9304 0.299806 6.25 0.299805C8.5696 0.299805 10.4502 2.1804 10.4502 4.5V9.75C10.4502 11.1031 9.3531 12.2002 8 12.2002C6.6469 12.2002 5.5498 11.1031 5.5498 9.75Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
 
 const OFFICIAL_SHIELD =
   'M8.20554 0.899994L14.7901 3.36857V7.01026C14.7901 12 11.0466 14.2103 8.20554 15.3C5.36446 14.2103 1.62012 12 1.62012 7.01026V3.36857L8.20554 0.899994Z';

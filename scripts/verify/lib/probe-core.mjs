@@ -86,12 +86,12 @@ export class Probe {
   }
 
   async editorScope() {
-    const side = await this.ev('(function () { return !!document.querySelector(".dci-surface[data-side] .cm-content") })()')
-    return side ? '[data-sidebar-right-tab] .cm-content' : '.dci-surface .cm-content'
+    const side = await this.ev('(function () { return !!document.querySelector(".dci-surface[data-side] .dci-cm-host") })()')
+    return side ? '[data-sidebar-right-tab]' : '.dci-surface'
   }
 
   async focusEditor(scope) {
-    const point = await this.ev('(function () { var el = document.querySelector(' + JSON.stringify(scope) + '); if (!el) return null; var r = el.getBoundingClientRect(); return { x: r.left + Math.min(30, r.width / 2), y: r.top + Math.min(12, r.height / 2) } })()')
+    const point = await this.ev('(function () { var scope = ' + JSON.stringify(scope) + '; var base = scope.replace(/\\s*\\.cm-content$/, ""); var el = (window.__dci && window.__dci.findInEditor(base, ".cm-content")) || document.querySelector(scope); if (!el) return null; var r = el.getBoundingClientRect(); return { x: r.left + Math.min(30, r.width / 2), y: r.top + Math.min(12, r.height / 2) } })()')
     if (!point) throw new Error('editor not found: ' + scope)
     await this.page.click(point.x, point.y)
     await sleep(140)
@@ -188,7 +188,7 @@ export class Probe {
   async closeSidebarTab() {
     const clicked = await this.ev('(function () { var btn = document.querySelector("[data-dockkit-tab-close]"); if (!btn) return false; btn.click(); return true })()')
     if (!clicked) throw new Error('no sidebar tab close button')
-    await this.page.waitFor('(function () { var s = document.querySelector(".dci-surface"); return !!s && s.getAttribute("data-side") !== "true" && document.querySelectorAll(".cm-editor").length === 1 })()', v => v === true, { label: 'side tab closed', timeoutMs: TIMEOUTS.switch })
+    await this.page.waitFor('(function () { var s = document.querySelector(".dci-surface"); if (!s || s.getAttribute("data-side") === "true") return false; var n = document.querySelectorAll(".cm-editor").length; var hs = document.querySelectorAll(".dci-cm-host"); for (var i = 0; i < hs.length; i++) if (hs[i].shadowRoot) n += hs[i].shadowRoot.querySelectorAll(".cm-editor").length; return n === 1 })()', v => v === true, { label: 'side tab closed', timeoutMs: TIMEOUTS.switch })
     await this.helpers()
     await sleep(400)
     return this.ev('(function () { return window.__dci.sidebarInfo() })()')

@@ -163,6 +163,15 @@ DSH_HOME=/tmp/dsh-rc-home /tmp/dsh-rc/node_modules/.bin/dsh web --port 3081 --no
 - [ ] **诊断口径**：不要以「没报错」当通过——该 bug 全程无异常；以面板是否出现为准。
 - 自动化：`node scripts/verify/probe-switch.mjs`（W1–W6；首次运行自建独立 `DSH_HOME` 的 Workspace，并用本地 mock 模型跑两次 `dsh headless` 造两个非空会话；与 `probe.mjs` 的隔离 home 分开）。
 
+## 8.3 0.5.3（长按回车/退格满帧流畅与全项目架构整改）验收
+
+**架构前提**：编辑器本体（`.cm-editor`）与行列指示器（`.dci-pos`）现挂载在 `.dci-cm-host` 的 open ShadowRoot 中，隔离宿主 `:has()` 级联与样式表重算；光标改用原生合成器光标（移除 `drawSelection()`），自动增高态在连按期间临时稳高。
+
+- [ ] **长对话下连按 Enter / Backspace 满帧流畅**：在有较多历史消息的会话里，分别测试「空草稿连按 Enter 自动增高」「连按 Backspace 删空」「200–600 行长草稿连按 Enter / Backspace」「分屏预览下连按」→ 画面与光标跟手无明显掉帧；松手后自动高度正确收敛、分屏预览停手 140 ms 后刷新且滚动同步正常。
+- [ ] **ShadowRoot 视觉与交互对等**：浅/深色主题下原生光标颜色与品牌强调色一致、选区高亮可读、滚动条样式与宿主一致、3 位定宽行号与当前行高亮正常、右下角行列指示器实时更新；在编辑器内直接 `Ctrl+V` 粘贴图片/文件仍正常进入草稿附件。
+- [ ] **触发词与快捷键不回归**：输入 `/`、`@` 候选菜单秒开、退格删掉 `/` 后菜单正常关闭；设置页字体输入框可清空再重输、自定义换行快捷键可替换当前选区；权限菜单在只读/禁用态不可点、完全权限确认弹窗居中不被裁切。
+- [ ] **自动化门禁**：`npm run prepublishOnly`（`check:popup` + `npm test` 10/10 + `build` + `typecheck`）、`node scripts/verify/probe.mjs`（23/23）、`node scripts/verify/probe-switch.mjs`（6/6）全通过且 `__dshCodinputErrs` 为空。
+
 ## 8. 0.3.8 / 0.3.9 / 0.4.0 新功能与回归
 
 **0.4.0 桌面宿主 0.2.2-rc.1 对齐与修复**

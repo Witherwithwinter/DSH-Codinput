@@ -3,32 +3,19 @@
  *
  * 契约分工：
  * - marked 侧（`renderMermaidBlock`）只产出占位 div：源码 base64 进
- *   `data-dci-md-mermaid`，内部先放一份「源码 + mermaid 标签」的可读降级内容
- *   （JS 还没激活时也能读源码，视觉上是普通代码块）；
+ *   `data-dci-md-mermaid`，内部先放一份「源码 + mermaid 标签」的可读降级内容；
  * - `activateMermaid`（基础渲染 `activateMarkdown` 调用，DOM 就绪后）：
- *   懒加载 mermaid（dynamic import，esbuild 内联进单文件；首次真正需要时才执行
- *   mermaid 模块初始化的开销，首屏不受影响）→ IntersectionObserver 可见时排队
- *   渲染 → `mermaid.render` → DOMPurify(SVG profile) 净化 → 替换 innerHTML。
- * - `securityLevel: 'strict'`（mermaid 自己也会净化 label）、`theme` 跟随宿主
- *   浅/深色并监听主题变化重渲染；失败回退「源码 + 错误样式」，不抛到页面。
- * - 构建期裁剪见 `scripts/build.mjs`：未内置的图类型被 stub，渲染时抛错走回退；
- *   ELK/cose 布局被移除（请求 ELK 时 mermaid 官方逻辑自动 fallback dagre）。
- *
- * 高度/滚动：SVG 由 CSS 约束 `max-width:100%; height:auto`；容器高度变化交给
- * 宿主滚动容器自然响应（不做滚动同步的额外干预，避免破坏预览分屏同步）。
+ *   懒加载 mermaid → IntersectionObserver 可见时排队渲染 → `mermaid.render` →
+ *   DOMPurify(SVG profile，经 `./sanitize`) 净化 → 替换 innerHTML。
+ * - 主题跟随：全局单实例引用计数观察者 + 逐节点 `data-dci-md-theme` 记录。
+ *   即使页面同时挂载多条含 Mermaid 的用户消息与预览面板，也只挂一个
+ *   `MutationObserver` 和一个 `matchMedia` 监听，且切换浅/深色时每个节点按
+ *   自身已渲染主题判定重绘，绝不因全局 `activeTheme` 先翻转而漏绘其它根。
  */
 
-import * as DOMPurifyModule from 'dompurify';
+import { t } from '../i18n';
 import { decodeBase64Utf8, encodeBase64Utf8, escapeHtml } from './heavy-shared';
-
-type DomPurifyLike = {
-  sanitize(html: string, options?: Record<string, unknown>): string;
-  isSupported?: boolean;
-};
-
-/** dompurify 的导出形状随打包条件漂移：默认导出与命名空间都兼容（同 基础渲染）。 */
-const DOMPurify = ((DOMPurifyModule as unknown as { default?: unknown }).default ??
-  DOMPurifyModule) as unknown as DomPurifyLike;
+import { sanitizeSvg } from './sanitize';
 
 type MermaidModule = typeof import('mermaid');
 type MermaidApi = MermaidModule['default'];
@@ -99,9 +86,8 @@ async function ensureMermaid(theme: MermaidTheme): Promise<MermaidApi> {
       theme,
       logLevel: 'fatal',
       fontFamily: 'inherit',
-      // mermaid 12 起 `flowchart.htmlLabels` 已废弃：必须用**全局 htmlLabels:false**
-      // 才会输出 SVG `<text>` 标签。否则节点文字落在 foreignObject 里（DOMPurify
-      // SVG 净化会剥掉其 HTML 子节点 → 空框；本地 harness 实测）。
+      // mermaid 12 起 `flowchart.htmlLabels` 已废弃：必须用全局 htmlLabels:false
+      // 才会输出 SVG `<text>` 标签（DOMPurify SVG 净化禁止 foreignObject）。
       htmlLabels: false,
       flowchart: { useMaxWidth: true },
       sequence: { useMaxWidth: true },
@@ -163,7 +149,7 @@ function relativeLuminance({ r, g, b }: Rgb): number {
 
 /**
  * 宿主浅/深色判定（按可靠性降级）：
- * 1. `<html data-theme|data-dsw-theme|data-color-scheme>`（主题插件/宿主约定）；
+ * 1. `<html data-theme|data-dsw-theme|data-color-scheme>`；
  * 2. `<html class="dark|theme-dark">`；
  * 3. `--dsw-alias-label-primary` 的亮度（深色主题下正文色是浅色）；
  * 4. `prefers-color-scheme`。
@@ -193,35 +179,13 @@ export function detectHostTheme(): MermaidTheme {
   }
 }
 
-/* ---------- SVG 净化 ---------- */
-
-/**
- * Mermaid 生成的 SVG 走 DOMPurify 的 SVG profile 净化（禁脚本 / 事件属性）。
- * 标签文字已通过全局 `htmlLabels:false` 落成 SVG `<text>`，所以这里继续禁
- * `foreignObject`（零 HTML 注入面；本地 harness 已断言 flowchart/sequence 标签正常）。
- */
-const SVG_SANITIZE_OPTIONS: Record<string, unknown> = {
-  USE_PROFILES: { svg: true, svgFilters: true },
-  FORBID_TAGS: ['script', 'foreignObject'],
-  FORBID_ATTR: ['onload', 'onerror', 'onclick', 'onmouseover', 'onfocus', 'onbegin'],
-};
-
-function sanitizeSvg(svg: string): string {
-  if (typeof DOMPurify.sanitize !== 'function') return svg;
-  try {
-    return DOMPurify.sanitize(svg, SVG_SANITIZE_OPTIONS);
-  } catch {
-    return '';
-  }
-}
-
 /* ---------- 渲染 ---------- */
 
 function errorMarkup(source: string, error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return [
     '<div class="dci-md-mermaid-error">',
-    '<div class="dci-md-mermaid-error-head">Mermaid 渲染失败</div>',
+    `<div class="dci-md-mermaid-error-head">${escapeHtml(t('md.mermaidError'))}</div>`,
     `<div class="dci-md-mermaid-error-msg">${escapeHtml(message)}</div>`,
     `<pre class="dci-md-pre"><code>${escapeHtml(source)}</code></pre>`,
     '</div>',
@@ -248,12 +212,14 @@ async function renderInto(element: HTMLElement): Promise<void> {
   element.setAttribute('data-dci-md-state', 'rendering');
   const id = nextRenderId();
   try {
-    const api = await ensureMermaid(detectHostTheme());
+    const theme = detectHostTheme();
+    const api = await ensureMermaid(theme);
     const result: MermaidRenderResult = await api.render(id, source);
     if (!element.isConnected) return;
     const svg = sanitizeSvg(result.svg ?? '');
     if (svg === '') throw new Error('mermaid: empty svg');
     element.innerHTML = svg;
+    element.setAttribute('data-dci-md-theme', theme);
     element.setAttribute('data-dci-md-state', 'rendered');
     try {
       result.bindFunctions?.(element);
@@ -269,57 +235,75 @@ async function renderInto(element: HTMLElement): Promise<void> {
   }
 }
 
-/* ---------- 主题跟随 ---------- */
+/* ---------- 全局单实例主题跟随（引用计数） ---------- */
 
-/** 监听宿主主题变化；变化后重新 initialize 并重渲染本根内已渲染的图表。 */
-function watchTheme(root: HTMLElement, isDisposed: () => boolean): () => void {
-  if (typeof MutationObserver === 'undefined' || typeof document === 'undefined') return () => {};
-  let scheduled = false;
-  const rerender = (): void => {
-    if (scheduled || isDisposed()) return;
-    scheduled = true;
-    const run = (): void => {
-      scheduled = false;
-      if (isDisposed()) return;
-      const theme = detectHostTheme();
-      if (theme === activeTheme) return;
-      for (const node of root.querySelectorAll<HTMLElement>('[data-dci-md-state="rendered"]')) {
-        if (!node.hasAttribute('data-dci-md-mermaid')) continue;
+const activeRoots = new Set<HTMLElement>();
+let themeObserver: MutationObserver | null = null;
+let themeMedia: MediaQueryList | null = null;
+let themeMediaHandler: (() => void) | null = null;
+let themeTimer = 0;
+
+function scheduleThemeSync(): void {
+  if (themeTimer !== 0) return;
+  // 等宿主把 theme 属性/class 全部落定再读 computed style；用 16ms setTimeout
+  // 而不是 rAF，保证后台标签页/无头环境下主题切换不丢。
+  themeTimer = window.setTimeout(() => {
+    themeTimer = 0;
+    if (activeRoots.size === 0) return;
+    const nextTheme = detectHostTheme();
+    for (const root of activeRoots) {
+      if (!root.isConnected) continue;
+      for (const node of root.querySelectorAll<HTMLElement>('[data-dci-md-mermaid][data-dci-md-state="rendered"]')) {
+        if (node.getAttribute('data-dci-md-theme') === nextTheme) continue;
         node.setAttribute('data-dci-md-state', 'pending');
-        enqueue(() => (isDisposed() ? Promise.resolve() : renderInto(node)));
+        enqueue(() => (activeRoots.has(root) ? renderInto(node) : Promise.resolve()));
       }
-    };
-    // 等宿主把 theme 属性/class 全部落定再读 computed style：延迟一拍再查。
-    // 用 setTimeout 而不是 rAF：无头/后台标签页里 rAF 可能被节流甚至不调度，
-    // 主题重渲染会因此丢失（本地 harness 实测）；16ms 定时器在两种环境下都稳。
-    window.setTimeout(run, 16);
-  };
-  const observer = new MutationObserver(rerender);
-  // 等主题属性/class 全部落定后再读 computed style（rAF 已延迟一拍）。
-  observer.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ['class', 'data-theme', 'data-dsw-theme', 'data-color-scheme'],
-  });
-  let media: MediaQueryList | null = null;
-  try {
-    media = matchMedia('(prefers-color-scheme: dark)');
-  } catch {
-    media = null;
+    }
+  }, 16);
+}
+
+function retainThemeWatcher(root: HTMLElement): () => void {
+  activeRoots.add(root);
+  if (activeRoots.size === 1 && typeof document !== 'undefined') {
+    if (typeof MutationObserver === 'function') {
+      themeObserver = new MutationObserver(scheduleThemeSync);
+      themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'data-theme', 'data-dsw-theme', 'data-color-scheme'],
+      });
+    }
+    try {
+      themeMedia = matchMedia('(prefers-color-scheme: dark)');
+      themeMediaHandler = () => scheduleThemeSync();
+      themeMedia.addEventListener?.('change', themeMediaHandler);
+    } catch {
+      themeMedia = null;
+      themeMediaHandler = null;
+    }
   }
-  const onMediaChange = (): void => rerender();
-  media?.addEventListener?.('change', onMediaChange);
   return () => {
-    observer.disconnect();
-    media?.removeEventListener?.('change', onMediaChange);
+    activeRoots.delete(root);
+    if (activeRoots.size === 0) {
+      if (themeTimer !== 0) {
+        window.clearTimeout(themeTimer);
+        themeTimer = 0;
+      }
+      themeObserver?.disconnect();
+      themeObserver = null;
+      if (themeMedia && themeMediaHandler) {
+        themeMedia.removeEventListener?.('change', themeMediaHandler);
+      }
+      themeMedia = null;
+      themeMediaHandler = null;
+    }
   };
 }
 
 /* ---------- 激活期入口 ---------- */
 
 /**
- * innerHTML 落地后的 Mermaid 激活：可见时懒渲染 + 主题跟随。
- * 返回 cleanup（组件下次渲染/卸载时调用）：置 disposed、断开 observer；
- * 已排队但未开始的渲染会因 disposed 被丢弃（mermaid.render 本身不可中断）。
+ * innerHTML 落地后的 Mermaid 激活：可见时懒渲染 + 共享主题跟随。
+ * 返回 cleanup（组件下次渲染/卸载时调用）：置 disposed、断开 observer 与主题引用。
  */
 export function activateMermaid(root: HTMLElement): (() => void) | undefined {
   const nodes = root.querySelectorAll<HTMLElement>('[data-dci-md-mermaid]');
@@ -349,10 +333,10 @@ export function activateMermaid(root: HTMLElement): (() => void) | undefined {
     for (const node of nodes) renderNode(node);
   }
 
-  const stopWatchingTheme = watchTheme(root, () => disposed);
+  const releaseThemeWatcher = retainThemeWatcher(root);
   return () => {
     disposed = true;
     observer?.disconnect();
-    stopWatchingTheme();
+    releaseThemeWatcher();
   };
 }

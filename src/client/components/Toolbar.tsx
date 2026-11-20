@@ -44,9 +44,16 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import type { DraftAttachmentId, InputActions, InputState, InputTriggerController, UseProjection } from '../host-types';
+import type {
+  ComposerKeyboard,
+  DraftAttachmentId,
+  InputActions,
+  InputState,
+  InputTriggerController,
+  UseProjection,
+} from '../host-types';
 import { openCommandMenu } from '../triggers';
-import { t, tBar, useT } from '../i18n';
+import { tBar, useT } from '../i18n';
 import { IconSendOfficial, IconStopOfficial } from '../icons';
 import { ModelMenu } from './ModelMenu';
 import { ModelSlot } from './ModelSlot';
@@ -69,6 +76,8 @@ export interface ToolbarProps {
   state: InputState | undefined;
   actions: InputActions | undefined;
   triggers: InputTriggerController | undefined;
+  /** 键盘面：指令按钮构造 synthetic hit 时读取实时 draftRev/draft 并关闭既有弹层。 */
+  keyboard?: ComposerKeyboard | undefined;
   /** caret 偏移（指令按钮以当前 caret 构造 synthetic hit）。 */
   caretRef: { current: number | null };
   useProjection: UseProjection | undefined;
@@ -193,7 +202,7 @@ function observeControlRow(row: HTMLDivElement | null): (() => void) | undefined
 }
 
 export function Toolbar(props: ToolbarProps): JSX.Element {
-  const { sessionId, state, actions, triggers, caretRef, useProjection, disabled, blocked, running, onNotify, inputStandard } = props;
+  const { sessionId, state, actions, triggers, keyboard, caretRef, useProjection, disabled, blocked, running, onNotify, inputStandard } = props;
   useT();
 
   const rowRef = useRef<HTMLDivElement | null>(null);
@@ -236,7 +245,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
       : props.primaryRetries === true
         ? tBar('tool.continue')
         : running === true && !locked && plainMessageDraft
-          ? t(primarySubmitMode === 'steer' ? 'tool.sendSteer' : 'tool.sendQueue')
+          ? tBar(primarySubmitMode === 'steer' ? 'tool.sendSteer' : 'tool.sendQueue')
           : tBar('tool.send');
 
   // 官方 activity 语义：语音展开时本行左侧工具与模型控件隐藏、capture 行伸展
@@ -266,7 +275,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
     if (!triggers) return;
     // 指令菜单的 hit/span 要按当前草稿与光标构造：宿主动作前先补最后一版本地草稿。
     props.onBeforeHostAction?.();
-    openCommandMenu(triggers, undefined, caretRef.current ?? 0);
+    openCommandMenu(triggers, keyboard, caretRef.current ?? 0);
   };
 
   // 旧宿主（permission 槽位未声明）回退自绘菜单；0.2.2 声明后镜像官方条目。
@@ -361,6 +370,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
           <div className={voiceActive ? 'dci-voice-seat dci-voice-seat-expanded' : 'dci-voice-seat'}>
             <VoiceActivity
               sessionId={sessionId}
+              standard={inputStandard}
               inputActions={actions}
               locked={locked}
               onActiveChange={onVoiceActiveChange}

@@ -125,9 +125,7 @@ function buildCandidates(card: CardRect, natural: NaturalHeights): Candidate[] {
   const rightSpace = vw - card.right - gap - margin;
   const sideWidth = (space: number): number => {
     const preferred = Math.min(sideMaxWidth, Math.max(space, 0));
-    return preferred >= SIDE_MIN_WIDTH
-      ? preferred
-      : Math.min(Math.max(sideMaxWidth, SIDE_MIN_WIDTH), SIDE_MIN_WIDTH);
+    return preferred >= SIDE_MIN_WIDTH ? preferred : SIDE_MIN_WIDTH;
   };
   const leftWidth = Math.round(sideWidth(leftSpace));
   const rightWidth = Math.round(sideWidth(rightSpace));
@@ -454,6 +452,12 @@ export function useAdaptiveOverlayHost(
       window.removeEventListener('resize', invalidate);
       host.removeAttribute('data-mode');
       delete host.dataset.placement;
+      // 还原普通形态时不残留内联定位样式与高度变量。
+      host.style.left = '';
+      host.style.top = '';
+      host.style.width = '';
+      host.style.visibility = '';
+      host.style.removeProperty('--dci-overlay-maxh');
       appliedRef.current = null;
       naturalRef.current = null;
       modeRef.current = 'idle';

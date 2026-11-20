@@ -8,6 +8,10 @@
  * 注册时序：第三方插件装载在宿主之后，目标槽位通常已声明——
  * slots.inject 锚点只对「声明晚于本插件」的场景触发，因此这里用
  * 直接注册 + 未声明短重试（槽位声明可能晚于首个 attempt 时仍兜底）。
+ *
+ * 生命周期约定：所有重试定时器、槽位注册、全局事件监听、偏好/总线订阅
+ * 与扩展注册均交由 `ctx.effect` 托管，确保热重载（`patchReload: live`）或
+ * 插件禁用/卸载时不残留监听、定时器或样式/手势劫持。
  */
 
 import type { ClientContext } from './host-types';
@@ -29,20 +33,57 @@ export const name = 'dsh-codinput';
 /** 客户端 inject：slots（槽位原语）+ conversation（输入机/会话装配）。 */
 export const inject = ['slots', 'conversation'];
 
-/** 尝试注册；槽位未声明会 throw——短重试兜底，成功即停。 */
-function tryRegister(doRegister: () => void, label: string, attempts = 60): void {
-  try {
-    doRegister();
-    diagWindow().__dshCodinputShell[label] = 'registered';
-    return;
-  } catch (error) {
-    if (attempts <= 0) {
-      diagError(label, error);
-      diagWindow().__dshCodinputShell[label] = 'failed';
+/**
+ * 尝试注册；槽位未声明会 throw——短重试兜底，成功即停。
+ * 返回可取消的清理函数（取消未到期定时器，并调用注册返回的 disposer）。
+ */
+function tryRegister(
+  doRegister: () => (() => void) | void,
+  label: string,
+  attempts = 60,
+): () => void {
+  let cancelled = false;
+  let timer = 0;
+  let disposer: (() => void) | undefined;
+
+  const attempt = (remaining: number): void => {
+    if (cancelled) return;
+    try {
+      const off = doRegister();
+      if (cancelled) {
+        off?.();
+        return;
+      }
+      disposer = typeof off === 'function' ? off : undefined;
+      if (diagWindow().__dshCodinputShell[label] === undefined) {
+        diagWindow().__dshCodinputShell[label] = 'registered';
+      }
       return;
+    } catch (error) {
+      if (remaining <= 0) {
+        diagError(label, error);
+        diagWindow().__dshCodinputShell[label] = 'failed';
+        return;
+      }
     }
-  }
-  setTimeout(() => tryRegister(doRegister, label, attempts - 1), 250);
+    timer = window.setTimeout(() => attempt(remaining - 1), 250);
+  };
+
+  attempt(attempts);
+  return () => {
+    cancelled = true;
+    if (timer !== 0) {
+      window.clearTimeout(timer);
+      timer = 0;
+    }
+    const off = disposer;
+    disposer = undefined;
+    try {
+      off?.();
+    } catch (error) {
+      diagError(`${label}.dispose`, error);
+    }
+  };
 }
 
 export function apply(ctx: ClientContext): void {
@@ -52,46 +93,52 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => () => stopSeatAudit(), 'dsh-codinput: seat audit');
 
   // ---- Markdown 扩展渲染 heavy 扩展：代码高亮 / KaTeX / Mermaid（全内置离线）----
-  // 只注册渲染扩展；同步/异步激活由 基础渲染的 activateMarkdown 在 innerHTML
-  // 落地后统一调度（组件侧无感）。注册幂等，热更新重复 apply 安全。
   runGuarded('md.heavy', () => {
-    registerHeavyMarkdown();
+    const disposeHeavy = registerHeavyMarkdown();
     diagWindow().__dshCodinputShell['md.heavy'] = 'registered';
+    ctx.effect(() => disposeHeavy, 'dsh-codinput: md.heavy');
   });
 
   // 诊断：插件加载期即接管 console.error（应用首渲染在插件加载之后），
-  // 抓取槽位边界的原始错误对象。
+  // 抓取槽位边界的原始错误对象；卸载时若仍是本包装器则还原。
   runGuarded('console.hook', () => {
     const w = diagWindow() as unknown as Record<string, unknown> & { console: Console };
-    if (!(w as Record<string, unknown>).__dshConsoleHooked) {
-      (w as Record<string, unknown>).__dshConsoleHooked = true;
-      const orig = w.console.error.bind(w.console);
-      w.console.error = (...args: unknown[]): void => {
-        const first = args.find((a) => a instanceof Error);
-        if (first) {
-          // 与 diagError 同口径限长：长会话里 console.error 不应无界堆积。
-          const errs = w.__dshCodinputErrs as unknown as unknown[];
-          errs.push(first);
-          if (errs.length > 200) errs.splice(0, errs.length - 200);
-        }
-        orig(...args);
-      };
-    }
+    if (w.__dshConsoleHooked) return;
+    w.__dshConsoleHooked = true;
+    const orig = w.console.error;
+    const boundOrig = orig.bind(w.console);
+    const wrapped = (...args: unknown[]): void => {
+      const first = args.find((a) => a instanceof Error);
+      if (first) {
+        const errs = diagWindow().__dshCodinputErrs;
+        errs.push(first);
+        if (errs.length > 200) errs.splice(0, errs.length - 200);
+      }
+      boundOrig(...args);
+    };
+    w.console.error = wrapped;
+    ctx.effect(
+      () => () => {
+        if (w.console.error === wrapped) w.console.error = orig;
+        w.__dshConsoleHooked = false;
+      },
+      'dsh-codinput: console.error hook',
+    );
   });
 
   // alpha 槽位：条目渲染崩溃会被「废黜」（本次注册周期内永久除名）。
-  // 尽早挂 onEntryError 监听，把崩溃堆栈留给诊断口。
+  // 尽早挂 onEntryError 监听，把崩溃堆栈留给诊断口（仅记一条，避免重复堆积）。
   runGuarded('slots.entryErrorHook', () => {
     const slotsService = ctx.slots as unknown as Record<string, unknown>;
     const core = (slotsService._core ?? slotsService) as Record<string, unknown>;
     if (typeof core.onEntryError === 'function') {
-      (core.onEntryError as (fn: (info: Record<string, unknown>) => void) => void)((info) => {
+      const off = (core.onEntryError as (fn: (info: Record<string, unknown>) => void) => (() => void) | void)((info) => {
         const err = info?.error as Error | undefined;
         diagError('slot.entry', err ?? info);
-        diagWindow().__dshCodinputErrs.push(
-          err instanceof Error ? err : new Error(JSON.stringify(info).slice(0, 800)),
-        );
       });
+      if (typeof off === 'function') {
+        ctx.effect(() => off, 'dsh-codinput: slots.onEntryError');
+      }
     }
   });
 
@@ -100,17 +147,16 @@ export function apply(ctx: ClientContext): void {
   // Codinput 标签承载（渲染 null 以隐藏主输入，唯一输入组件约定）。
   const bar = barRegistration();
   let barDisposer: (() => void) | null = null;
+  let cancelBarRetry: (() => void) | null = null;
   const mountBar = (): void => {
     if (barDisposer) return;
-    try {
-      barDisposer = ctx.slots.register(bar.options, CodinputBar);
-      diagWindow().__dshCodinputShell['bar'] = 'mounted';
-      setTakeoverActive(true);
-    } catch (error) {
-      diagError('bar.register', error);
-    }
+    barDisposer = ctx.slots.register(bar.options, CodinputBar);
+    diagWindow().__dshCodinputShell['bar'] = 'mounted';
+    setTakeoverActive(true);
   };
   const unmountBar = (): void => {
+    cancelBarRetry?.();
+    cancelBarRetry = null;
     const disposer = barDisposer;
     barDisposer = null;
     try {
@@ -123,23 +169,31 @@ export function apply(ctx: ClientContext): void {
   };
   const barWanted = (): boolean => loadPrefs().enabled || isAnySidebarInputCarried();
   const reconcileBar = (): void => {
-    if (barWanted()) mountBar();
-    else unmountBar();
+    if (barWanted()) {
+      if (!barDisposer && !cancelBarRetry) {
+        let pending = true;
+        const cancel = tryRegister(() => {
+          if (barWanted()) mountBar();
+          pending = false;
+          cancelBarRetry = null;
+        }, 'bar');
+        if (pending) cancelBarRetry = cancel;
+      }
+    } else {
+      unmountBar();
+    }
   };
-  tryRegister(() => {
-    if (barWanted()) mountBar();
-  }, 'bar');
+  reconcileBar();
 
-  runGuarded('bar.prefs', () => {
-    subscribePrefs(reconcileBar);
-  });
-
-  // 侧栏标签挂载/卸载：入口（prefs 关闭时也要为隐藏主输入而挂载）与出口
-  // （标签关闭后把主输入还给官方）。侧栏收起时小球由接管条目自己 portal
-  // 渲染（见 components/ExpandBall），不占官方槽位。
-  runGuarded('bar.sideinput', () => {
-    subscribeSidebarInput(reconcileBar);
-  });
+  ctx.effect(() => {
+    const offPrefs = subscribePrefs(reconcileBar);
+    const offSide = subscribeSidebarInput(reconcileBar);
+    return () => {
+      offPrefs();
+      offSide();
+      unmountBar();
+    };
+  }, 'dsh-codinput: bar lifecycle');
 
   // ---- 用户消息 Markdown：conversation.chat.node 键控座 user/steering 遮蔽 ----
   // 独立于接管开关，自带 prefs.userMarkdown；关闭即卸载条目把消息渲染还座
@@ -147,6 +201,7 @@ export function apply(ctx: ClientContext): void {
   runGuarded('md.register', () => {
     const mdSeats = userMarkdownRegistrations();
     const mdMounted = new Map<string, () => void>();
+    const mdRetries = new Map<string, () => void>();
     const mdWanted = (): boolean => loadPrefs().userMarkdown;
     const mountMdSeat = (seat: (typeof mdSeats)[number]): void => {
       const key = seat.options.key ?? '';
@@ -155,6 +210,8 @@ export function apply(ctx: ClientContext): void {
       diagWindow().__dshCodinputShell[`md.${key}`] = 'mounted';
     };
     const unmountMdSeat = (key: string): void => {
+      mdRetries.get(key)?.();
+      mdRetries.delete(key);
       const disposer = mdMounted.get(key);
       if (!disposer) return;
       mdMounted.delete(key);
@@ -169,19 +226,31 @@ export function apply(ctx: ClientContext): void {
       for (const seat of mdSeats) {
         const key = seat.options.key ?? '';
         if (mdWanted()) {
-          tryRegister(() => mountMdSeat(seat), `md.${key}`);
+          if (!mdMounted.has(key) && !mdRetries.has(key)) {
+            let pending = true;
+            const cancel = tryRegister(() => {
+              mountMdSeat(seat);
+              pending = false;
+              mdRetries.delete(key);
+            }, `md.${key}`);
+            if (pending) mdRetries.set(key, cancel);
+          }
         } else {
           unmountMdSeat(key);
         }
       }
     };
     reconcileMd();
-    runGuarded('md.prefs', () => {
-      subscribePrefs(reconcileMd);
-    });
+    ctx.effect(() => {
+      const offPrefs = subscribePrefs(reconcileMd);
+      return () => {
+        offPrefs();
+        for (const seat of mdSeats) unmountMdSeat(seat.options.key ?? '');
+      };
+    }, 'dsh-codinput: user markdown lifecycle');
   });
 
-  // ---- 侧边模式：sidebarRightTabs 两段式注册（dockkit 承担停靠/浮动） ----
+  // ---- 侧边模式：sidebarRightTabs 三段式注册（dockkit 承担停靠/浮动） ----
   runGuarded('sidebar.register', () => {
     ctx.inject(['slots', 'sidebarRightTabs', 'sidebarRight'], (scope: Record<string, unknown>) => {
       const tabs = scope['sidebarRightTabs'] as { register(def: Record<string, unknown>): () => void } | undefined;
@@ -192,44 +261,42 @@ export function apply(ctx: ClientContext): void {
       const body = sidebarBodyRegistration();
       // 标签类型定义 ride 调用方 fiber（官方约定：disposer 交 ctx.effect 持有）。
       ctx.effect(() => tabs.register(sidebarTabDefinition()), 'dsh-codinput: sidebar tab type');
-      tryRegister(() => {
-        ctx.slots.register(body.options, body.component);
-      }, 'sidebar.body');
+      const disposeBody = tryRegister(() => ctx.slots.register(body.options, body.component), 'sidebar.body');
+      ctx.effect(() => disposeBody, 'dsh-codinput: sidebar.body');
       // chip 标题（品牌标 + 标签名）：官方 FilesTitle 同构的 keyed 注册。
       const title = sidebarTitleRegistration();
-      tryRegister(() => {
-        ctx.slots.register(title.options, title.component);
-      }, 'sidebar.title');
+      const disposeTitle = tryRegister(() => ctx.slots.register(title.options, title.component), 'sidebar.title');
+      ctx.effect(() => disposeTitle, 'dsh-codinput: sidebar.title');
     });
   });
 
   // ---- 设置 → Codinput 分组（settings.section 必须带 label/order） ----
   runGuarded('settings.register', () => {
     const settings = settingsRegistration();
-    tryRegister(() => {
-      ctx.slots.register(settings.options, settings.component);
-    }, 'settings');
+    const disposeSettings = tryRegister(() => ctx.slots.register(settings.options, settings.component), 'settings');
+    ctx.effect(() => disposeSettings, 'dsh-codinput: settings');
   });
 
   // ---- /codinput 命令：官方命令通道的 action 贡献（进入/退出接管） ----
   registerCodinputCommand(ctx);
 
   // ---- 去掉 dockkit「拖动标签页→浮动/换位」手势（产品决策 2026-09-20：
-  // 悬浮只经主输入卡片 pin 按钮进入）。capture 相位拦掉 tab chip 的
+  // 悬浮只经主输入卡片拖动区进入）。capture 相位拦掉 tab chip 的
   // pointerdown，dockkit 的 press→drag 追踪不再启动；点击激活走独立
-  // click 事件、关闭按钮有专属 pointerdown 处理，均不受影响。 ----
+  // click 事件、关闭按钮有专属 pointerdown 处理，均不受影响。
+  // 生命周期绑定到 ctx.effect：卸载插件即恢复宿主原手势。 ----
   runGuarded('draggate.install', () => {
-    const w = window as unknown as { __dshCodinputDragGate?: boolean };
-    if (w.__dshCodinputDragGate) return;
-    w.__dshCodinputDragGate = true;
-    document.addEventListener(
-      'pointerdown',
-      (event) => {
-        if (!(event.target instanceof Element)) return;
-        if (event.target.closest('[data-dockkit-tab-close]')) return;
-        if (event.target.closest('[data-dockkit-tab]')) event.stopPropagation();
+    const onPointerDown = (event: PointerEvent): void => {
+      if (!(event.target instanceof Element)) return;
+      if (event.target.closest('[data-dockkit-tab-close]')) return;
+      if (event.target.closest('[data-dockkit-tab]')) event.stopPropagation();
+    };
+    document.addEventListener('pointerdown', onPointerDown, { capture: true });
+    ctx.effect(
+      () => () => {
+        document.removeEventListener('pointerdown', onPointerDown, { capture: true });
       },
-      { capture: true },
+      'dsh-codinput: dockkit drag gate',
     );
   });
 

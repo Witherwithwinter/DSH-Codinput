@@ -63,6 +63,7 @@ import wasm from 'highlight.js/lib/languages/wasm';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
 import type { Tokens } from 'marked';
+import { t } from '../i18n';
 import { copyTextToClipboard } from './index';
 import { escapeHtml, safeLanguageClass } from './heavy-shared';
 import { renderMermaidBlock } from './mermaid';
@@ -197,20 +198,9 @@ export function highlightCode(source: string, rawLanguage: string): CodeHighligh
   }
 }
 
-/** 复制按钮文案：宿主语言是 en 时用英文，其余中文（插件默认中文环境）。 */
+/** 复制按钮文案：统一走插件 i18n（随宿主 locale 实时切换）。 */
 function copyLabels(): { copy: string; copied: string } {
-  let language = 'zh';
-  if (typeof document !== 'undefined') {
-    language = (document.documentElement.getAttribute('lang') ?? '').toLowerCase();
-  }
-  if (language === '') {
-    try {
-      language = (navigator.language ?? 'zh').toLowerCase();
-    } catch {
-      language = 'zh';
-    }
-  }
-  return language.startsWith('en') ? { copy: 'Copy', copied: 'Copied' } : { copy: '复制', copied: '已复制' };
+  return { copy: t('umsg.copy'), copied: t('umsg.copied') };
 }
 
 /** marked renderer.code 的实现：chrome（语言标签 + 复制按钮）+ 高亮代码。 */
@@ -229,7 +219,7 @@ export function renderCodeBlock(token: Tokens.Code): string {
     '<div class="dci-md-codeblock">',
     '<div class="dci-md-codebar">',
     `<span class="dci-md-codelang">${escapeHtml(label)}</span>`,
-    `<button type="button" class="dci-md-copy" title="复制代码 / Copy code"><span class="dci-md-copy-glyph" aria-hidden="true"></span><span class="dci-md-copy-text">${escapeHtml(copy)}</span></button>`,
+    `<button type="button" class="dci-md-copy" title="${escapeHtml(copy)}"><span class="dci-md-copy-glyph" aria-hidden="true"></span><span class="dci-md-copy-text">${escapeHtml(copy)}</span></button>`,
     '</div>',
     `<pre class="dci-md-pre"><code class="${hljsClass}${languageClass}">${result.html}</code></pre>`,
     '</div>\n',

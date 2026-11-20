@@ -61,20 +61,25 @@ export function CodinputBall(props: { sessionId?: string }): JSX.Element | null 
       setPos((prev) => (prev && prev.left === next.left && prev.top === next.top ? prev : next));
     };
     measure();
-    const header = headerElement();
+    let observedHeader = headerElement();
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
-    if (header && observer) observer.observe(header);
+    if (observedHeader && observer) observer.observe(observedHeader);
     window.addEventListener('resize', measure);
-    // 头部尚未挂载（会话切换/重挂载）时短轮询兜底，量到即停。
-    const timer = window.setInterval(() => {
-      if (!headerElement()) return;
-      measure();
-      window.clearInterval(timer);
-    }, 250);
+    // 头部尚未挂载（会话切换/重挂载）时短轮询兜底，量到即挂 ResizeObserver 并停止轮询。
+    const timer = observedHeader
+      ? 0
+      : window.setInterval(() => {
+          const nextHeader = headerElement();
+          if (!nextHeader) return;
+          observedHeader = nextHeader;
+          observer?.observe(nextHeader);
+          measure();
+          window.clearInterval(timer);
+        }, 250);
     return () => {
       observer?.disconnect();
       window.removeEventListener('resize', measure);
-      window.clearInterval(timer);
+      if (timer !== 0) window.clearInterval(timer);
     };
   }, [active]);
 

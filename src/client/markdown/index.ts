@@ -247,11 +247,17 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
+const wikilinkTimers = new WeakMap<HTMLElement, number>();
+
 function flashWikilinkCopied(element: HTMLElement): void {
+  const prev = wikilinkTimers.get(element);
+  if (prev !== undefined) window.clearTimeout(prev);
   element.dataset.dciCopied = 'true';
-  window.setTimeout(() => {
-    delete element.dataset.dciCopied;
+  const timer = window.setTimeout(() => {
+    wikilinkTimers.delete(element);
+    if (element.isConnected) delete element.dataset.dciCopied;
   }, 900);
+  wikilinkTimers.set(element, timer);
 }
 
 export interface MarkdownClickHandlers {

@@ -7,12 +7,11 @@
  * 宿主 consume-token 通道消费；插件只在残留时兜底剥离 token 本身，绝不整体
  * 清空草稿（否则「先有草稿再 /codinput 退出」会丢草稿）。侧栏里发起的退出会
  * 经总线请求 body 关掉自己的标签（见 sideinput）。
- *
  */
 
 import type { ClientContext } from './host-types';
 import { stash } from './services';
-import { loadPrefs, savePrefs, subscribePrefs } from './prefs';
+import { loadPrefs, savePrefs } from './prefs';
 import { carriedSessionIds, requestSidebarTabClose } from './sideinput';
 import { t } from './i18n';
 import { IconCodinputCommand16 } from './icons';
@@ -24,17 +23,9 @@ const COMMAND_TOKEN = '/codinput';
 /**
  * 清理 `/codinput` 命令 token 的残留，**只剥 token，不碰草稿其余内容**。
  *
- * 官方命令通道在调用 `ui.run` 之前会先派发 `slash/input-consume-token`
- * （菜单拾取 = exact span，裸命令回车 = bare-token），正常路径此时草稿里
- * 已经没有 token。但「工具行指令按钮程序化唤起菜单」等路径的 span 消费
- * 可能落空，草稿里会残留 "/codinput" 前缀。旧实现无条件 `setDraft('')`
- * 把草稿整体清空——用户先有草稿、再输入 `/codinput` 退出接管时，宿主只
- * 消费掉命令 token，剩下的用户草稿随后被这段无条件清空吞掉（普通/悬浮
- * 形态都中招，退出后内置输入框变空）。
- *
- * 这里沿用宿主 bare-token guard 的判据：只有「token 本身」或「token 后跟
- * 空白」才当作命令 token 处理；"/codinputX" 这类真的用户文本不动。清理后
- * 余下的用户内容原样保留。
+ * 沿用宿主 bare-token guard 的判据：只有「token 本身」或「token 后跟空白」
+ * 才当作命令 token 处理；"/codinputX" 这类真的用户文本不动。清理后余下的
+ * 用户内容原样保留。
  */
 function stripCommandToken(sessionId: string | undefined): void {
   if (!sessionId) return;
@@ -60,7 +51,11 @@ function stripCommandToken(sessionId: string | undefined): void {
  * 官方空查询走 sectionRows（「添加/指令」按使用序固定节构），贡献默认追加
  * 在「指令」节尾——整列排序会把小节排散、节头重复渲染，只能单行搬。
  */
-function moveRow<T extends { name: string }>(list: readonly T[], name: string, locate: (rows: readonly T[]) => number): T[] {
+function moveRow<T extends { name: string }>(
+  list: readonly T[],
+  name: string,
+  locate: (rows: readonly T[]) => number,
+): T[] {
   const at = list.findIndex((row) => row.name === name);
   if (at === -1) return [...list];
   const target = locate(list);
@@ -87,9 +82,10 @@ export function registerCodinputCommand(ctx: ClientContext): void {
       // 使用序里 file 排该节第一——节名是本地化的，用同节已知行反查）。
       let restoreOrder: (() => void) | undefined;
       if (typeof commandUi.candidates === 'function') {
-        const original = commandUi.candidates.bind(commandUi);
-        commandUi.candidates = (session: unknown, req: { query: string }) =>
-          Promise.resolve(original(session, req)).then((rows) => {
+        const hadOwn = Object.prototype.hasOwnProperty.call(commandUi, 'candidates');
+        const original = commandUi.candidates;
+        const patched = (session: unknown, req: { query: string }) =>
+          Promise.resolve(original.call(commandUi, session, req)).then((rows) => {
             if (req.query !== '' || !Array.isArray(rows)) return rows;
             let list = rows as { name: string; section?: string }[];
             const addSection = list.find((row) => row.name === 'goal' || row.name === 'plan' || row.name === 'feedback')?.section;
@@ -108,8 +104,13 @@ export function registerCodinputCommand(ctx: ClientContext): void {
             });
             return list;
           });
+        commandUi.candidates = patched;
         restoreOrder = () => {
-          commandUi.candidates = original;
+          // 仅当仍是本插件挂的包装器时才还原，避免覆盖后装载插件的补丁；
+          // 原方法来自原型链时直接 delete，避免在实例上残留遮蔽属性。
+          if (commandUi.candidates !== patched) return;
+          if (hadOwn) commandUi.candidates = original;
+          else delete commandUi.candidates;
         };
       }
       ctx.effect(() => restoreOrder, 'dsh-codinput: slash order patch');
@@ -117,8 +118,7 @@ export function registerCodinputCommand(ctx: ClientContext): void {
         () =>
           commandUi.register({
             name: 'codinput',
-            description: () =>
-              loadPrefs().enabled ? t('cmd.exit') : t('cmd.enter'),
+            description: () => (loadPrefs().enabled ? t('cmd.exit') : t('cmd.enter')),
             // 官方命令菜单 glyph：icon 为 React 组件，菜单按 <icon size={16}/> 渲染。
             icon: IconCodinputCommand16,
             available: () => true,
@@ -128,14 +128,12 @@ export function registerCodinputCommand(ctx: ClientContext): void {
                 // 卸载会清掉诊断 sessionId，先捕获（清理必须在卸载前做完，
                 // 否则官方输入框挂载时就会带上残留 token）。
                 const sessionId = diagWindow().__dshCodinputSessionId ?? undefined;
-                // 只剥离命令 token：宿主已派发 consume-token，这里兜住
-                // 「程序化唤起菜单导致 span 消费落空」的残留；用户草稿保留。
                 stripCommandToken(sessionId);
-                savePrefs({ enabled: !loadPrefs().enabled });
+                const next = savePrefs({ enabled: !loadPrefs().enabled });
                 // 侧栏里发起的退出：关掉承载会话的 Codinput 标签（body 经
                 // tab 域 actions.close 关闭、卸载撤销承载），主输入回到官方
                 // 输入框。承载会话从总线查——诊断 sessionId 可能为 null。
-                if (!loadPrefs().enabled) {
+                if (!next.enabled) {
                   for (const carried of carriedSessionIds()) requestSidebarTabClose(carried);
                 }
               },

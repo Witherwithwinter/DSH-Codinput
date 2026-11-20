@@ -51,7 +51,9 @@ export function ModelLabel(props: ModelLabelProps): JSX.Element {
   }
   return (
     <span data-provider-id={provider.id} data-model-id={model.id}>
-      <EntryBoundary fallback={fallback}>{label}</EntryBoundary>
+      <EntryBoundary fallback={fallback} resetKey={`${provider.id}:${model.id}`} entry={entry}>
+        {label}
+      </EntryBoundary>
     </span>
   );
 }

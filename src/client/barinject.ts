@@ -11,7 +11,7 @@
  * 会话时清空（卸载清理按对象身份判定，避免新条目被旧清理误删）。
  */
 
-import { useEffect, useReducer } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import type { ComposerFileIntakeTarget } from './host-types';
 
 /** bar 条目注入面里插件需要跨树转存的部分（原样引用宿主函数）。 */
@@ -23,9 +23,21 @@ export interface BarInjectedFace {
 }
 
 const faces = new Map<string, BarInjectedFace>();
+const listeners = new Set<() => void>();
 
 function keyOf(sessionId: string | undefined): string {
   return sessionId ?? 'hero';
+}
+
+function emit(): void {
+  for (const fn of listeners) fn();
+}
+
+function subscribeBarInjected(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
 }
 
 /** bar 条目渲染时转存（同一会话后写覆盖：重挂载的条目是最新注入面）。 */
@@ -39,21 +51,6 @@ export function getBarInjected(sessionId: string | undefined): BarInjectedFace |
   return faces.get(keyOf(sessionId));
 }
 
-
-/** 订阅 bar 注入面变化（侧栏 body 用：条目晚于侧栏挂载时也能拿到 retry 等）。 */
-const listeners = new Set<() => void>();
-
-function emit(): void {
-  for (const fn of listeners) fn();
-}
-
-function subscribeBarInjected(fn: () => void): () => void {
-  listeners.add(fn);
-  return () => {
-    listeners.delete(fn);
-  };
-}
-
 /** bar 条目卸载时清理——只清自己写的那一份（按对象身份）。 */
 export function clearBarInjected(sessionId: string | undefined, face: BarInjectedFace): void {
   const key = keyOf(sessionId);
@@ -63,9 +60,8 @@ export function clearBarInjected(sessionId: string | undefined, face: BarInjecte
   }
 }
 
-/** 侧栏 body 的 react 侧读取：bar 条目晚于侧栏挂载时（开标签即启用）也能拿到面。 */
+/** 侧栏 body 的 react 侧读取：bar 条目晚于侧栏挂载时（开标签即启用）也能同步拿到面。 */
 export function useBarInjected(sessionId: string | undefined): BarInjectedFace | undefined {
-  const [, force] = useReducer((count: number) => count + 1, 0);
-  useEffect(() => subscribeBarInjected(force), []);
-  return getBarInjected(sessionId);
+  const getSnapshot = useCallback(() => getBarInjected(sessionId), [sessionId]);
+  return useSyncExternalStore(subscribeBarInjected, getSnapshot, getSnapshot);
 }

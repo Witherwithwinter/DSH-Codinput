@@ -1,28 +1,25 @@
 // 客户端产物构建：esbuild bundle + cjs，包成 window.__ModuleLoader__.load。
 // 外部依赖只有平台模块（宿主 PLATFORM_MODULES 共享表）：react / react-dom，以及
-// 官方原语库 @deepseek-ai/dsh-client-ui-primitives（Tooltip 等——「能不复刻就
-// 不复刻」，直接用宿主同一份官方实现，样式/行为/无障碍天然与官方一致）。
+// 官方原语库 @deepseek-ai/dsh-client-ui-primitives（Tooltip / ImageLightbox 等——
+// 「能不复刻就不复刻」，直接用宿主同一份官方实现）。
 // CodeMirror / marked / dompurify / highlight.js / katex / mermaid 一律随包内置。
 //
 // 默认出**发布产物**：压缩、无 sourcemap（源码随包在 src/，不必把内联 sourcemap
 // 打进产物——那是 1MB 级的体积）。开发调试用 --dev（npm run build:dev）：
 // 不压缩 + 内联 sourcemap，可在浏览器里直接看到 TypeScript 源码。
 //
-// Markdown 扩展渲染的两个构建期 plugin（保证仍是单文件 lib/client.js）：
+// 构建期 plugins（保证单文件 lib/client.js）：
 // - katex-css-inline：把 node_modules/katex/dist/katex.min.css 变成虚拟模块
 //   `virtual:katex-css`，其中 20 个 woff2 字体全部内联为 data URI、woff/ttf 回退项
 //   删除 → 运行时零网络请求（离线可用）。替换或残留引用会直接让构建失败。
-// - mermaid-trim：mermaid 的 dist/mermaid.core.mjs 用 dynamic import 按需加载 52 个
-//   图类型 chunk；这里在构建期把**未内置**的图类型 stub 成 `diagram = undefined`
-//   （渲染这些类型时 mermaid 抛错 → 前端回退「源码 + 错误样式」），并把
-//   chunk-CFHHFPVC.mjs 里的 `...true ? [` 改成 `...false ? [`（mermaid 自带的
-//   tiny-build 开关）移除 ELK/cose-bilkent 布局 loader（省 ~2MB；请求 ELK 的图会按
-//   mermaid 官方逻辑 fallback 到 dagre）。替换必须命中，否则构建失败——防止
-//   mermaid 升级后裁剪静默失效。
-//
-// 两个 plugin 以工厂函数导出，供本地验收脚本复用（scripts 内部 API，不对外）。
+// - mermaid-trim：构建期把未内置图类型 stub 成 `diagram = undefined`，并动态定位
+//   mermaid.core chunks 中携带 ELK/cose 布局开关 `...true ? [` 的唯一 chunk（不写死
+//   版本哈希文件名），替换为 `...false ? [` 移除 ELK/cose-bilkent 布局 loader（省 ~2MB）。
+// - css-template-minify：发布构建时用 esbuild CSS 压缩器裁剪内联 CSS 模板字符串
+//   （styles.ts / markdown/styles.ts / markdown/heavy.ts）里的中文注释与多余空白，
+//   同时在构建期校验 CSS 语法。
 import { execFileSync } from 'node:child_process';
-import { build } from 'esbuild';
+import { build, transform } from 'esbuild';
 import { mkdir, stat } from 'node:fs/promises';
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -114,12 +111,34 @@ const MERMAID_KEEP = new Set([
 ]);
 
 const MERMAID_CORE_ENTRY = join(mermaidDistDir, 'mermaid.core.mjs');
-const MERMAID_LAYOUT_CHUNK = join(mermaidDistDir, 'chunks', 'mermaid.core', 'chunk-CFHHFPVC.mjs');
+const MERMAID_CHUNKS_DIR = join(mermaidDistDir, 'chunks', 'mermaid.core');
+const MERMAID_LAYOUT_SWITCH = '...true ? [';
+
+/**
+ * 动态定位携带 ELK/cose-bilkent 布局开关 `...true ? [` 的唯一 chunk，
+ * 不再硬编码特定 patch 版本的哈希文件名（如 chunk-CFHHFPVC.mjs）。
+ * 若匹配数为 0 或 >1 立即抛错，防止 mermaid 升级后裁剪静默失效。
+ */
+function findMermaidLayoutChunk() {
+  const matches = [];
+  for (const name of readdirSync(MERMAID_CHUNKS_DIR)) {
+    if (!name.endsWith('.mjs')) continue;
+    const full = join(MERMAID_CHUNKS_DIR, name);
+    const source = readFileSync(full, 'utf8');
+    if (source.includes(MERMAID_LAYOUT_SWITCH)) {
+      matches.push({ name, full, source });
+    }
+  }
+  if (matches.length !== 1) {
+    throw new Error(
+      `[mermaid-trim] 期望在 ${MERMAID_CHUNKS_DIR} 中找到唯一含 \`${MERMAID_LAYOUT_SWITCH}\` 的布局 chunk，实际找到 ${matches.length} 个（${matches.map((m) => m.name).join(', ')}）`,
+    );
+  }
+  return matches[0];
+}
 
 /**
  * 从 mermaid.core.mjs 里解析「图类型 id → dynamic import 的 chunk 文件」映射。
- * 每个图类型的 loader 形如 `const { diagram } = await import("./chunks/.../xxx.mjs")`，
- * 上方 25 行内有 `var idN = "<图类型>"`。
  * @returns {Map<string, Set<string>>} chunk 文件名 → 图类型 id 集合
  */
 function readMermaidDiagramChunks() {
@@ -157,6 +176,8 @@ export function createMermaidTrimPlugin() {
       );
     }
   }
+  const layoutChunk = findMermaidLayoutChunk();
+  const layoutFileFilter = new RegExp(`${layoutChunk.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
   const stubbed = knownIds.size - MERMAID_KEEP.size;
   let patchedLayout = null;
 
@@ -176,27 +197,86 @@ export function createMermaidTrimPlugin() {
         loader: 'js',
       }));
       // mermaid 自带 tiny-build 开关：移除 ELK + cose-bilkent 布局 loader。
-      buildApi.onLoad({ filter: /chunk-CFHHFPVC\.mjs$/ }, () => {
+      buildApi.onLoad({ filter: layoutFileFilter }, () => {
         if (patchedLayout === null) {
-          const source = readFileSync(MERMAID_LAYOUT_CHUNK, 'utf8');
-          if (!source.includes('...true ? [')) {
-            throw new Error(
-              '[mermaid-trim] chunk-CFHHFPVC.mjs 里找不到 ELK/cose 布局开关 `...true ? [`（mermaid 版本变化，构建中止）',
-            );
-          }
-          patchedLayout = source.replace('...true ? [', '...false ? [');
-          console.log('[dsh-codinput] Mermaid 裁剪：移除 ELK/cose-bilkent 布局 loader（省 ~2MB）');
+          patchedLayout = layoutChunk.source.replace(MERMAID_LAYOUT_SWITCH, '...false ? [');
+          console.log(`[dsh-codinput] Mermaid 裁剪：移除 ${layoutChunk.name} 中的 ELK/cose-bilkent 布局 loader（省 ~2MB）`);
         }
         return {
           contents: patchedLayout,
           loader: 'js',
-          resolveDir: dirname(MERMAID_LAYOUT_CHUNK),
-          watchFiles: [MERMAID_LAYOUT_CHUNK],
+          resolveDir: dirname(layoutChunk.full),
+          watchFiles: [layoutChunk.full],
         };
       });
       console.log(
         `[dsh-codinput] Mermaid 裁剪：内置 ${MERMAID_KEEP.size} 种图类型，stub ${stubbed} 种（入口共 ${knownIds.size} 种）`,
       );
+    },
+  };
+}
+
+/* =====================================================================
+ * plugin 3：内联 CSS 模板字符串构建期压缩（去除大段注释与空白）
+ * ===================================================================== */
+
+const CSS_TEMPLATE_TARGETS = [
+  { fileSuffix: 'src/client/styles.ts', binding: 'const CSS = ' },
+  { fileSuffix: 'src/client/markdown/styles.ts', binding: 'export const markdownStyles = ' },
+  { fileSuffix: 'src/client/markdown/heavy.ts', binding: 'export const heavyMarkdownStyles = ' },
+];
+
+/** 发布构建压缩 styles.ts / markdown/styles.ts / markdown/heavy.ts 中的内联 CSS 字符串。 */
+export function createCssMinifyPlugin({ minify = true } = {}) {
+  return {
+    name: 'css-template-minify',
+    setup(buildApi) {
+      if (!minify) return;
+      buildApi.onLoad({ filter: /src[\\/]client[\\/](?:styles|markdown[\\/](?:styles|heavy))\.ts$/ }, async (args) => {
+        const normalized = args.path.replace(/\\/g, '/');
+        const target = CSS_TEMPLATE_TARGETS.find((item) => normalized.endsWith(item.fileSuffix));
+        if (!target) return undefined;
+        const source = readFileSync(args.path, 'utf8');
+        const marker = `${target.binding}\``;
+        const startIdx = source.indexOf(marker);
+        if (startIdx < 0) {
+          throw new Error(`[css-template-minify] 在 ${target.fileSuffix} 中找不到 \`${marker}\``);
+        }
+        const cssStart = startIdx + marker.length;
+        // 扫描静态 CSS 模板字面量末尾（允许 \` 转义，拒绝 ${ 插值避免误伤）。
+        let cursor = cssStart;
+        while (cursor < source.length) {
+          const ch = source[cursor];
+          if (ch === '\\') {
+            cursor += 2;
+            continue;
+          }
+          if (ch === '$' && source[cursor + 1] === '{') {
+            throw new Error(`[css-template-minify] ${target.fileSuffix} 中的 CSS 模板包含动态插值，拒绝静态压缩`);
+          }
+          if (ch === '`') break;
+          cursor += 1;
+        }
+        if (cursor >= source.length) {
+          throw new Error(`[css-template-minify] ${target.fileSuffix} 中的 CSS 模板未闭合`);
+        }
+        const rawCss = source.slice(cssStart, cursor);
+        const result = await transform(rawCss, { loader: 'css', minify: true });
+        const saved = rawCss.length - result.code.length;
+        console.log(
+          `[dsh-codinput] CSS 压缩 ${target.fileSuffix}：${(rawCss.length / 1024).toFixed(1)} → ${(result.code.length / 1024).toFixed(1)} KiB（-${(saved / 1024).toFixed(1)} KiB）`,
+        );
+        const replaced =
+          source.slice(0, startIdx) +
+          `${target.binding}${JSON.stringify(result.code)}` +
+          source.slice(cursor + 1);
+        return {
+          contents: replaced,
+          loader: 'ts',
+          resolveDir: dirname(args.path),
+          watchFiles: [args.path],
+        };
+      });
     },
   };
 }
@@ -226,23 +306,25 @@ export async function main() {
       // 宿主 baseline 共享模块（见 host-primitives.d.ts 头注释）；不随包内置。
       '@deepseek-ai/dsh-client-ui-primitives',
     ],
-    plugins: [createKatexCssPlugin(), createMermaidTrimPlugin()],
+    plugins: [
+      createKatexCssPlugin(),
+      createMermaidTrimPlugin(),
+      createCssMinifyPlugin({ minify: !dev }),
+    ],
     banner: {
       js: [
         `window.__ModuleLoader__.load({ id: ${JSON.stringify(pkg.name)}, factory: (require) => {`,
         'var module = { exports: {} };',
         'var exports = module.exports;',
         'Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });',
-      ].join('\n')
+      ].join('\n'),
     },
     footer: {
-      js: 'return module.exports; } })'
-    }
+      js: 'return module.exports; } })',
+    },
   });
 
-  // 自检 1：产物必须是合法 JS。banner/footer 拼接错误（例如换行被双重转义成
-  // 字面 `\n` 两字符）会造成 `SyntaxError: Invalid or unexpected token`，宿主
-  // 加载插件直接失败——这里在构建末尾用 `node --check` 把它拦在发布之前。
+  // 自检 1：产物必须是合法 JS。
   try {
     execFileSync(process.execPath, ['--check', 'lib/client.js'], { stdio: 'pipe' });
     console.log('[dsh-codinput] 自检：node --check lib/client.js → OK');
@@ -267,8 +349,7 @@ export async function main() {
 }
 
 const invokedPath = process.argv[1] ? resolve(process.argv[1]) : '';
-// 用 realpath 比较：本地验收副本里 scripts/ 可能是 junction/symlink，ESM 会把
-// import.meta.url 解析到真实路径，直接比较字符串会误判为「被 import」而不构建。
+// 用 realpath 比较：本地验收副本里 scripts/ 可能是 junction/symlink。
 function realOrSelf(target) {
   try {
     return realpathSync(target);

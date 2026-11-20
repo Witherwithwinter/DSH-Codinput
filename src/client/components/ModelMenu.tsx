@@ -17,7 +17,7 @@ import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primit
 import { useEffect, useRef, useState } from 'react';
 import type { ModelCatalogModel, ModelProviderGroup, ModelSelection } from '../host-types';
 import { getSessionDirectory, type DirectorySnapshot } from '../modeldir';
-import { stash } from '../services';
+import { useService } from '../services';
 
 import { ModelLabel } from './ModelLabel';
 import { MenuCheck, MenuSurface } from './MenuSurface';
@@ -80,18 +80,20 @@ export function ModelMenu(props: ModelMenuProps): JSX.Element {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [anchorRect, setAnchorRect] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null);
 
-  // 服务缺席（installServices 未注入到）时禁用；svcEpoch 轮询兜底见 CodinputSurface。
+  // 响应式感知 modelDirectories 就绪：服务晚到时触发钮自动解除禁用。
+  useService('modelDirectories');
   const directory = getSessionDirectory(sessionId);
   const snap = useSnapshot(directory?.store) as DirectorySnapshot | undefined;
 
-  // 首次打开时确保目录已加载（官方 load 语义）。
+  // 切换会话时关闭已展开菜单；打开时确保目录已加载（官方 load 语义）。
+  useEffect(() => {
+    setOpen(false);
+    setView('root');
+  }, [sessionId]);
   useEffect(() => {
     if (!open || !directory) return;
     directory.load().catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  const rootMenuRef = useRef<HTMLDivElement | null>(null);
+  }, [open, directory]);
 
   const openMenu = (): void => {
     const el = triggerRef.current;
@@ -167,8 +169,7 @@ export function ModelMenu(props: ModelMenuProps): JSX.Element {
       </button>
 
       {open && anchor ? (
-        <div ref={rootMenuRef}>
-          <MenuSurface anchor={anchor} initialRect={anchorRect} onClose={close} alignEnd={true} minWidth={240}>
+        <MenuSurface anchor={anchor} initialRect={anchorRect} onClose={close} alignEnd={true} minWidth={240}>
             {view === 'root' ? (
               <>
                 <button type="button" className="dci-cell" onClick={() => setView('models')}>
@@ -276,7 +277,6 @@ export function ModelMenu(props: ModelMenuProps): JSX.Element {
               </>
             ) : null}
           </MenuSurface>
-        </div>
       ) : null}
     </div>
   );

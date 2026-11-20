@@ -1,6 +1,6 @@
 /** 诊断口约定：window.__dshCodinput*（见 docs/idea.md 附录）。 */
 
-import type { InputState, InputTriggerController, ComposerKeyboard } from './host-types';
+import type { InputTriggerController, ComposerKeyboard } from './host-types';
 
 interface DiagWindow {
   __dshCodinputDebug: unknown[];
@@ -22,6 +22,9 @@ declare global {
   }
 }
 
+const DEBUG_LIMIT = 400;
+const ERROR_LIMIT = 200;
+
 export function diagWindow(): DiagWindow {
   const w = window as Window & Partial<DiagWindow>;
   w.__dshCodinputDebug ??= [];
@@ -35,13 +38,17 @@ export function diagWindow(): DiagWindow {
 export function diagDebug(...parts: unknown[]): void {
   const w = diagWindow();
   w.__dshCodinputDebug.push(parts.length === 1 ? parts[0] : parts);
-  if (w.__dshCodinputDebug.length > 400) w.__dshCodinputDebug.splice(0, w.__dshCodinputDebug.length - 400);
+  if (w.__dshCodinputDebug.length > DEBUG_LIMIT) {
+    w.__dshCodinputDebug.splice(0, w.__dshCodinputDebug.length - DEBUG_LIMIT);
+  }
 }
 
 export function diagError(scope: string, error: unknown): void {
   const w = diagWindow();
   w.__dshCodinputErrs.push({ scope, error: error instanceof Error ? error.stack ?? error.message : String(error) });
-  if (w.__dshCodinputErrs.length > 200) w.__dshCodinputErrs.splice(0, w.__dshCodinputErrs.length - 200);
+  if (w.__dshCodinputErrs.length > ERROR_LIMIT) {
+    w.__dshCodinputErrs.splice(0, w.__dshCodinputErrs.length - ERROR_LIMIT);
+  }
 }
 
 export function diagSession(id: string | null): void {

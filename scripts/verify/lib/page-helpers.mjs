@@ -31,8 +31,24 @@ export const HELPERS = `window.__dci = (() => {
     if (side === "right") return menu.l - card.r
     return null
   }
+  const findInEditor = (scopeSelector, innerSelector) => {
+    const host = document.querySelector(scopeSelector ? scopeSelector + " .dci-cm-host" : ".dci-cm-host")
+    if (host && host.shadowRoot) {
+      const hit = host.shadowRoot.querySelector(innerSelector)
+      if (hit) return hit
+    }
+    return document.querySelector(scopeSelector ? scopeSelector + " " + innerSelector : innerSelector)
+  }
+  const countCmEditors = () => {
+    let n = document.querySelectorAll(".cm-editor").length
+    const hosts = document.querySelectorAll(".dci-cm-host")
+    for (let i = 0; i < hosts.length; i++) {
+      if (hosts[i].shadowRoot) n += hosts[i].shadowRoot.querySelectorAll(".cm-editor").length
+    }
+    return n
+  }
   const editorText = () => {
-    const root = document.querySelector(".dci-surface .cm-content")
+    const root = findInEditor(".dci-surface", ".cm-content")
     if (!root) return null
     const ph = root.querySelector(".cm-placeholder") ? root.querySelector(".cm-placeholder").textContent : ""
     return (root.innerText || "").replace(ph, "").trim()
@@ -121,6 +137,6 @@ export const HELPERS = `window.__dci = (() => {
       gap: gap(rect(entry), info.card, relationValue),
     }, info)
   }
-  window.__dci = { rect, overlapping, relation, gap, editorText, sessionId, hostDraft, sidebarInfo: base, menuInfo, popupInfo }
+  window.__dci = { rect, overlapping, relation, gap, findInEditor, countCmEditors, editorText, sessionId, hostDraft, sidebarInfo: base, menuInfo, popupInfo }
   return window.__dci
 })()`

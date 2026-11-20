@@ -29,7 +29,7 @@
  */
 
 import { diagDebug, diagError } from './diag';
-import type { SlotEntryLike, SlotsService } from './host-types';
+import type { SlotsService } from './host-types';
 
 /** 已在自绘面按位置复刻的座位（与宿主 0.2.2-rc.3 的 bar children 表对齐）。 */
 export const MIRRORED_SEATS: readonly string[] = [

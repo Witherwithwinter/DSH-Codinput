@@ -20,7 +20,7 @@ import type { SessionStandard, SidebarTabInfo, SlotRegisterOptions } from './hos
 import { claimSidebarInput, subscribeSidebarTabClose, useSidebarCarryOwner, useSidebarInputCarried, type SidebarCarry } from './sideinput';
 import { useBarInjected } from './barinject';
 import { useContinueState } from './continuation';
-import { loadPrefs, savePrefs, subscribePrefs } from './prefs';
+import { loadPrefs, savePrefs, usePref, type CodinputPrefs } from './prefs';
 import { diagError, diagWindow } from './diag';
 import { CodinputSurface } from './components/CodinputSurface';
 import { useStableKit } from './components/slotEntry';
@@ -29,6 +29,8 @@ import { t, useT } from './i18n';
 
 export const SIDEBAR_TAB_ID = 'dsh-codinput';
 export const SIDEBAR_TAB_KIND = 'codinput';
+
+const selectEnabled = (p: CodinputPrefs): boolean => p.enabled;
 
 /** 第一段：标签类型定义（页面型：无 patterns，经指南页打开）。 */
 export function sidebarTabDefinition(): Record<string, unknown> {
@@ -147,8 +149,7 @@ export function SidebarCodinputBody(props: SessionStandard & { useTabInfo?: () =
   // 接管开关是承载的前提：侧边模式下输入 /codinput（或设置里关闭）要能
   // 退回官方输入框——body 撤销承载声明（主输入位随之恢复），标签里只出
   // 提示；重新开启后自动恢复侧栏形态。
-  const [enabled, setEnabled] = useState(() => loadPrefs().enabled);
-  useEffect(() => subscribePrefs(() => setEnabled(loadPrefs().enabled)), []);
+  const enabled = usePref(selectEnabled);
   // 打开标签即启用：body 挂载（首次激活/重载后激活/关掉重开）时若接管
   // 未开，直接开启——用户点开这个标签就是要用它。body 在 keepMounted 下
   // 常驻，/codinput 退出后不会重挂，不会把退出顶回去。

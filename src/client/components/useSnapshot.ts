@@ -11,8 +11,3 @@ export function useSnapshot<T>(source: HostObservable<T> | undefined): T | undef
   const getSnapshot = useCallback(() => source?.getSnapshot(), [source]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
-
-export function useSnapshotOf<T>(source: HostObservable<T> | undefined, selector: (value: T) => unknown): unknown {
-  const value = useSnapshot(source);
-  return value === undefined ? undefined : selector(value);
-}

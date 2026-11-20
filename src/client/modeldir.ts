@@ -3,8 +3,7 @@
  * `ctx.modelDirectories.directoryFor(sessionId)` 返回 per-session 目录，
  * `.store` 是 { current, groups, failures, status, error } 快照源，
  * `.select(selection)` 走 selectModel RPC 写入。
- * 注入注意：ctx.inject 列出 remote/remote.session 会让回调挂起
- * （那些是目录服务自身的依赖）——这里用 ctx.get / 单服务 inject。
+ * 注入方式见 `services.ts`（需连带声明其 static inject 链）。
  */
 
 import type { HostObservable, ModelCatalog, ModelDirectoriesFace, ModelSelection, UseProjection } from './host-types';

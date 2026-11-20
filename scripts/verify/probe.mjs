@@ -179,7 +179,7 @@ async function main() {
       return { shell: shell, sessionId: sessionKeys[0] }
     })
     await probe.check('H3', 'single takeover surface and single CodeMirror', async () => {
-      const info = await probe.ev('(function () { return { surfaces: document.querySelectorAll(".dci-surface").length, cards: document.querySelectorAll(".dci-card").length, cm: document.querySelectorAll(".cm-editor").length } })()')
+      const info = await probe.ev('(function () { return { surfaces: document.querySelectorAll(".dci-surface").length, cards: document.querySelectorAll(".dci-card").length, cm: window.__dci.countCmEditors() } })()')
       probe.assert(info.surfaces === 1 && info.cards === 1 && info.cm === 1, 'not single-instance', info)
       return info
     })
@@ -292,7 +292,7 @@ async function main() {
       probe.assert(info.side === 'true', 'side attribute not set', { side: info.side })
       probe.assert(info.inSidebar === true, 'surface not inside sidebar tab body', { inSidebar: info.inSidebar })
       probe.assert(info.float !== 'true', 'float also active in side form', { float: info.float })
-      const count = await probe.ev('(function () { return document.querySelectorAll(".cm-editor").length })()')
+      const count = await probe.ev('(function () { return window.__dci.countCmEditors() })()')
       probe.assert(count === 1, 'expected one editor in side form', { count: count })
       const text = await probe.ev('(function () { return window.__dci.editorText() })()')
       probe.assert(text === MARK, 'draft lost on live normal -> side switch', { text: text, MARK: MARK })

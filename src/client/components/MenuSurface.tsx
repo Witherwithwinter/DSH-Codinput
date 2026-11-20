@@ -129,8 +129,17 @@ export function MenuSurface(props: MenuSurfaceProps): JSX.Element {
       if (!dismissOnAnchorPointerDown && anchor && event.target instanceof Node && anchor.contains(event.target)) return;
       onClose();
     };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      onClose();
+    };
     window.addEventListener('pointerdown', onDown, true);
-    return () => window.removeEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
   }, [anchor, dismissOnAnchorPointerDown, onClose]);
 
   // 未定位的首帧隐藏但仍参与布局（官方 unplaced card 同款）——place() 在

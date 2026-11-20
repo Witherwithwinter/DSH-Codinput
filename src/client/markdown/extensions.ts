@@ -137,6 +137,8 @@ function collectFootnoteRefs(text: string): string[] {
  * 只识别块首（≤3 空格缩进）的定义行；围栏代码里的 `[^x]:` 不动。
  */
 export function extractFootnotes(source: string): ExtractedFootnotes {
+  // 快速路径：全文没有 `[^` 时零拆分、零正则扫描。
+  if (!source.includes('[^')) return { text: source, definitions: [] };
   const lines = source.split('\n');
   const kept: string[] = [];
   const rawDefs = new Map<string, string>();
@@ -196,6 +198,7 @@ export function extractFootnotes(source: string): ExtractedFootnotes {
     flush();
     keepPendingBlanks();
   }
+  if (rawDefs.size === 0) return { text: source, definitions: [] };
   const text = kept.join('\n');
   const definitions: FootnoteDefinition[] = [];
   let number = 0;
@@ -295,21 +298,16 @@ const commentBlockExtension: TokenizerAndRendererExtension = {
   name: 'dciCommentBlock',
   level: 'block',
   tokenizer(src: string): Tokens.Generic | undefined {
-    const lines = src.split('\n');
-    const first = lines[0] ?? '';
-    if (!/^ {0,3}%%/u.test(first)) return undefined;
-    const open = /^ {0,3}%%/u.exec(first);
-    if (!open || first.slice(open[0].length).includes('%%')) return undefined;
-    let close = -1;
-    for (let i = 1; i < lines.length; i++) {
-      if (lines[i].includes('%%')) {
-        close = i;
-        break;
-      }
-    }
-    if (close < 0) return undefined;
-    let raw = lines.slice(0, close + 1).join('\n');
-    if (close + 1 < lines.length) raw += '\n';
+    // 先查首行前缀再拆分：避免每个普通块都对剩余全文做 O(n) split('\n')。
+    const open = /^ {0,3}%%/u.exec(src);
+    if (!open) return undefined;
+    const nl = src.indexOf('\n');
+    if (nl < 0) return undefined;
+    if (src.slice(open[0].length, nl).includes('%%')) return undefined;
+    const closeAt = src.indexOf('%%', nl + 1);
+    if (closeAt < 0) return undefined;
+    const lineEnd = src.indexOf('\n', closeAt + 2);
+    const raw = lineEnd < 0 ? src : src.slice(0, lineEnd + 1);
     return { type: 'dciCommentBlock', raw };
   },
   renderer(): string {
@@ -439,21 +437,27 @@ const calloutExtension: TokenizerAndRendererExtension = {
   name: 'dciCallout',
   level: 'block',
   tokenizer(this: TokenizerThis, src: string): Tokens.Generic | undefined {
-    const lines = src.split('\n');
-    const head = CALLOUT_HEAD.exec(lines[0] ?? '');
+    // 先仅截取首行做头匹配，避免非 callout 块对全文做 O(n) split('\n')。
+    const firstNl = src.indexOf('\n');
+    const firstLine = firstNl < 0 ? src : src.slice(0, firstNl);
+    const head = CALLOUT_HEAD.exec(firstLine);
     if (!head) return undefined;
-    const rawLines: string[] = [lines[0]];
     const bodyLines: string[] = [];
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i];
-      // 只有继续带 `>` 的行才属于本 blockquote/callout；空行（未带 `>`）结束本块
-      // ——`> a\n\n> b` 在 CommonMark/Obsidian 里是两个块，不能吞并成一次 callout。
-      if (!/^ {0,3}>/u.test(line)) break;
-      rawLines.push(line);
-      bodyLines.push(line.replace(/^ {0,3}>[ \t]?/u, ''));
+    let end = firstNl < 0 ? src.length : firstNl + 1;
+    if (firstNl >= 0) {
+      let pos = firstNl + 1;
+      while (pos < src.length) {
+        const nl = src.indexOf('\n', pos);
+        const line = nl < 0 ? src.slice(pos) : src.slice(pos, nl);
+        // 只有继续带 `>` 的行才属于本 blockquote/callout；空行结束本块。
+        if (!/^ {0,3}>/u.test(line)) break;
+        bodyLines.push(line.replace(/^ {0,3}>[ \t]?/u, ''));
+        end = nl < 0 ? src.length : nl + 1;
+        if (nl < 0) break;
+        pos = nl + 1;
+      }
     }
-    let raw = rawLines.join('\n');
-    if (rawLines.length < lines.length) raw += '\n';
+    const raw = src.slice(0, end);
     const body = bodyLines.join('\n');
     const prevTop = this.lexer.state.top;
     this.lexer.state.top = true;

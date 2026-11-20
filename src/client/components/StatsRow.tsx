@@ -10,9 +10,17 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives';
-import { useSessionStats, formatTokens, formatTokensPerSecond, formatCacheHitPercent, formatDuration, type SessionStats } from '../stats';
+import {
+  useSessionStatsBundle,
+  formatTokens,
+  formatTokensPerSecond,
+  formatCacheHitPercent,
+  formatDuration,
+  type ContextPressureSnapshot,
+  type SessionStats,
+} from '../stats';
 import type { UseProjection } from '../host-types';
-import { t } from '../i18n';
+import { t, useT } from '../i18n';
 import { listRows, useSlotEntries } from './slotEntry';
 import { ComposerDockSlot, COMPOSER_DOCK_SLOT, SHIPPED_DOCK_IDS } from './ComposerDockSlot';
 
@@ -89,10 +97,12 @@ function useAnchoredPanel(
     window.addEventListener('scroll', place, true);
     window.addEventListener('resize', place);
     const panel = panelRef.current;
+    const anchor = anchorRef.current;
     let observer: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined' && panel !== null) {
+    if (typeof ResizeObserver !== 'undefined') {
       observer = new ResizeObserver(place);
-      observer.observe(panel);
+      if (panel !== null) observer.observe(panel);
+      if (anchor !== null) observer.observe(anchor);
     }
     return () => {
       observer?.disconnect();
@@ -314,6 +324,8 @@ function TokenPill(props: { stats: SessionStats; open: boolean; onToggle(): void
 
 export function StatsRow(props: StatsRowProps): JSX.Element | null {
   const { useProjection, sessionId, chatNodes, standard } = props;
+  // StatsRowMemo 被 React.memo 隔离，必须自行订阅语言变化，切 zh/en 时文案即时刷新。
+  useT();
   // 唯一展开：三枚（轮步/用量/上下文小圈）共用一个 open 态——任意一枚展开
   // 即收起其余（官方 chat StatsPills 的 openPill 同语义：详情面板同时只存在一个）。
   const [open, setOpen] = useState<'rounds' | 'tokens' | 'gauge' | null>(null);
@@ -321,21 +333,14 @@ export function StatsRow(props: StatsRowProps): JSX.Element | null {
   const toggle = useCallback((key: 'rounds' | 'tokens' | 'gauge') => {
     setOpen((current) => (current === key ? null : key));
   }, []);
-  const stats = useSessionStats(useProjection, sessionId, chatNodes);
+  const { stats, pressure } = useSessionStatsBundle(useProjection, chatNodes);
 
-  // composer.dock 座位（issue #8）：官方 dock 行由 [composer.dock 条目, ContextMeter]
-  // 组成，bar 被遮蔽后该渲染点随官方输入框消失；这里在复刻数据行里把它渲染回来。
-  // 只镜像第三方条目：官方 Activity/Usage 胶囊由本行自绘复刻，镜像整座会重复
-  // （运行时验证 3 项 → 5 项），故按 SHIPPED_DOCK_IDS 过滤。无第三方条目时整行
-  // 维持旧行为（不因空座位多出一条空白行）。
+  // composer.dock 座位（issue #8）：只镜像第三方条目，官方 Activity/Usage 由本行复刻。
   const dockEntries = useSlotEntries(COMPOSER_DOCK_SLOT);
   const hasDockSeat =
     sessionId !== undefined && listRows(dockEntries, SHIPPED_DOCK_IDS).length > 0;
 
   // 官方 rc.2：上下文小圈独立于 stats 胶囊渲染（无 stats 也要出圈）。
-  const pressure = useProjection
-    ? (useProjection('contextPressure') as PressureSnapshot | undefined)
-    : undefined;
   const hasGauge =
     pressure !== undefined &&
     typeof pressure.contextWindow === 'number' &&
@@ -360,6 +365,7 @@ export function StatsRow(props: StatsRowProps): JSX.Element | null {
       ) : null}
       <ContextGauge
         useProjection={useProjection}
+        pressure={pressure}
         open={open === 'gauge'}
         onToggle={() => toggle('gauge')}
         onClose={close}
@@ -369,12 +375,6 @@ export function StatsRow(props: StatsRowProps): JSX.Element | null {
 }
 
 const GAUGE_CIRCUMFERENCE = 2 * Math.PI * 5.5;
-
-interface PressureSnapshot {
-  contextWindow?: number;
-  pressureTokens?: number;
-  projectedTokens?: number;
-}
 
 interface BreakdownSnapshot {
   messageTokens?: number;
@@ -396,15 +396,13 @@ function shortTokens(n: number): string {
  * useAnchoredPanel 定位（官方 ContextMeter：side top / align start / gap 8 / margin 12）。 */
 export function ContextGauge(props: {
   useProjection: UseProjection | undefined;
+  pressure: ContextPressureSnapshot | undefined;
   open: boolean;
   onToggle(): void;
   onClose(): void;
 }): JSX.Element | null {
-  const { useProjection, open, onToggle, onClose } = props;
+  const { useProjection, pressure, open, onToggle, onClose } = props;
   const { rootRef, panelRef, position } = useStatDialogSeat(open, onClose);
-  const pressure = useProjection
-    ? (useProjection('contextPressure') as PressureSnapshot | undefined)
-    : undefined;
   const breakdown = useProjection
     ? (useProjection('contextBreakdown') as BreakdownSnapshot | undefined)
     : undefined;

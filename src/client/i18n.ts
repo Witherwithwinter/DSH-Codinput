@@ -4,13 +4,13 @@
  *
  * - 注册命名空间 `dsh-codinput` 的 zh / en 两份词典（宿主内置语言只有这两个）。
  * - `bind(ns)` 返回的函数**引用稳定、按调用当拍读当前语言**，所以组件里直接
- *   调 `t('key')` 即可；要跟随语言切换重渲染的地方用 `useT()`（内部订阅宿主
- *   locale 快照变化）。动态键（如候选菜单来源名）用 `tOptional()`，词典里没有
- *   就返回 undefined，交由调用方回退原名。
+ *   调 `t('key')` 即可；要跟随语言切换重渲染的地方用 `useT()`（基于
+ *   `useSyncExternalStore` 订阅宿主 locale 快照变化）。动态键（如权限预设）用
+ *   `tOptional()`，词典里没有就返回 undefined，交由调用方回退原名。
  * - 插值占位符用 `{name}`（与宿主 Translate 约定一致）。
  */
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 export type TranslateParams = Record<string, string | number>;
 type Dict = Record<string, string>;
@@ -54,6 +54,7 @@ const ZH: Dict = {
   'stats.toolTime': '工具调用用时',
   'stats.ttft': '首 token 平均（TTFT）',
   'stats.tpsLabel': '输出速度（TPS）',
+  'stats.durationMinSec': '{m}分{s}秒',
   'stats.totalTokens': '{tokens} tok',
   'stats.cacheHit': '缓存命中 {percent}%',
   'stats.cacheHitLabel': '缓存命中',
@@ -61,26 +62,15 @@ const ZH: Dict = {
   'stats.cacheWrite': '缓存写入',
   'stats.output': '输出',
   'stats.uncached': '未缓存输入',
-  'stats.breakdown': '上下文分段',
   'stats.prompt': '系统提示词',
   'stats.tools': '工具定义',
   'stats.messages': '对话消息',
   'menu.model': '模型',
   'menu.reasoning': '推理等级',
   'menu.reasoningNone': '当前模型未提供推理等级。',
-  'menu.source.command': '指令',
-  'menu.source.skill': '技能',
-  'menu.source.subagent': '子智能体',
-  'menu.drill': '进入目录',
-  'menu.nav': '目录导航',
-  'menu.triggerCandidates': '触发候选建议',
-  'menu.empty': '没有匹配项',
-  'menu.loading': '加载中…',
-  'menu.loadFailed': '加载失败',
   'menu.refreshingModels': '正在刷新模型列表…',
   'menu.noModels': '没有可用的模型。',
-  'menu.filter': '筛选选项…',
-  'popup.ack': '我已了解该操作的影响',
+  'md.mermaidError': 'Mermaid 渲染失败',
   'perm.trigger': '访问模式，当前：{name}',
   'perm.confirmTitle': '确认启用完全权限？',
   'perm.confirmEnable': '启用完全权限',
@@ -128,7 +118,6 @@ const ZH: Dict = {
   'side.notice': '本会话的输入面已在另一个分栏中打开（输入入口唯一）。',
   'side.guideDesc': '代码编辑器风格的输入面板；开启期间主输入框由本面板接管（共用同一台输入机）',
   'side.disabled': 'Codinput 接管已关闭：主输入在原输入位（官方输入框）。输入 /codinput 或到 设置 → Codinput 重新开启。',
-  'tool.attach': '文件',
   'tool.stop': '停止生成',
   'image.preview': '原图预览',
   'image.closePreview': '关闭原图预览',
@@ -175,6 +164,7 @@ const EN: Dict = {
   'stats.toolTime': 'Tool call time',
   'stats.ttft': 'Avg first token (TTFT)',
   'stats.tpsLabel': 'Output speed (TPS)',
+  'stats.durationMinSec': '{m}m {s}s',
   'stats.totalTokens': '{tokens} tok',
   'stats.cacheHit': 'Cache hit {percent}%',
   'stats.cacheHitLabel': 'Cache hit',
@@ -182,26 +172,15 @@ const EN: Dict = {
   'stats.cacheWrite': 'Cache write',
   'stats.output': 'Output',
   'stats.uncached': 'Uncached input',
-  'stats.breakdown': 'Context breakdown',
   'stats.prompt': 'System prompt',
   'stats.tools': 'Tool definitions',
   'stats.messages': 'Conversation',
   'menu.model': 'Model',
   'menu.reasoning': 'Reasoning effort',
   'menu.reasoningNone': 'The current model exposes no reasoning effort.',
-  'menu.source.command': 'Commands',
-  'menu.source.skill': 'Skills',
-  'menu.source.subagent': 'Subagents',
-  'menu.drill': 'Open folder',
-  'menu.nav': 'Folder navigation',
-  'menu.triggerCandidates': 'Trigger suggestions',
-  'menu.empty': 'No matches',
-  'menu.loading': 'Loading…',
-  'menu.loadFailed': 'Failed to load',
   'menu.refreshingModels': 'Refreshing model list…',
   'menu.noModels': 'No models available.',
-  'menu.filter': 'Filter options…',
-  'popup.ack': 'I understand the impact of this action',
+  'md.mermaidError': 'Mermaid render failed',
   'perm.trigger': 'Access mode, current: {name}',
   'perm.confirmTitle': 'Enable full access?',
   'perm.confirmEnable': 'Enable full access',
@@ -249,7 +228,6 @@ const EN: Dict = {
   'side.notice': "This session's input panel is already open in another split pane (only one input surface exists).",
   'side.guideDesc': 'Code-editor style input panel. While enabled it takes over the composer (sharing the same input machine).',
   'side.disabled': 'Codinput takeover is off: the composer is back at its original place (official input). Type /codinput or open Settings → Codinput to re-enable.',
-  'tool.attach': 'File',
   'tool.stop': 'Stop generating',
   'image.preview': 'Original image preview',
   'image.closePreview': 'Close original image preview',
@@ -269,10 +247,12 @@ interface LocaleFaceLike {
 let hostFace: LocaleFaceLike | null = null;
 let bound: ((key: string, params?: TranslateParams) => string) | null = null;
 let activeLocale = 'zh';
+let localeVersion = 0;
 const listeners = new Set<() => void>();
 const foreignBinds = new Map<string, ((key: string, params?: TranslateParams) => string) | null>();
 
 function emit(): void {
+  localeVersion += 1;
   for (const fn of listeners) fn();
 }
 
@@ -289,14 +269,18 @@ function builtinDict(): Dict {
   return activeLocale.startsWith('zh') ? ZH : EN;
 }
 
-/** 安装：注册词典并绑定翻译函数（宿主 locale 服务就绪后调用一次）。 */
-export function installI18n(locale: unknown): void {
+/** 安装：注册词典并绑定翻译函数（宿主 locale 服务就绪后调用一次；返回卸载清理函数）。 */
+export function installI18n(locale: unknown): (() => void) | undefined {
   const face = locale as LocaleFaceLike | undefined;
-  if (!face) return;
+  if (!face) return undefined;
   hostFace = face;
+  foreignBinds.clear();
+  const disposers: Array<() => void> = [];
   try {
-    face.register?.(NS, 'zh', ZH);
-    face.register?.(NS, 'en', EN);
+    const offZh = face.register?.(NS, 'zh', ZH);
+    if (typeof offZh === 'function') disposers.push(offZh);
+    const offEn = face.register?.(NS, 'en', EN);
+    if (typeof offEn === 'function') disposers.push(offEn);
     bound = face.bind?.(NS) ?? null;
   } catch {
     // 重复注册（热重载）或形状漂移：退回内置词典
@@ -309,14 +293,30 @@ export function installI18n(locale: unknown): void {
   try {
     const snapshot = face.getSnapshot?.();
     if (snapshot?.active) activeLocale = snapshot.active;
-    face.subscribe?.(() => {
+    const offSub = face.subscribe?.(() => {
       const next = face.getSnapshot?.();
       if (next?.active && next.active !== activeLocale) activeLocale = next.active;
       emit();
     });
+    if (typeof offSub === 'function') disposers.push(offSub);
   } catch {
     /* 快照不可用：语言切换不重渲染，但不影响首屏文案 */
   }
+  emit();
+  return () => {
+    for (const off of disposers.splice(0)) {
+      try {
+        off();
+      } catch {
+        /* 忽略宿主卸载期异常 */
+      }
+    }
+    if (hostFace === face) {
+      hostFace = null;
+      bound = null;
+      foreignBinds.clear();
+    }
+  };
 }
 
 /**
@@ -329,14 +329,14 @@ export function bindForeign(ns: string): ((key: string, params?: TranslateParams
   if (cached) return cached;
   // 只缓存成功的绑定：宿主 locale 服务可能晚于首次调用就绪，null 缓存会让
   // 之后所有文案永远拿不到官方词典。
-  let bound: ((key: string, params?: TranslateParams) => string) | null = null;
+  let foreign: ((key: string, params?: TranslateParams) => string) | null = null;
   try {
-    bound = hostFace?.bind?.(ns) ?? null;
+    foreign = hostFace?.bind?.(ns) ?? null;
   } catch {
-    bound = null;
+    foreign = null;
   }
-  if (bound) foreignBinds.set(ns, bound);
-  return bound;
+  if (foreign) foreignBinds.set(ns, foreign);
+  return foreign;
 }
 
 export function subscribeI18n(fn: () => void): () => void {
@@ -344,6 +344,10 @@ export function subscribeI18n(fn: () => void): () => void {
   return () => {
     listeners.delete(fn);
   };
+}
+
+function getLocaleVersion(): number {
+  return localeVersion;
 }
 
 function lookup(key: string, params?: TranslateParams): string | undefined {
@@ -409,16 +413,15 @@ export function tBar(key: string, params?: TranslateParams): string {
 }
 
 /**
- * 可选翻译：词典里没有该键时返回 undefined——用于动态键（如候选菜单的
- * 来源名），调用方回退显示原名而不是把 key 摆到界面上。
+ * 可选翻译：词典里没有该键时返回 undefined——用于动态键，
+ * 调用方回退显示原名而不是把 key 摆到界面上。
  */
 export function tOptional(key: string, params?: TranslateParams): string | undefined {
   return lookup(key, params);
 }
 
-/** 语言切换时重渲染的订阅钩子（返回稳定的 t）。 */
+/** 语言切换时重渲染的订阅钩子（useSyncExternalStore，无撕裂，返回稳定的 t）。 */
 export function useT(): typeof t {
-  const [, bump] = useState(0);
-  useEffect(() => subscribeI18n(() => bump((n) => n + 1)), []);
+  useSyncExternalStore(subscribeI18n, getLocaleVersion, getLocaleVersion);
   return t;
 }

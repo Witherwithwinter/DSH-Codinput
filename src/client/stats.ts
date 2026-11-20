@@ -6,7 +6,9 @@
  * 注意：useProjection 是真实 hook，键探测必须是固定次数的顶层调用。
  */
 
+import { useMemo } from 'react';
 import type { UseProjection } from './host-types';
+import { t } from './i18n';
 
 const PROJECTION_KEYS = [
   'tokenUsage',
@@ -40,17 +42,17 @@ export interface SessionStats {
   outputTokens?: number;
 }
 
+export interface ContextPressureSnapshot {
+  readonly contextWindow?: number;
+  readonly pressureTokens?: number;
+  readonly projectedTokens?: number;
+}
+
 interface TokenUsage {
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
   outputTokens?: number;
   uncachedInputTokens?: number;
-}
-
-interface ContextPressure {
-  contextWindow?: number;
-  pressureTokens?: number;
-  projectedTokens?: number;
 }
 
 /** 官方 sessionStats 投影/deriveStats 的输出形状。 */
@@ -81,15 +83,15 @@ function readTokenUsage(raw: unknown): TokenUsage | undefined {
   return Object.values(usage).some((v) => v !== undefined) ? usage : undefined;
 }
 
-function readContextPressure(raw: unknown): ContextPressure | undefined {
+function readContextPressure(raw: unknown): ContextPressureSnapshot | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const r = raw as Record<string, unknown>;
-  const cp: ContextPressure = {
+  const cp: ContextPressureSnapshot = {
     contextWindow: num(r['contextWindow']),
     pressureTokens: num(r['pressureTokens']),
     projectedTokens: num(r['projectedTokens']),
   };
-  return cp.contextWindow !== undefined && cp.pressureTokens !== undefined ? cp : undefined;
+  return cp.contextWindow !== undefined ? cp : undefined;
 }
 
 function readSessionStats(raw: unknown): ChatStats | undefined {
@@ -114,7 +116,7 @@ function readSessionStats(raw: unknown): ChatStats | undefined {
  * callTime 起算工具用时。
  */
 export function deriveChatStats(nodes: unknown): ChatStats | undefined {
-  if (!Array.isArray(nodes)) return undefined;
+  if (!Array.isArray(nodes) || nodes.length === 0) return undefined;
   const turns = new Set<unknown>();
   let steps = 0;
   let llmMs = 0;
@@ -153,7 +155,6 @@ export function deriveChatStats(nodes: unknown): ChatStats | undefined {
     const out = num(usage?.['outputTokens']);
     if (out !== undefined && out >= 0) decodeTokens += out;
   }
-  if (nodes.length === 0) return undefined;
   return { turns: turns.size, steps, llmMs, toolMs, ttftMs, ttftSteps, decodeMs, decodeTokens };
 }
 
@@ -237,76 +238,89 @@ export function formatCacheHitPercent(
   return `99.${'9'.repeat(distinguishingPlaces - 1)}${10 - roundedLoss}`;
 }
 
-/** 官方 formatDuration：<60s 一位小数秒，否则 分+秒；NaN/Infinity → null。 */
+/** 官方 formatDuration：<60s 一位小数秒，否则本地化分+秒；NaN/Infinity → null。 */
 export function formatDuration(ms: number): string | null {
   if (!Number.isFinite(ms)) return null;
   const s = Math.max(0, ms) / 1000;
   if (s < 60) return `${Math.round(s * 10) / 10}s`;
   const whole = Math.round(s);
-  return `${Math.floor(whole / 60)}分${whole % 60}秒`;
+  return t('stats.durationMinSec', { m: Math.floor(whole / 60), s: whole % 60 });
 }
 
-/** 每个键一个固定位置的 hook 调用——跨渲染的调用次数与顺序恒定。 */
-export function useSessionStats(
+export interface SessionStatsBundle {
+  readonly stats: SessionStats | null;
+  readonly pressure: ContextPressureSnapshot | undefined;
+}
+
+/**
+ * 每个键一个固定位置的 hook 调用——跨渲染的调用次数与顺序恒定。
+ * 同时返回原始 `pressure` 供 ContextGauge 复用（避免同一行对 contextPressure 重复订阅 3 次），
+ * 并对 `deriveChatStats` 与统计对象做 memo，避免无变化重渲染重复扫描消息数组。
+ */
+export function useSessionStatsBundle(
   useProjection: UseProjection | undefined,
-  sessionId: string | undefined,
   chatNodes: unknown,
-): SessionStats | null {
+): SessionStatsBundle {
   const k0 = useProjection ? useProjection(PROJECTION_KEYS[0]) : undefined;
   const k1 = useProjection ? useProjection(PROJECTION_KEYS[1]) : undefined;
   const k2 = useProjection ? useProjection(PROJECTION_KEYS[2]) : undefined;
   const k3 = useProjection ? useProjection(PROJECTION_KEYS[3]) : undefined;
   const k4 = useProjection ? useProjection(PROJECTION_KEYS[4]) : undefined;
 
-  const usage = readTokenUsage(k0);
-  const pressure = readContextPressure(k1);
-  // 官方：sessionStats 投影优先，缺席从 chat legacy 节点派生。
-  const chat = readSessionStats(k4) ?? deriveChatStats(chatNodes) ?? readTurnsSteps(k2, k3);
+  const pressure = useMemo(() => readContextPressure(k1), [k1]);
+  const derivedChat = useMemo(() => (readSessionStats(k4) ? undefined : deriveChatStats(chatNodes)), [k4, chatNodes]);
 
-  const stats: SessionStats = {};
-  if (chat) {
-    if (chat.turns !== undefined || chat.steps !== undefined) {
-      stats.turns = chat.turns;
-      stats.steps = chat.steps;
+  const stats = useMemo<SessionStats | null>(() => {
+    const usage = readTokenUsage(k0);
+    // 官方：sessionStats 投影优先，缺席从 chat legacy 节点派生。
+    const chat = readSessionStats(k4) ?? derivedChat ?? readTurnsSteps(k2, k3);
+
+    const out: SessionStats = {};
+    if (chat) {
+      if (chat.turns !== undefined || chat.steps !== undefined) {
+        out.turns = chat.turns;
+        out.steps = chat.steps;
+      }
+      if (chat.llmMs !== undefined) out.llmMs = chat.llmMs;
+      if (chat.toolMs !== undefined) out.toolMs = chat.toolMs;
+      if (chat.ttftMs !== undefined) out.ttftMs = chat.ttftMs;
+      if (chat.ttftSteps !== undefined) out.ttftSteps = chat.ttftSteps;
+      if (chat.decodeMs !== undefined) out.decodeMs = chat.decodeMs;
+      if (chat.decodeTokens !== undefined) out.decodeTokens = chat.decodeTokens;
+      if ((chat.decodeMs ?? 0) > 0) {
+        out.tokensPerSecond = (chat.decodeTokens ?? 0) / (chat.decodeMs! / 1000);
+      }
     }
-    if (chat.llmMs !== undefined) stats.llmMs = chat.llmMs;
-    if (chat.toolMs !== undefined) stats.toolMs = chat.toolMs;
-    if (chat.ttftMs !== undefined) stats.ttftMs = chat.ttftMs;
-    if (chat.ttftSteps !== undefined) stats.ttftSteps = chat.ttftSteps;
-    if (chat.decodeMs !== undefined) stats.decodeMs = chat.decodeMs;
-    if (chat.decodeTokens !== undefined) stats.decodeTokens = chat.decodeTokens;
-    if ((chat.decodeMs ?? 0) > 0) {
-      stats.tokensPerSecond = (chat.decodeTokens ?? 0) / (chat.decodeMs! / 1000);
+    if (usage) {
+      const total =
+        (usage.cacheReadTokens ?? 0) +
+        (usage.cacheWriteTokens ?? 0) +
+        (usage.outputTokens ?? 0) +
+        (usage.uncachedInputTokens ?? 0);
+      if (total > 0) {
+        out.totalTokens = total;
+        out.uncachedInputTokens = usage.uncachedInputTokens;
+        out.cacheReadTokens = usage.cacheReadTokens;
+        out.cacheWriteTokens = usage.cacheWriteTokens;
+        out.outputTokens = usage.outputTokens;
+      }
+      // 官方：分母 = 三段输入桶（缓存读+写+未缓存输入）。
+      const inputTotal = (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0) + (usage.uncachedInputTokens ?? 0);
+      if (inputTotal > 0) {
+        const text = formatCacheHitPercent(usage.cacheReadTokens ?? 0, inputTotal);
+        if (text !== null) out.cacheHitText = text;
+      }
     }
-  }
-  if (usage) {
-    const total =
-      (usage.cacheReadTokens ?? 0) +
-      (usage.cacheWriteTokens ?? 0) +
-      (usage.outputTokens ?? 0) +
-      (usage.uncachedInputTokens ?? 0);
-    if (total > 0) {
-      stats.totalTokens = total;
-      stats.uncachedInputTokens = usage.uncachedInputTokens;
-      stats.cacheReadTokens = usage.cacheReadTokens;
-      stats.cacheWriteTokens = usage.cacheWriteTokens;
-      stats.outputTokens = usage.outputTokens;
+    const window_ = pressure?.contextWindow;
+    // 官方 contextOccupancy：优先 projectedTokens。
+    const used = pressure?.projectedTokens ?? pressure?.pressureTokens;
+    if (window_ !== undefined && window_ > 0 && used !== undefined) {
+      out.contextPct = (used / window_) * 100;
     }
-    // 官方：分母 = 三段输入桶（缓存读+写+未缓存输入）。
-    const inputTotal = (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0) + (usage.uncachedInputTokens ?? 0);
-    if (inputTotal > 0) {
-      const text = formatCacheHitPercent(usage.cacheReadTokens ?? 0, inputTotal);
-      if (text !== null) stats.cacheHitText = text;
-    }
-  }
-  const window_ = pressure?.contextWindow;
-  // 官方 contextOccupancy：优先 projectedTokens。
-  const used = pressure?.projectedTokens ?? pressure?.pressureTokens;
-  if (window_ !== undefined && window_ > 0 && used !== undefined) {
-    stats.contextPct = (used / window_) * 100;
-  }
-  void sessionId;
-  return Object.keys(stats).length > 0 ? stats : null;
+    return Object.keys(out).length > 0 ? out : null;
+  }, [k0, k2, k3, k4, derivedChat, pressure]);
+
+  return { stats, pressure };
 }
 
 function readTurnsSteps(k2: unknown, k3: unknown): ChatStats | undefined {

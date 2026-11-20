@@ -1,6 +1,6 @@
 {
   "name": "dsh-codinput",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "DSH 插件（桌面版，适配 DSH 0.2.2-rc.3）：把聊天输入框变成代码编辑器一样的输入风格（CodeMirror 6 接管 conversation.composer.bar）。",
   "license": "MIT",
   "author": "Witherwithwinter",
@@ -41,8 +41,9 @@
     "build": "node scripts/build.mjs",
     "build:dev": "node scripts/build.mjs --dev",
     "check:popup": "node scripts/check-popup-contract.mjs",
+    "test": "node scripts/test-unit.mjs",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run check:popup && npm run build && npm run typecheck",
+    "prepublishOnly": "npm run check:popup && npm test && npm run build && npm run typecheck",
     "prebuild": "node scripts/check-popup-contract.mjs"
   },
   "dsh": {
@@ -61,21 +62,19 @@
       ]
     }
   },
-  "dependencies": {
+  "devDependencies": {
     "@codemirror/commands": "^6.8.0",
     "@codemirror/language": "^6.10.8",
     "@codemirror/state": "^6.5.2",
     "@codemirror/view": "^6.36.0",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.7",
     "dompurify": "^3.2.4",
+    "esbuild": "^0.25.0",
     "highlight.js": "^11.12.0",
     "katex": "^0.18.0",
     "marked": "^15.0.6",
-    "mermaid": "^12.3.0"
-  },
-  "devDependencies": {
-    "@types/react": "^18.3.18",
-    "@types/react-dom": "^18.3.7",
-    "esbuild": "^0.25.0",
+    "mermaid": "^12.3.0",
     "typescript": "^5.7.3"
   },
   "allowScripts": {

@@ -2,6 +2,46 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.5.3] — 2026-11-20（长按回车/退格满帧流畅优化与全项目架构整改）
+
+### 性能（编辑器长按 Enter / Backspace 满帧流畅）
+
+- **编辑器与行列指示器迁入 open ShadowRoot 隔离（根治宿主 `:has()` 级联重算）**：CDP Tracing 实测表明，Light DOM 下每次增删行都会触发宿主 `.wSkVaW_scrollBody` / `[data-files-navigator-row]` / `html` 上的 `:has(...)` 规则与 166 张宿主样式表（5,987 条规则），在含 2,000 个聊天节点的会话中单键 `RecalcStyle` 耗时 25–30 ms。现通过 `ensureEditorShadow` 将 CodeMirror `EditorView({ root: shadow })` 与 `.dci-pos` 挂载至 `.dci-cm-host` 的 open ShadowRoot，截断宿主 `:has()` 失效链，样式重算复杂度与聊天历史长度彻底解耦为 O(1)；ShadowRoot 内复刻宿主 5 条滚动条规则（继承 `--dsh-scrollbar-*` / `--dsw-*` 变量），浅/深色换肤视觉一致；`.cm-scroller` 启用 `contain: layout style paint`。同步适配分屏被动滚动监听（`onEditorScroll`）与附件粘贴 `composedPath()`。
+- **移除 `drawSelection()`，改用原生合成器光标**：单光标编辑器移除 CodeMirror JS 自绘光标层（省去每次按键一次同步 `coordsAtPos` 布局 + 光标动画样式失效），直接使用 `.cm-content` 的 `caret-color`（品牌强调色）与原生 `::selection`。
+- **热输入路径零 React 重渲染、零整篇字符串分配**：`.dci-pos` 改为 ShadowRoot 内 `rAF` 合并直写 `textContent`；`cm.ts` `updateListener` 与 `liveDocs` 直接传递不可变 `Text` 树，仅在空闲同步、发送、预览停手 140 ms 或触发 `/` `@` 菜单时惰性 `toString()`；非触发词上下文短路跳过 `triggers.track(fullText)`；草稿空/命令态通过 `classifyDoc(doc)` O(1) 判定。
+- **自动增高态连按稳高**：未手动拖高且处于自动增高态时，检测到 `event.repeat` 连按 `Enter` / `Backspace` / `Delete` 期间锁定 `.dci-body` 精确浮点高度（连按 `Enter` 至多每 200 ms 阶梯扩展一次，连按 `Backspace` 保持视口稳定不跳动），避免宿主 `seatObserver` 每行改写继承变量 `--dsh-composer-height` 触发整页样式重算；松手 `keyup` 或短暂空闲后立即交回 CSS 自适应。
+- **隔离宿主实测（`0.2.2-rc.3` + 2,000 可见聊天节点 + 无头 Edge CDP）**：
+  - 200 行连按 Enter / Backspace：单键 p50 **35.3 / 36.1 ms → 7.0 / 6.4 ms**，帧间隔 p95/max **33.4 / 100 ms → 16.7 / 16.8 ms**（满帧 60 fps），`RecalcStyle` 总耗时下降 **96%–97%**；
+  - 600 行与分屏预览 200 行：单键 p50 **6.1–6.8 ms**，帧间隔锁在 **16.7–16.8 ms**（与草稿长度、聊天长度均无关）；
+  - 空草稿自动增高（1→35 行）与自动收缩（35→1 行）：单键 p50 **34.7 ms → 6.8 / 6.7 ms**，收缩阶段全程满帧 60 fps。
+
+### 架构与缺陷修复
+
+- **响应式状态与插件生命周期收口**：`services.ts` 升级为响应式订阅存储（`subscribeServices` / `useService`）；`prefs.ts` 增加冻结内存快照缓存与跨标签 `storage` 同步，消除热路径重复 `localStorage` 读写；`i18n.ts` / `barinject.ts` / `sideinput.ts` / `slotEntry.tsx` 统一改用 `useSyncExternalStore` 稳定快照；`index.tsx` / `command.ts` / `attachments.ts` 的全局订阅、定时器、`console.error` 钩子与隐藏 `<input type="file">` 全部纳入 `ctx.effect` 严格回收。
+- **组件拆解与多处隐蔽 Bug 修复**：
+  - 从 `CodinputBar.tsx` 拆出独立 `FloatingShell.tsx`，修复悬浮拖放首帧视口/局部坐标夹取跳变，补充 `data-dragging` 态、视口缩放重夹取与卸载清理；
+  - `slotEntry.tsx`：修复 `snapshotHookFor` 订阅引用抖动、`listRows` 丢弃多个 `id === undefined` 条目、`EntryBoundary` 换会话不自动复位、`entryInjectCache` 无上限增长（加 LRU 16 上限）及 `useStableKit` 误比对未过滤 props；
+  - `VoiceActivity.tsx` / `AttachmentsSeat.tsx` / `ModelLabel.tsx`：移除绕过 0.5.2 会话绑定代失效的旧 `useMemo` 包装；
+  - `PermissionMenu.tsx`：修复 `disabled` 判断反转并把 `RiskConfirmation` 迁入 portal；
+  - `CodinputSurface.tsx` / `Toolbar.tsx`：向 `openCommandMenu` 传递 `keyboard`（修复 `draftRev: 0`）、修复仅预览态切会话残留旧草稿、卸载时回收顶边拖拽监听、修复发送按钮 steer/queue 宿主页签键；
+  - `cm.ts` / `EditorPane.tsx`：隔离 `editableCompartment` 防止偏好变更意外解锁只读态、修复切会话后偏好/锁定 effect 钉在旧 view、自定义 `lineBreakHotkey` 正确替换当前选区；
+  - `StatsRow.tsx` / `stats.ts` / `MenuSurface.tsx` / `ExpandBall.tsx` / `overlay-host.ts` / `settings.tsx` / `hotkey.ts`：补全语言切换联动与时长本地化、去重 `contextPressure` 订阅、菜单支持 `Escape` 关闭、`ExpandBall` 支持标题栏晚挂载、清理 `overlay-host` 内联残留、修复字体输入框无法清空与 `mod` vs `ctrl`/`meta` 冲突检测；
+  - **Markdown 管线**：消除 `commentBlockExtension` / `calloutExtension` 的 O(N²) 拆行、无脚注时快路径返回、缓存 DOMPurify 配置并统一 SVG 净化、Mermaid 改为单 ref 计数主题监听 + 节点级 `data-dci-md-theme`、`renderMathNode` 幂等化、`chipTextNodes` 跳过 `.katex` / `.dci-md-mermaid` / `.dci-md-codebar` / `svg` / `style`。
+- **构建、打包与测试体系**：
+  - `package.json` 将 9 个已由 esbuild 打入 `lib/client.js` 的前端依赖迁至 `devDependencies`，用户安装本插件达到 **0 运行时传递依赖**；
+  - `scripts/build.mjs` 改为动态扫描 Mermaid layout-switch chunk（移除硬编码文件名）并新增构建期 CSS 模板压缩（`lib/client.js` 体积由 3,554,543 B 降至 3,524,758 B，省 ~30 KiB）；
+  - 清理 13 个未用 i18n 键、11 个未用图标组件及重复旧 CSS；
+  - 新增零依赖单元测试套件 `scripts/test-unit.mjs`（10 组用例覆盖 hotkey / prefs / stats / slotEntry / markdown / sideinput & barinject）并接入 `prepublishOnly` 与 GitHub Actions CI；
+  - `scripts/verify/` 探针（`page-helpers.mjs` / `probe-core.mjs` / `probe.mjs`）适配 ShadowRoot 穿透查询。
+
+### 验证
+
+- `npm run prepublishOnly`（`check:popup` + `npm test` 10/10 + `npm run build` + `tsc --noEmit`）全过；二次重建 `lib/client.js` SHA-256 确定性一致。
+- 隔离宿主 `@deepseek-ai/dsh@0.2.2-rc.3` + 无头 Edge CDP：
+  - `scripts/verify/probe.mjs` 三形态 **23/23** 通过（0 插件错误、0 console 错误）；
+  - `scripts/verify/probe-switch.mjs` 会话切换 **6/6** 通过（0 插件错误、0 console 错误）；
+  - CDP 连按基准与分屏视觉截图复核通过。
+
 ## [0.5.2] — 2026-11-18（修复切换会话后 `/` 候选面板不再出现）
 
 ### 修复
@@ -140,6 +180,7 @@
   - **行号三位预留**：仅 1 行时行号栏宽度即 39px（= `calc(3ch + 16px)`，默认等宽字体），证明 ≤999 行内不会随位数变化。
 - 桌面实机终检（用户侧）：强刷页面后按 `TESTING.md` §8.0 清单目检模型/推理选择器、`/model`、`/permission`、行号与悬停提示。
 
+[0.5.3]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.4.1...v0.5.0

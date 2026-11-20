@@ -27,16 +27,15 @@
  * 两条附带约束：question-reply 来源的消息让位官方 question-reply 卡片；原始
  * HTML 一律按文本转义（data-dci-wire 只能由本文件的 md 扩展产生）。
  *
- * 已知边界（刻意不做）：KaTeX 数学公式、Shiki 代码高亮与 CodeBlock 语言横幅、
- * 链接分类图标不渲染（官方 MarkdownText 的完整面超出自含范围）；未知内容块
- * 出极简 JSON 块（官方 JsonBlock 的降级形态）。
+ * 已知边界（刻意不做）：链接分类图标不渲染（官方 MarkdownText 的宿主私有面）；
+ * 未知内容块出极简 JSON 块（官方 JsonBlock 的降级形态）。
  */
 
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives';
+import { ImageLightbox, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { SlotRegisterOptions } from '../host-types';
 import { diagError } from '../diag';
-import { loadPrefs, subscribePrefs } from '../prefs';
+import { usePref, type CodinputPrefs } from '../prefs';
 import { bindForeign, t, useT, type TranslateParams } from '../i18n';
 import {
   activateMarkdown,
@@ -46,7 +45,8 @@ import {
   type MarkdownImageTarget,
 } from '../markdown';
 import { FileGlyph, fileExtension, fileSizeText } from './AttachmentRail';
-import { ImageLightbox } from '@deepseek-ai/dsh-client-ui-primitives';
+
+const selectMarkdownMono = (p: CodinputPrefs): boolean => p.markdownMono;
 
 /* ---------- 注册 ---------- */
 
@@ -335,8 +335,10 @@ function chipTextNodes(root: HTMLElement, actionsRef: React.MutableRefObject<Chi
     acceptNode(node: Node): number {
       const parent = (node as Text).parentElement;
       if (!parent) return NodeFilter.FILTER_REJECT;
-      // 代码/链接里不做 chip（改写内容会破坏代码与链接文本）。
-      if (parent.closest('pre, code, a, .dci-umsg-chip')) return NodeFilter.FILTER_REJECT;
+      // 代码/链接/数学公式/Mermaid 图表/代码块头栏里不做 chip（改写内容会破坏渲染 DOM）。
+      if (parent.closest('pre, code, a, svg, style, .katex, .dci-md-mermaid, .dci-md-codebar, .dci-umsg-chip')) {
+        return NodeFilter.FILTER_REJECT;
+      }
       return (node as Text).data.length === 0 ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
     },
   });
@@ -582,8 +584,7 @@ function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element |
   const sourceKind = (data.source as { kind?: unknown } | null | undefined)?.kind;
 
   /** Markdown 正文等宽连字（prefs.markdownMono）：即时跟随设置变化。 */
-  const [markdownMono, setMarkdownMono] = useState<boolean>(() => loadPrefs().markdownMono);
-  useEffect(() => subscribePrefs(() => setMarkdownMono(loadPrefs().markdownMono)), []);
+  const markdownMono = usePref(selectMarkdownMono);
 
   const html = useMemo(() => (text === '' ? '' : renderMarkdown(text, { surface: 'user-message' })), [text]);
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -657,6 +658,8 @@ function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element |
     return null;
   }
 
+  const clockText = data.time !== undefined ? messageClock(data.time) : '';
+
   return (
     <div className="dci-umsg-row" data-dci-node={node?.kind} data-dci-src={typeof sourceKind === 'string' ? sourceKind : undefined}>
       <div className="dci-umsg-stack">
@@ -677,7 +680,7 @@ function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element |
               <pre key={index} className="dci-umsg-extra">
                 {officialText('message.extraBlock', 'umsg.extraBlock')}
                 {'\n'}
-                {JSON.stringify(block, null, 2)}
+                {safeJsonBlock(block)}
               </pre>
             ))}
           </div>
@@ -690,9 +693,7 @@ function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element |
           </div>
         )}
         <div className="dci-umsg-actions" data-clock="start">
-          {data.time !== undefined && messageClock(data.time) !== '' && (
-            <span className="dci-umsg-time">{messageClock(data.time)}</span>
-          )}
+          {clockText !== '' && <span className="dci-umsg-time">{clockText}</span>}
           <Tooltip label={copied ? t('umsg.copied') : t('umsg.copy')} side="top" delayMs={500} portal>
             <button
               type="button"
@@ -715,6 +716,14 @@ function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element |
       </div>
     </div>
   );
+}
+
+function safeJsonBlock(block: unknown): string {
+  try {
+    return JSON.stringify(block, null, 2);
+  } catch {
+    return String(block);
+  }
 }
 
 /** 与官方 UserMessageNodeView 一致用 memo 包裹：历史节点快照重建时不连坐重渲染。 */

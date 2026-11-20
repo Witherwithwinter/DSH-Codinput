@@ -1,15 +1,11 @@
 /**
- * Markdown 输出净化（DOMPurify 兜底）。
+ * Markdown 输出净化（DOMPurify 兜底，HTML 与 Mermaid SVG 统一入口）。
  *
  * 安全模型（B5 结论不变）：**原始 HTML 一律在 marked 的 renderer.html 里转义**
  * （见 `extensions.ts`），所以任何 `data-dci-*` 属性只可能由本模块自己的扩展
  * 产生；手写 `<span data-dci-wire="x">` 只会显示成文本。DOMPurify 这里是第二道
  * 闸：白名单收敛到 Markdown 产出面，URI 只放行 http(s)/mailto/页内锚点，
  * 行内 style 一律不进 DOM（`<style>` 一旦落地会全局生效）。
- *
- * 白名单由「基础面 + registry 扩展追加」组成：扩展渲染的 KaTeX/Mermaid 通过
- * `registerMarkdownExtension({ allowTags, allowAttrs })` 增量放行自己的输出标签，
- * 不需要改本文件。
  */
 
 import * as DOMPurifyModule from 'dompurify';
@@ -53,12 +49,7 @@ const BASE_ATTRS: readonly string[] = [
 const ALLOWED_URI = /^(?:https?:|mailto:|#)/i;
 
 /**
- * 非 URL 属性（值不做 URI 协议检查）。
- *
- * DOMPurify 的 `ALLOWED_URI_REGEXP` 会对**所有非「URI-safe」属性**的取值做匹配，
- * 不匹配就整条剥掉——所以 `target="_blank"`、`align="center"`、`width="300"`、
- * `data-callout="note"` 这类非 URL 取值会被误杀。标准解法是把它们登记进
- * `ADD_URI_SAFE_ATTR`（与默认 URI-safe 集合并），只留 href/src 走协议白名单。
+ * 非 URL 属性（值不做 URI 协议检查）：登记进 `ADD_URI_SAFE_ATTR`，只留 href/src 走协议白名单。
  */
 const NON_URI_ATTRS: readonly string[] = [
   'alt', 'title', 'target', 'rel', 'type', 'checked', 'disabled', 'start',
@@ -79,7 +70,7 @@ function dedupe(values: readonly string[]): string[] {
   return [...new Set(values)];
 }
 
-function sanitizeOptions(extras?: SanitizeExtras): Record<string, unknown> {
+function buildSanitizeOptions(extras?: SanitizeExtras): Record<string, unknown> {
   return {
     ALLOWED_TAGS: dedupe([...BASE_TAGS, ...(extras?.tags ?? [])]),
     ALLOWED_ATTR: dedupe([...BASE_ATTRS, ...(extras?.attrs ?? [])]),
@@ -88,6 +79,20 @@ function sanitizeOptions(extras?: SanitizeExtras): Record<string, unknown> {
     ALLOW_DATA_ATTR: false,
     FORBID_ATTR: ['style'],
   };
+}
+
+/** 按 extras 对象引用缓存 DOMPurify 配置，避免每次 renderMarkdown 重复构建 Set 与数组。 */
+const BASE_OPTIONS = buildSanitizeOptions();
+const extrasOptionsCache = new WeakMap<SanitizeExtras, Record<string, unknown>>();
+
+function sanitizeOptions(extras?: SanitizeExtras): Record<string, unknown> {
+  if (!extras) return BASE_OPTIONS;
+  let cached = extrasOptionsCache.get(extras);
+  if (!cached) {
+    cached = buildSanitizeOptions(extras);
+    extrasOptionsCache.set(extras, cached);
+  }
+  return cached;
 }
 
 /**
@@ -100,4 +105,23 @@ export function sanitizeMarkdown(html: string, extras?: SanitizeExtras): string 
     return `<p>${escapeHtml(html).replace(/\n/g, '<br>')}</p>`;
   }
   return DOMPurify.sanitize(html, sanitizeOptions(extras));
+}
+
+/**
+ * Mermaid 生成的 SVG 走 DOMPurify 的 SVG profile 净化（禁脚本 / 事件属性 / foreignObject）。
+ * 标签文字已通过全局 `htmlLabels:false` 落成 SVG `<text>`，零 HTML 注入面。
+ */
+const SVG_SANITIZE_OPTIONS: Record<string, unknown> = {
+  USE_PROFILES: { svg: true, svgFilters: true },
+  FORBID_TAGS: ['script', 'foreignObject'],
+  FORBID_ATTR: ['onload', 'onerror', 'onclick', 'onmouseover', 'onfocus', 'onbegin'],
+};
+
+export function sanitizeSvg(svg: string): string {
+  if (typeof DOMPurify.sanitize !== 'function' || DOMPurify.isSupported === false) return '';
+  try {
+    return DOMPurify.sanitize(svg, SVG_SANITIZE_OPTIONS);
+  } catch {
+    return '';
+  }
 }

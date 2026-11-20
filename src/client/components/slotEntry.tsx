@@ -5,11 +5,11 @@
  * 共用同一套合成公式，抽到这里避免多份漂移）。
  */
 
-import { createElement, useCallback, useMemo, useRef, useSyncExternalStore, Component } from 'react';
+import { createElement, useCallback, useRef, useSyncExternalStore, Component } from 'react';
 import type { HostObservable, SlotEntryLike } from '../host-types';
 import { bindForeign } from '../i18n';
 import { diagError } from '../diag';
-import { stash } from '../services';
+import { stash, useService } from '../services';
 
 export type Translator = (key: string, params?: Record<string, string | number>) => string;
 
@@ -17,8 +17,9 @@ const EMPTY_ENTRIES: readonly unknown[] = [];
 
 /** 槽位条目快照：entries 引用在变更之间稳定（官方契约），直接作 uSES 源。 */
 export function useSlotEntries(key: string): readonly unknown[] {
-  // 服务缺席时退化为恒空快照；slots 就绪后 deps 变化自动重订。
-  const slots = stash.slots;
+  // 通过 useService 响应式读取 slots：即使 slots 晚于组件挂载到达，
+  // React.memo 隔离的座位组件也能立刻订阅并生效。
+  const slots = useService('slots');
   const subscribe = useCallback(
     (fn: () => void) => {
       if (typeof slots?.subscribe !== 'function') return () => {};
@@ -69,7 +70,7 @@ const RENDERABLE_OBJECT_TYPES: readonly symbol[] = [
 export type SlotDeclaration = 'declared' | 'undeclared' | 'unknown';
 
 export function useSlotDeclaration(key: string): SlotDeclaration {
-  const slots = stash.slots;
+  const slots = useService('slots');
   const subscribe = useCallback(
     (fn: () => void) => {
       if (typeof slots?.subscribe !== 'function') return () => {};
@@ -112,25 +113,28 @@ export function firstComponentEntry(entries: readonly unknown[]): SlotEntryLike 
 
 /**
  * 列表槽位行合成：复刻官方 renderer 的 list 分支——
- * entries 已由 SlotCore 按（priority↑, order↑）排序，同 id 首个占位（去重），
- * 剩余行再按 order 升序稳定排序（官方 `[...rows].sort(a.order - b.order)`）。
- * 无组件的条目跳过（官方 deadCell 是废黜兜底，插件侧无法复现其内部状态）。
+ * entries 已由 SlotCore 按（priority↑, order↑）排序，带非空 id 时同 id 首个占位
+ * （去重），不带 id 的条目各自保留不被 `undefined` 误合并；剩余行再按 order
+ * 升序稳定排序（官方 `[...rows].sort(a.order - b.order)`）。
  *
  * `excludeIds`：镜像时跳过宿主自带条目（如 `conversation.composer.dock` 里
  * client-ui-chat 的官方 Activity/Usage 胶囊——它们的 UI 已由 Codinput 自绘数据行
  * 顶替，整座镜像会与自绘件重复，见 issue #8 运行时验证）。
  */
 export function listRows(entries: readonly unknown[], excludeIds?: readonly string[]): SlotEntryLike[] {
-  const byId = new Map<unknown, SlotEntryLike>();
+  const seenIds = new Set<unknown>();
+  const rows: SlotEntryLike[] = [];
   for (const candidate of entries) {
     const record = candidate as (SlotEntryLike & { options?: { id?: unknown } }) | null | undefined;
     if (!record || typeof record !== 'object' || !isRenderableComponent(record.component)) continue;
-    const id = (record as { options?: { id?: unknown } }).options?.id;
+    const id = record.options?.id;
     if (typeof id === 'string' && excludeIds?.includes(id)) continue;
-    if (byId.has(id)) continue;
-    byId.set(id, record);
+    if (id !== undefined) {
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+    }
+    rows.push(record);
   }
-  const rows = [...byId.values()];
   rows.sort((a, b) => orderOf(a) - orderOf(b));
   return rows;
 }
@@ -147,33 +151,10 @@ export function entryId(entry: SlotEntryLike, index: number): string {
 }
 
 /**
- * 座位「第三方遮蔽者」判据（单值座让位用）。
- *
- * 宿主的动态包守卫（dsh-cordis-client-runner 的 `guardedSlots`）对非 chain
- * 槽位的 register 做两件事：① **强制**用页内遮蔽秩覆盖插件自报的 priority
- * （`--nextPriority`，负数且唯一——插件写 priority:-1 也会被覆盖成分配值）；
- * ② fiber 名取 `dyn/<pluginId>`，而条目 `registrant` = `options.registrant ??
- * fiber.name`。出厂自带占用者（如 client-ui-model-selection 的 ModelSelect）
- * 不经过该守卫：不带 priority（≡0），registrant 也没有 `dyn/` 前缀。
- *
- * 据此把「第三方遮蔽者」与「出厂占用者」分开：前者应当让位（镜像它），
- * 后者继续由 Codinput 自绘控件代表（镜像出厂条目会与自绘控件重复）。
- * 负 priority 是主判据（分配秩即遮蔽意图）；`dyn/` 前缀是兜底（防旧宿主/
- * 未来守卫变化下 priority 未落进条目 options 的形态）。
- */
-export function isShadowingOccupant(entry: SlotEntryLike): boolean {
-  const options = (entry as { options?: { priority?: number; registrant?: string } }).options;
-  const priority = options?.priority;
-  if (typeof priority === 'number' && priority < 0) return true;
-  const registrant = entry.registrant ?? options?.registrant;
-  return typeof registrant === 'string' && registrant.startsWith('dyn/');
-}
-
-/**
  * 单条目渲染（座位镜像与单值座共用）：官方 SessionEntry → renderEntry 的
  * props 展开式 `{...standard(kit), sessionId, ...entryInjectProps, ...t,
  * ...ownerProps}`——owner props 最后展开（如模型座的 `locked` 不被 kit 覆盖）。
- * 逐条目 EntryBoundary 隔离：单个条目崩溃只丢本座位。
+ * 逐条目 EntryBoundary 隔离：单个条目崩溃只丢本座位，换会话或换条目时自动复位。
  */
 export function renderSlotEntry(
   entry: SlotEntryLike,
@@ -205,7 +186,7 @@ export function renderSlotEntry(
   }
   return createElement(
     EntryBoundary,
-    { key, fallback },
+    { key, fallback, resetKey: sessionId, entry },
     createElement(Comp, {
       ...(standard ?? {}),
       sessionId,
@@ -219,16 +200,6 @@ export function renderSlotEntry(
 /**
  * 官方 `renderSlot(key, ownerProps, opts)` 的子座渲染等价（**只**给官方组件
  * 自己声明的子槽用：模型座的 `conversation.input.model.label` / `.options`）。
- *
- * 为什么需要：Codinput 以 priority -1 遮蔽官方 bar 条目后，官方组件（如
- * ModelSelect）自带的 `renderSlot` prop 仍指向**宿主发给本插件 bar 条目的**
- * 那个函数——它只能渲染本插件声明的子槽（我们没有、也不能重复声明宿主的
- * 子槽），调用官方组件自己的子槽会抛错。这里按官方 renderer 语义用条目快照
- * 手工合成：single-inline 取首个可渲染条目并原样返回其元素（无包装 DOM，
- * 与官方 inline 槽一致）；list 按 id 首占位 + order 升序合成。空/未声明/
- * 条目 inject 不可复现 → 返回官方 fallback（调用方给的兜底内容）。
- *
- * 快照订阅由调用方用 `useSlotEntries` 做（本函数是纯渲染函数，可在渲染期调）。
  */
 export function renderChildSlot(
   kind: 'single-inline' | 'list',
@@ -253,19 +224,52 @@ export function renderChildSlot(
 
 export type SnapshotSelectorHook = <S>(sel: (s: any) => S, eq?: (a: S, b: S) => boolean) => S;
 
-/** 快照 store → use<Name> 选择器钩子（官方 observableHook 同款，按源缓存）。 */
+/**
+ * 快照 store → use<Name> 选择器钩子（官方 observableHook 同款，按源缓存）。
+ *
+ * 工程要点：
+ * 1. `subscribe` 提升到工厂级（引用恒定），避免 React 在每次渲染都反反复复
+ *    卸载再重订外部 store；
+ * 2. 选择器结果按 `(rawSnapshot, selector, eq)` 记忆（等价 React 官方
+ *    `useSyncExternalStoreWithSelector`）：支持派生对象/数组选择器与自定义
+ *    `eq`，杜绝 `getSnapshot` 每次返回新对象触发 React #185 死循环。
+ */
 const snapshotHookCache = new WeakMap<object, SnapshotSelectorHook>();
 export function snapshotHookFor(source: unknown): SnapshotSelectorHook | null {
   const face = source as HostObservable<unknown> | undefined;
   if (!face || typeof face.subscribe !== 'function' || typeof face.getSnapshot !== 'function') return null;
   let hook = snapshotHookCache.get(face);
   if (!hook) {
-    hook = <S,>(sel: (s: unknown) => S): S =>
-      useSyncExternalStore(
-        (fn: () => void) => face.subscribe(fn) ?? (() => {}),
-        () => sel(face.getSnapshot()),
-        () => sel(face.getSnapshot()),
-      );
+    const subscribe = (fn: () => void): (() => void) => face.subscribe(fn) ?? (() => {});
+    hook = <S,>(sel: (s: unknown) => S, eq?: (a: S, b: S) => boolean): S => {
+      const memoRef = useRef<{
+        hasValue: boolean;
+        raw: unknown;
+        sel: ((s: unknown) => S) | undefined;
+        selected: S;
+      }>({ hasValue: false, raw: undefined, sel: undefined, selected: undefined as S });
+
+      const getSelected = (): S => {
+        const raw = face.getSnapshot();
+        const prev = memoRef.current;
+        if (prev.hasValue && Object.is(raw, prev.raw) && Object.is(sel, prev.sel)) {
+          return prev.selected;
+        }
+        const next = sel(raw);
+        if (prev.hasValue && (eq ? eq(prev.selected, next) : Object.is(prev.selected, next))) {
+          prev.raw = raw;
+          prev.sel = sel;
+          return prev.selected;
+        }
+        prev.hasValue = true;
+        prev.raw = raw;
+        prev.sel = sel;
+        prev.selected = next;
+        return next;
+      };
+
+      return useSyncExternalStore(subscribe, getSelected, getSelected);
+    };
     snapshotHookCache.set(face, hook);
   }
   return hook;
@@ -281,14 +285,8 @@ export function standardHookPropName(name: string): string {
  * 条目自带 inject 的 props 面（官方 runInject + bindInjectSources 的插件侧
  * 复刻）：以 sessionId 调 inject，把 hooks 子表折成 use<Name> 钩子、其余
  * 原样下传；keyedHooks 需要官方 keyed resolver 面，插件侧不可复现 → 跳过
- * （现网条目无键控钩子）。结果按（条目 × 会话）缓存——官方同款缓存轴。
- *
- * 为什么额外记「失败」：官方 renderer 是在**宿主自己的 fiber 上下文里**调
- * 这个 inject 闭包；插件侧从自己的 fiber 调会丢掉条目所属插件的 ctx 绑定，
- * 于是依赖宿主服务面的 inject 会抛 `cannot get property "remote.session"
- * without inject`（实测 dsh-model-accordion 0.2.1 的 `directoryFor`）。这是
- * 插件侧不可复现的边界——单值座镜像据此让位降级（回退自绘控件），而不是把
- * 空 props 下发给一个必然崩溃的组件。
+ * （现网条目无键控钩子）。结果按（条目 × 会话 × 绑定代）缓存，且按 LRU 上限
+ * 淘汰陈旧会话，避免已释放的 SessionBinding 被强引用钉死在内存里。
  */
 interface InjectBound {
   props: Record<string, unknown> | null;
@@ -296,14 +294,12 @@ interface InjectBound {
   /**
    * 本次 inject 结果所属的「会话绑定代」（Host 的 SessionBinding / Agent scope
    * 对象）。Host 在会话重新驻留时会重建 scope 与 binding——切走再切回同一会话
-   * 就是最常见的触发路径。条目 inject 返回的控制器/服务面属于某一代，跨代复用
-   * 旧 props 会把条目订阅钉死在已 dispose 的实例上：slash 面板不出现的根因就是
-   * 「触发管线在**新**控制器的 menu store 上 open，而 MenuView 订阅的是上一代
-   * 已关闭的旧 store」——状态 open 但面板永远渲染不出来（控制台无报错）。
-   * 因此缓存必须按代失效，代变即重新 inject（失败结果同样按代重试）。
+   * 就是最常见的触发路径。缓存必须按代失效，代变即重新 inject（失败结果同样按代重试）。
    */
   token: unknown;
 }
+
+const INJECT_CACHE_MAX = 16;
 const entryInjectCache = new WeakMap<object, Map<string, InjectBound>>();
 
 /**
@@ -333,7 +329,12 @@ function boundInject(entry: SlotEntryLike, sessionId: string): InjectBound {
   }
   const token = sessionGeneration(sessionId);
   const cached = perSession.get(sessionId);
-  if (cached !== undefined && cached.token === token) return cached;
+  if (cached !== undefined && cached.token === token) {
+    // 刷新 LRU 序
+    perSession.delete(sessionId);
+    perSession.set(sessionId, cached);
+    return cached;
+  }
   let bound: InjectBound = { props: null, failed: false, token };
   try {
     const face = entry.inject?.(sessionId);
@@ -353,7 +354,13 @@ function boundInject(entry: SlotEntryLike, sessionId: string): InjectBound {
     diagError('slot.inject', error);
     bound = { props: null, failed: true, token };
   }
+  perSession.delete(sessionId);
   perSession.set(sessionId, bound);
+  while (perSession.size > INJECT_CACHE_MAX) {
+    const oldest = perSession.keys().next().value;
+    if (oldest === undefined) break;
+    perSession.delete(oldest);
+  }
   return bound;
 }
 
@@ -375,54 +382,73 @@ export function translatorFor(entry: SlotEntryLike, fallbackNs?: string): Transl
   return bindForeign(ns);
 }
 
-/** 条目崩溃只丢本座位，不连坐 Codinput 的 bar 条目（被废黜 = 输入面消失）。 */
+/**
+ * 条目崩溃只丢本座位，不连坐 Codinput 的 bar 条目（被废黜 = 输入面消失）。
+ * 切换会话（`resetKey` 变化）或条目实例替换（`entry` 变化）时自动复位，
+ * 避免一次瞬态异常把座位永久锁死在 fallback。
+ */
 export class EntryBoundary extends Component<
-  { children?: React.ReactNode; fallback?: React.ReactNode },
-  { failed: boolean }
+  { children?: React.ReactNode; fallback?: React.ReactNode; resetKey?: unknown; entry?: unknown },
+  { failed: boolean; lastResetKey: unknown; lastEntry: unknown }
 > {
-  state = { failed: false };
+  state = { failed: false, lastResetKey: this.props.resetKey, lastEntry: this.props.entry };
+
   static getDerivedStateFromError(): { failed: boolean } {
     return { failed: true };
   }
+
+  static getDerivedStateFromProps(
+    props: { resetKey?: unknown; entry?: unknown },
+    state: { failed: boolean; lastResetKey: unknown; lastEntry: unknown },
+  ): { failed?: boolean; lastResetKey: unknown; lastEntry: unknown } | null {
+    if (Object.is(props.resetKey, state.lastResetKey) && Object.is(props.entry, state.lastEntry)) {
+      return null;
+    }
+    return {
+      ...(state.failed ? { failed: false } : {}),
+      lastResetKey: props.resetKey,
+      lastEntry: props.entry,
+    };
+  }
+
   componentDidCatch(error: unknown): void {
     diagError('slot.entry', error);
   }
+
   render(): React.ReactNode {
     return this.state.failed ? this.props.fallback ?? null : this.props.children;
   }
 }
 
 /**
- * 宿主 kit 减去 owner props 的原样面：供槽位条目按官方契约消费
- * （sessionId + 选择器 hook + inputActions 等）。bar 条目的 kit 里 owner
- * 专属字段（variant/blocked/disabled/placeholder/…）不该下发给子槽位条目；
- * 侧栏 body 再额外剔除注入的 useTabInfo。
- */
-/**
- * 稳定版 standard kit：宿主 bar 条目每次重渲染都可能带来新的 props 对象，而
- * kit 里的值（hooks/actions/services）绝大多数是稳定引用。逐键浅比较后复用上一份
- * kit 对象，`React.memo` 的子组件（StatsRow 等）才不会因「每次按键父组件重渲染」
- * 而跟着重渲染——这是长按回车/退格时帧率稳定的另一半。
+ * 稳定版 standard kit：先过滤掉 owner props 得到 `nextKit`，再逐键浅比较
+ * `prevKit` 与 `nextKit`——被剔除的 owner prop（placeholder/blocked/disabled/
+ * useTabInfo 等）变化时不再误杀 kit 引用，`React.memo` 子组件（StatsRow /
+ * 各镜像座位）真正稳定 bail-out。
  */
 export function useStableKit(
   props: Record<string, unknown>,
   extraOmit: readonly string[] = [],
 ): Record<string, unknown> {
-  const cache = useRef<{ props: Record<string, unknown>; kit: Record<string, unknown> } | null>(null);
+  const cache = useRef<Record<string, unknown> | null>(null);
+  const nextKit = kitFromBarProps(props, extraOmit);
   const prev = cache.current;
-  let same = prev !== null && Object.keys(prev.props).length === Object.keys(props).length;
-  if (same && prev !== null) {
-    for (const key in prev.props) {
-      if (prev.props[key] !== props[key]) {
-        same = false;
-        break;
+  if (prev !== null) {
+    const prevKeys = Object.keys(prev);
+    const nextKeys = Object.keys(nextKit);
+    if (prevKeys.length === nextKeys.length) {
+      let same = true;
+      for (const key of nextKeys) {
+        if (!Object.prototype.hasOwnProperty.call(prev, key) || prev[key] !== nextKit[key]) {
+          same = false;
+          break;
+        }
       }
+      if (same) return prev;
     }
   }
-  if (!same || prev === null) {
-    cache.current = { props, kit: kitFromBarProps(props, extraOmit) };
-  }
-  return cache.current!.kit;
+  cache.current = nextKit;
+  return nextKit;
 }
 
 export function kitFromBarProps(

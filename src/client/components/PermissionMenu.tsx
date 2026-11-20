@@ -9,6 +9,7 @@ import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primit
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { InputActions, UseProjection } from '../host-types';
 import { t } from '../i18n';
 import {
@@ -64,8 +65,7 @@ export function PermissionMenu(props: PermissionMenuProps): JSX.Element | null {
 
   // locked/无值时收起（官方 useEffect 同语义）。
   useEffect(() => {
-    if (disabled) return;
-    if (permissions !== undefined) return;
+    if (!disabled && permissions !== undefined) return;
     setOpen(false);
     setAcknowledged(false);
     setConfirmation(null);
@@ -214,14 +214,15 @@ function RiskConfirmation(props: {
   }, [open]);
 
   if (!open) return null;
-  return (
+  const copy = fullAccessConfirm();
+  return createPortal(
     <div className="dci-modal-root" role="presentation">
       <div className="dci-modal-mask" aria-hidden="true" onClick={onCancel} />
-      <div className="dci-modal-dialog dci-confirm" role="dialog" aria-modal="true" aria-label={fullAccessConfirm().title}>
+      <div className="dci-modal-dialog dci-confirm" role="dialog" aria-modal="true" aria-label={copy.title}>
         <div className="dci-modal-content">
           <div className="dci-modal-header">
-            <h2 className="dci-modal-title">{fullAccessConfirm().title}</h2>
-            <button type="button" className="dci-modal-close" aria-label={t("perm.close")} onClick={onCancel}>
+            <h2 className="dci-modal-title">{copy.title}</h2>
+            <button type="button" className="dci-modal-close" aria-label={t('perm.close')} onClick={onCancel}>
               <IconX size={14} />
             </button>
           </div>
@@ -230,7 +231,7 @@ function RiskConfirmation(props: {
               <span className="dci-confirm-warningIcon" aria-hidden="true">
                 <IconWarningOfficial size={18} />
               </span>
-              <p>{fullAccessConfirm().description}</p>
+              <p>{copy.description}</p>
             </div>
             <label className="dci-confirm-ack">
               <input
@@ -240,13 +241,13 @@ function RiskConfirmation(props: {
                 autoFocus
                 onChange={(e) => onAcknowledgedChange(e.currentTarget.checked)}
               />
-              <span>{fullAccessConfirm().acknowledgeLabel}</span>
+              <span>{copy.acknowledgeLabel}</span>
             </label>
           </div>
         </div>
         <div className="dci-modal-footer">
           <button type="button" className="dci-btn dci-btn-outline dci-btn-cancel" onClick={onCancel}>
-            {fullAccessConfirm().cancelLabel}
+            {copy.cancelLabel}
           </button>
           <button
             type="button"
@@ -254,10 +255,11 @@ function RiskConfirmation(props: {
             disabled={disabled || !acknowledged}
             onClick={onConfirm}
           >
-            {fullAccessConfirm().enableLabel}
+            {copy.enableLabel}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

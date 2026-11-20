@@ -1,6 +1,7 @@
-/** 偏好存储：localStorage 持久化（技术决策：无宿主往返，升级宿主不影响）。 */
+/** 偏好存储：localStorage 持久化 + 内存快照缓存（热路径零 JSON 解析、跨标签页同步）。 */
 
-import { isValidHotkey, normalizeHotkey } from './hotkey';
+import { useCallback, useSyncExternalStore } from 'react';
+import { hotkeysConflict, isValidHotkey, normalizeHotkey } from './hotkey';
 
 /** 快捷键组合：规范化串（如 "mod+enter"、"ctrl+shift+k"），见 hotkey.ts。 */
 export type Hotkey = string;
@@ -52,7 +53,7 @@ export interface CodinputPrefs {
   floatH: number | null;
 }
 
-export const DEFAULT_PREFS: CodinputPrefs = {
+export const DEFAULT_PREFS: Readonly<CodinputPrefs> = Object.freeze({
   enabled: true,
   userMarkdown: true,
   lineNumbers: true,
@@ -68,7 +69,7 @@ export const DEFAULT_PREFS: CodinputPrefs = {
   floatY: null,
   floatW: null,
   floatH: null,
-};
+});
 
 // v2：旧版（已移除的 v0.1.0）遗留的 'dsh-codinput.prefs' 形状不同且可能
 // enabled:false——换键避免被旧数据劫持接管开关。
@@ -100,6 +101,11 @@ const FLOAT_POS_MAX = 100000;
 const FONT_FAMILY_MAX = 256;
 
 const listeners = new Set<() => void>();
+/** 内存缓存快照：引用在变更之间稳定，直接作 useSyncExternalStore 的快照源。 */
+let cachedPrefs: Readonly<CodinputPrefs> | null = null;
+/** 上次读取到的 localStorage 原文（兼容测试/探针直接写 localStorage 而不触发 storage 事件）。 */
+let cachedRaw: string | null | undefined = undefined;
+let storageSyncInstalled = false;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -158,8 +164,8 @@ export function normalizePrefs(input: unknown): CodinputPrefs {
 
   prefs.sendHotkey = readHotkey(raw['sendHotkey'], DEFAULT_PREFS.sendHotkey);
   prefs.lineBreakHotkey = readHotkey(raw['lineBreakHotkey'], DEFAULT_PREFS.lineBreakHotkey);
-  if (prefs.sendHotkey === prefs.lineBreakHotkey) {
-    // 冲突（含被写坏成同一键）：两枚都回退默认，保证 send ≠ lineBreak。
+  if (hotkeysConflict(prefs.sendHotkey, prefs.lineBreakHotkey)) {
+    // 冲突（含被写坏成同一键，或 mod 与 ctrl/meta 撞键）：两枚都回退默认。
     prefs.sendHotkey = DEFAULT_PREFS.sendHotkey;
     prefs.lineBreakHotkey = DEFAULT_PREFS.lineBreakHotkey;
   }
@@ -233,6 +239,14 @@ function safeRemove(key: string): void {
   }
 }
 
+function safeGet(key: string): string | null | undefined {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return undefined;
+  }
+}
+
 /** 存储文本 → 合法偏好（坏 JSON/未知键/旧字段一并归一化，不写回）。 */
 function decodePrefs(raw: string): CodinputPrefs {
   let parsed: unknown = null;
@@ -244,51 +258,101 @@ function decodePrefs(raw: string): CodinputPrefs {
   return normalizePrefs(isRecord(parsed) ? migrateLegacy(parsed) : null);
 }
 
+function emit(): void {
+  for (const fn of listeners) fn();
+}
+
+function ensureStorageSync(): void {
+  if (storageSyncInstalled || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+  storageSyncInstalled = true;
+  window.addEventListener('storage', (event: StorageEvent) => {
+    if (event.key !== null && event.key !== KEY && event.key !== LEGACY_KEY) return;
+    cachedPrefs = null;
+    cachedRaw = undefined;
+    emit();
+  });
+}
+
 /**
- * 读取偏好：任何脏数据（坏 JSON、错误类型、未知键、越界值）都不抛错，
- * 全部逐字段归一化回退默认（B3）。迁移/修复/清脏后与规范化文本不一致时
- * 一次性写回（B2：旧字段删除、坏值修复、未知键不出现在存储里）；之后的
- * 加载 raw 与 canonical 相同，不再重复写入。
+ * 读取偏好：内存缓存优先（引用稳定，热路径免去 JSON.parse/stringify）；
+ * 若外部直接改写 localStorage（跨标签页 / 调试 / 验收探针），按原文对比自动失效。
+ * 任何脏数据（坏 JSON、错误类型、未知键、越界值）都不抛错，全部逐字段归一化回退默认（B3）。
  *
- * v3 优先。v3 缺失而 v2 存在时做一次性升级迁移（v2 时代的坏值/旧字段在这里
- * 归一化清理）：归一化后写 v3，只有 v3 写成功才删 v2——写失败时保留 v2 兜底，
- * 下次加载重试。
+ * v3 优先。v3 缺失而 v2 存在时做一次性升级迁移：归一化后写 v3，只有 v3 写成功才删 v2。
  */
 export function loadPrefs(): CodinputPrefs {
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    if (raw !== null) {
-      const prefs = decodePrefs(raw);
-      const canonical = JSON.stringify(prefs);
-      if (raw !== canonical) safeSet(KEY, canonical);
-      return prefs;
-    }
-    const legacyRaw = window.localStorage.getItem(LEGACY_KEY);
-    if (legacyRaw === null) return { ...DEFAULT_PREFS };
-    const prefs = decodePrefs(legacyRaw);
-    const canonical = JSON.stringify(prefs);
-    if (safeSet(KEY, canonical)) safeRemove(LEGACY_KEY);
-    return prefs;
-  } catch {
-    return { ...DEFAULT_PREFS };
+  ensureStorageSync();
+  const raw = safeGet(KEY);
+  // localStorage 不可读（隐私/无 DOM）：返回当前内存快照或默认。
+  if (raw === undefined) {
+    cachedPrefs ??= DEFAULT_PREFS;
+    return cachedPrefs;
   }
+  // 命中缓存：原文未变且已有冻结快照（v3 存在，或 v3 缺失且无待迁移的 v2）。
+  if (cachedPrefs !== null && raw === cachedRaw && (raw !== null || safeGet(LEGACY_KEY) === null)) {
+    return cachedPrefs;
+  }
+  if (raw !== null) {
+    const prefs = Object.freeze(decodePrefs(raw));
+    const canonical = JSON.stringify(prefs);
+    if (raw !== canonical) safeSet(KEY, canonical);
+    cachedPrefs = prefs;
+    cachedRaw = safeGet(KEY) ?? canonical;
+    return prefs;
+  }
+  const legacyRaw = safeGet(LEGACY_KEY);
+  if (legacyRaw === null || legacyRaw === undefined) {
+    cachedPrefs = DEFAULT_PREFS;
+    cachedRaw = null;
+    return cachedPrefs;
+  }
+  const prefs = Object.freeze(decodePrefs(legacyRaw));
+  const canonical = JSON.stringify(prefs);
+  const wrote = safeSet(KEY, canonical);
+  if (wrote) safeRemove(LEGACY_KEY);
+  cachedPrefs = prefs;
+  cachedRaw = wrote ? canonical : null;
+  return prefs;
 }
 
 /**
  * 保存偏好：先与当前值合并再做同一套归一化（B3），只序列化已知字段（B2），
- * 写入 v3。v3 写成功后再清掉可能残留的 v2（迁移写失败后由保存补上的场景；
- * 写失败则保留 v2 兜底）。
+ * 写入 v3 并更新内存快照（即使 localStorage 写入失败，当次会话内状态仍一致）。
  */
 export function savePrefs(patch: Partial<CodinputPrefs>): CodinputPrefs {
-  const next = normalizePrefs({ ...loadPrefs(), ...(isRecord(patch) ? patch : {}) });
-  if (safeSet(KEY, JSON.stringify(next))) safeRemove(LEGACY_KEY);
-  for (const fn of listeners) fn();
+  const next = Object.freeze(normalizePrefs({ ...loadPrefs(), ...(isRecord(patch) ? patch : {}) }));
+  const canonical = JSON.stringify(next);
+  const wrote = safeSet(KEY, canonical);
+  if (wrote) safeRemove(LEGACY_KEY);
+  cachedPrefs = next;
+  cachedRaw = wrote ? canonical : safeGet(KEY);
+  emit();
   return next;
 }
 
+/** 重置内存缓存（单测 / 外部清空 localStorage 后使用）。 */
+export function resetPrefsCache(): void {
+  cachedPrefs = null;
+  cachedRaw = undefined;
+}
+
 export function subscribePrefs(fn: () => void): () => void {
+  ensureStorageSync();
   listeners.add(fn);
-  return () => listeners.delete(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+/** 响应式读取完整偏好（useSyncExternalStore：无撕裂，引用在变更间稳定）。 */
+export function usePrefs(): CodinputPrefs {
+  return useSyncExternalStore(subscribePrefs, loadPrefs, loadPrefs);
+}
+
+/** 响应式读取单项偏好（原始值字段用它：其它字段变动不触发本组件重渲染）。 */
+export function usePref<T>(selector: (prefs: CodinputPrefs) => T): T {
+  const getSnapshot = useCallback(() => selector(loadPrefs()), [selector]);
+  return useSyncExternalStore(subscribePrefs, getSnapshot, getSnapshot);
 }
 
 /** 权限菜单最近一次实际应用的预设（仅本浏览器记忆，宿主无公开读取面）。 */

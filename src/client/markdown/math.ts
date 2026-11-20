@@ -99,6 +99,7 @@ export const mathMarkedExtensions: TokenizerAndRendererExtension[] = [blockMathE
 /* ---------- 激活期：同步替换为 KaTeX HTML ---------- */
 
 function renderMathNode(node: HTMLElement): void {
+  if (node.classList.contains('dci-md-math-rendered') || node.classList.contains('dci-md-math-error')) return;
   const encoded = node.getAttribute('data-dci-md-math') ?? '';
   const display = node.getAttribute('data-dci-md-display') === '1';
   const tex = decodeBase64Utf8(encoded);

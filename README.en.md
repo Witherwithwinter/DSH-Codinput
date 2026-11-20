@@ -149,7 +149,7 @@ To pin a version in the profile or maintain it by hand, the equivalent of **Meth
 ```jsonc
 {
   "dependencies": {
-    "dsh-codinput": "^0.5.2"          // local development: "link:/abs/path/to/DSH-Codinput"
+    "dsh-codinput": "^0.5.3"          // local development: "link:/abs/path/to/DSH-Codinput"
   },
   "dsh": {
     "profile": {

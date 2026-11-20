@@ -11,7 +11,7 @@
  * 总线是纯模块态：侧栏与主输入分属两棵 React 树，唯一的通信面就是这里。
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 export interface SidebarCarryState {
   /** 官方可见判定（useTabInfo().tab.visible）：展开且为激活标签，或浮动面板。 */
@@ -28,6 +28,15 @@ export interface SidebarCarry {
   /** body 卸载时释放。 */
   release(): void;
 }
+
+export interface SidebarCarrySummary {
+  readonly carried: boolean;
+  readonly collapsed: boolean;
+}
+
+const NOT_CARRIED: SidebarCarrySummary = Object.freeze({ carried: false, collapsed: false });
+const CARRIED_VISIBLE: SidebarCarrySummary = Object.freeze({ carried: true, collapsed: false });
+const CARRIED_COLLAPSED: SidebarCarrySummary = Object.freeze({ carried: true, collapsed: true });
 
 const claims = new Map<number, SidebarCarryState & { sessionId: string }>();
 const listeners = new Set<() => void>();
@@ -119,7 +128,6 @@ export function isSidebarCarryOwner(sessionId: string | undefined, token: number
   return snapshot.get(sessionId)?.owner === token;
 }
 
-
 /** 标签关闭请求总线：/codinput 从侧栏退出时，命令侧请求 body 关掉自己的标签。 */
 const tabCloseListeners = new Set<(sessionId: string) => void>();
 
@@ -135,20 +143,6 @@ export function subscribeSidebarTabClose(fn: (sessionId: string) => void): () =>
   };
 }
 
-/** 归属订阅（body 用）：令牌变化、其他 body 挂载/卸载都会重渲染。 */
-export function useSidebarCarryOwner(sessionId: string | undefined, token: number): boolean {
-  const [owner, setOwner] = useState(() => isSidebarCarryOwner(sessionId, token));
-  useEffect(() => {
-    const sync = (): void => {
-      const now = isSidebarCarryOwner(sessionId, token);
-      setOwner((prev) => (prev === now ? prev : now));
-    };
-    sync();
-    return subscribeSidebarInput(sync);
-  }, [sessionId, token]);
-  return owner;
-}
-
 export function subscribeSidebarInput(fn: () => void): () => void {
   listeners.add(fn);
   return () => {
@@ -156,42 +150,29 @@ export function subscribeSidebarInput(fn: () => void): () => void {
   };
 }
 
+/** 归属订阅（body 用）：令牌变化、其他 body 挂载/卸载都会重渲染（useSyncExternalStore 无撕裂）。 */
+export function useSidebarCarryOwner(sessionId: string | undefined, token: number): boolean {
+  const getSnapshot = useCallback(() => isSidebarCarryOwner(sessionId, token), [sessionId, token]);
+  return useSyncExternalStore(subscribeSidebarInput, getSnapshot, getSnapshot);
+}
+
 /** 主输入组件订阅：本会话输入是否已由侧栏承载。 */
 export function useSidebarInputCarried(sessionId: string | undefined): boolean {
-  const [carried, setCarried] = useState(() => isSidebarInputCarried(sessionId));
-  useEffect(() => {
-    const sync = (): void => {
-      const now = isSidebarInputCarried(sessionId);
-      setCarried((prev) => (prev === now ? prev : now));
-    };
-    sync();
-    return subscribeSidebarInput(sync);
-  }, [sessionId]);
-  return carried;
+  const getSnapshot = useCallback(() => isSidebarInputCarried(sessionId), [sessionId]);
+  return useSyncExternalStore(subscribeSidebarInput, getSnapshot, getSnapshot);
 }
 
 /**
  * 侧栏承载态订阅（小球用）：`carried` = 本会话输入在侧栏里，
  * `collapsed` = 输入面不可见（承载但侧栏已收起 → 输入入口需要小球唤出）。
  * 浮动面板 visible=true——输入就在眼前，即使侧栏恰好收起也不出球。
+ * 返回冻结单例对象，确保 useSyncExternalStore 快照引用稳定。
  */
-export function useSidebarCarry(sessionId: string | undefined): { carried: boolean; collapsed: boolean } {
-  const read = (): { carried: boolean; collapsed: boolean } => {
+export function useSidebarCarry(sessionId: string | undefined): SidebarCarrySummary {
+  const getSnapshot = useCallback((): SidebarCarrySummary => {
     const state = sidebarCarryState(sessionId);
-    return {
-      carried: state !== undefined,
-      collapsed: state !== undefined && state.expanded === false && state.visible === false,
-    };
-  };
-  const [value, setValue] = useState(read);
-  useEffect(() => {
-    const sync = (): void => {
-      const next = read();
-      setValue((prev) => (prev.carried === next.carried && prev.collapsed === next.collapsed ? prev : next));
-    };
-    sync();
-    return subscribeSidebarInput(sync);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (state === undefined) return NOT_CARRIED;
+    return state.expanded === false && state.visible === false ? CARRIED_COLLAPSED : CARRIED_VISIBLE;
   }, [sessionId]);
-  return value;
+  return useSyncExternalStore(subscribeSidebarInput, getSnapshot, getSnapshot);
 }

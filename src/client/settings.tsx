@@ -1,16 +1,15 @@
-import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives';
 /**
  * 设置 → Codinput 分组：启用接管、显示行号、编辑器字体、发送/换行快捷键、
  * 默认视图。行结构与控件对齐官方设置（T1PP：标题 + 描述 + 发丝线 +
  * 36px 选择器胶囊）；settings.section（list，须带 label/order——工程事实
- * #3），偏好 localStorage 持久化。
+ * #3），偏好经 usePrefs 与 localStorage 实时同步。
  */
 
+import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives';
 import { useEffect, useRef, useState } from 'react';
 import type { SlotRegisterOptions } from './host-types';
-import { DEFAULT_PREFS, loadPrefs, savePrefs, type CodinputPrefs, type Hotkey } from './prefs';
-import { formatCombo, comboFromEventLike } from './hotkey';
-
+import { DEFAULT_PREFS, savePrefs, usePrefs, type CodinputPrefs, type Hotkey } from './prefs';
+import { comboFromEventLike, formatCombo, hotkeysConflict } from './hotkey';
 import { MenuSurface } from './components/MenuSurface';
 import { t, useT } from './i18n';
 
@@ -29,7 +28,7 @@ export function settingsRegistration(): { options: SlotRegisterOptions; componen
   };
 }
 
-/** 快捷键录制器：点击进入录制态，按任意组合完成录入，Esc 取消。 */
+/** 快捷键录制器：点击进入录制态，按任意组合完成录入，Esc 取消，冲突时标红提示。 */
 function HotkeyRecorder(props: {
   value: Hotkey;
   conflictWith?: Hotkey;
@@ -40,6 +39,17 @@ function HotkeyRecorder(props: {
   const [recording, setRecording] = useState(false);
   const [conflict, setConflict] = useState(false);
   const btnRef = useRef<HTMLButtonElement | null>(null);
+  const conflictTimerRef = useRef<number>(0);
+
+  useEffect(
+    () => () => {
+      if (conflictTimerRef.current !== 0) {
+        window.clearTimeout(conflictTimerRef.current);
+        conflictTimerRef.current = 0;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!recording) return;
@@ -71,11 +81,20 @@ function HotkeyRecorder(props: {
         }
         if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
         const combo = comboFromEventLike(e.nativeEvent, e.key);
-        if (conflictWith !== undefined && combo === conflictWith) {
+        if (conflictWith !== undefined && hotkeysConflict(combo, conflictWith)) {
           setConflict(true);
-          window.setTimeout(() => setConflict(false), 1500);
+          if (conflictTimerRef.current !== 0) window.clearTimeout(conflictTimerRef.current);
+          conflictTimerRef.current = window.setTimeout(() => {
+            conflictTimerRef.current = 0;
+            setConflict(false);
+          }, 1500);
           return;
         }
+        if (conflictTimerRef.current !== 0) {
+          window.clearTimeout(conflictTimerRef.current);
+          conflictTimerRef.current = 0;
+        }
+        setConflict(false);
         onChange(combo);
         setRecording(false);
         btnRef.current?.blur();
@@ -170,65 +189,88 @@ function Switch(props: { on: boolean; label: string; onToggle(): void }): JSX.El
 }
 
 export function CodinputSettingsSection(): JSX.Element {
-  const [prefs, setPrefs] = useState<CodinputPrefs>(() => loadPrefs());
+  const prefs = usePrefs();
   useT();
+  // 字体输入框用本地草稿态：允许自由清空与编辑，失焦/回车再提交；
+  // 留空提交即恢复默认字体（旧版 onChange 直写会在清空瞬间把默认串填回来）。
+  const [fontDraft, setFontDraft] = useState<string>(prefs.fontFamily);
+  useEffect(() => {
+    setFontDraft(prefs.fontFamily);
+  }, [prefs.fontFamily]);
 
   const update = (patch: Partial<CodinputPrefs>): void => {
-    setPrefs(savePrefs(patch));
+    savePrefs(patch);
+  };
+
+  const commitFont = (): void => {
+    const trimmed = fontDraft.trim();
+    const target = trimmed === '' ? DEFAULT_PREFS.fontFamily : trimmed;
+    const saved = savePrefs({ fontFamily: target });
+    setFontDraft(saved.fontFamily);
   };
 
   return (
     <div className="dci-settings">
-      <Row title={t("set.enabled")} desc={t("set.enabledDesc")}>
-        <Switch on={prefs.enabled} label={t("set.enabled")} onToggle={() => update({ enabled: !prefs.enabled })} />
+      <Row title={t('set.enabled')} desc={t('set.enabledDesc')}>
+        <Switch on={prefs.enabled} label={t('set.enabled')} onToggle={() => update({ enabled: !prefs.enabled })} />
       </Row>
-      <Row title={t("set.userMarkdown")} desc={t("set.userMarkdownDesc")}>
+      <Row title={t('set.userMarkdown')} desc={t('set.userMarkdownDesc')}>
         <Switch
           on={prefs.userMarkdown}
-          label={t("set.userMarkdown")}
+          label={t('set.userMarkdown')}
           onToggle={() => update({ userMarkdown: !prefs.userMarkdown })}
         />
       </Row>
-      <Row title={t("set.lineNumbers")} desc={t("set.lineNumbersDesc")}>
-        <Switch on={prefs.lineNumbers} label={t("set.lineNumbers")} onToggle={() => update({ lineNumbers: !prefs.lineNumbers })} />
+      <Row title={t('set.lineNumbers')} desc={t('set.lineNumbersDesc')}>
+        <Switch on={prefs.lineNumbers} label={t('set.lineNumbers')} onToggle={() => update({ lineNumbers: !prefs.lineNumbers })} />
       </Row>
-      <Row title={t("set.markdownMono")} desc={t("set.markdownMonoDesc")}>
+      <Row title={t('set.markdownMono')} desc={t('set.markdownMonoDesc')}>
         <Switch
           on={prefs.markdownMono}
-          label={t("set.markdownMono")}
+          label={t('set.markdownMono')}
           onToggle={() => update({ markdownMono: !prefs.markdownMono })}
         />
       </Row>
-      <Row title={t("set.font")} desc={t("set.fontDesc")}>
+      <Row title={t('set.font')} desc={t('set.fontDesc')}>
         <input
           type="text"
           className="dci-set-input"
-          value={prefs.fontFamily}
+          value={fontDraft}
+          placeholder={DEFAULT_PREFS.fontFamily}
           spellCheck={false}
-          aria-label={t("set.font")}
-          onChange={(e) => update({ fontFamily: e.target.value })}
+          aria-label={t('set.font')}
+          onChange={(e) => setFontDraft(e.target.value)}
+          onBlur={commitFont}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.currentTarget.blur();
+            } else if (e.key === 'Escape') {
+              setFontDraft(prefs.fontFamily);
+              e.currentTarget.blur();
+            }
+          }}
         />
       </Row>
-      <Row title={t("set.sendKey")} desc={t("set.sendKeyDesc")}>
+      <Row title={t('set.sendKey')} desc={t('set.sendKeyDesc')}>
         <HotkeyRecorder
           value={prefs.sendHotkey}
           conflictWith={prefs.lineBreakHotkey}
-          ariaLabel={t("set.sendKey")}
+          ariaLabel={t('set.sendKey')}
           onChange={(v) => update({ sendHotkey: v })}
         />
       </Row>
-      <Row title={t("set.lineBreakKey")} desc={t("set.lineBreakKeyDesc")}>
+      <Row title={t('set.lineBreakKey')} desc={t('set.lineBreakKeyDesc')}>
         <HotkeyRecorder
           value={prefs.lineBreakHotkey}
           conflictWith={prefs.sendHotkey}
-          ariaLabel={t("set.lineBreakKey")}
+          ariaLabel={t('set.lineBreakKey')}
           onChange={(v) => update({ lineBreakHotkey: v })}
         />
       </Row>
-      <Row title={t("set.defaultView")} desc={t("set.defaultViewDesc")}>
+      <Row title={t('set.defaultView')} desc={t('set.defaultViewDesc')}>
         <Selector
           value={prefs.defaultEdit && prefs.defaultPreview ? 'split' : prefs.defaultPreview ? 'preview' : 'edit'}
-          ariaLabel={t("set.defaultView")}
+          ariaLabel={t('set.defaultView')}
           onChange={(v) =>
             update({
               defaultEdit: v !== 'preview',
@@ -242,13 +284,13 @@ export function CodinputSettingsSection(): JSX.Element {
           ]}
         />
       </Row>
-      <Row title={t("set.reset")} desc={t("set.resetAll")}>
+      <Row title={t('set.reset')} desc={t('set.resetAll')}>
         <button
           type="button"
           className="dci-set-selector"
-          onClick={() => setPrefs(savePrefs({ ...DEFAULT_PREFS }))}
+          onClick={() => savePrefs({ ...DEFAULT_PREFS })}
         >
-          {t("set.resetAction")}
+          {t('set.resetAction')}
         </button>
       </Row>
     </div>
