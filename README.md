@@ -1,6 +1,6 @@
-<p align="center">
-  <img src="./assets/icon.png" width="128" alt="DSH-Codinput" />
-</p>
+<div align="center">
+
+<img src="./assets/icon.png" width="128" alt="DSH-Codinput" />
 
 # DSH-Codinput
 
@@ -9,6 +9,10 @@
 中文 | [English](./README.en.md)
 
 把 DeepSeek Harness 的聊天输入框，换成编辑器式的输入面板。
+
+[功能](#功能) · [安装](#安装) · [主题适配](#主题--皮肤) · [开发与验证](#开发与验证)
+
+</div>
 
 ## 界面预览
 

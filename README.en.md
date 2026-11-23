@@ -1,6 +1,6 @@
-<p align="center">
-  <img src="./assets/icon.png" width="128" alt="DSH-Codinput" />
-</p>
+<div align="center">
+
+<img src="./assets/icon.png" width="128" alt="DSH-Codinput" />
 
 # DSH-Codinput
 
@@ -9,6 +9,10 @@
 [中文](./README.md) | English
 
 An editor-style input panel, right where the DeepSeek Harness chat composer used to be.
+
+[Features](#features) · [Installation](#installation) · [Theme / Skin](#theme--skin) · [Development](#development--verification)
+
+</div>
 
 ## Previews
 
