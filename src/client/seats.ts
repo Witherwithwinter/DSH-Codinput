@@ -24,8 +24,8 @@
  *   里**原样镜像官方条目**（MenuView / PopupSelectView / FeedbackDialog）；
  * - `conversation.input.attachments` 自 0.5.0 起镜像官方 `ComposerAttachments`
  *   条目（条目缺失/不可复现时回退自绘 `AttachmentRail`）；
- * - 其余已镜像的座位见 `MIRRORED_SEATS`（含 `composer.dock`，由 StatsRow 的
- *   数据行按官方 list 合成渲染，且只镜像第三方条目）。
+ * - 其余已镜像的座位见 `MIRRORED_SEATS`（含 `composer.dock`，由 StatsRow 按官方
+ *   `[data-slot="conversation.composer.dock"]` 语义原样镜像，不再自绘统计胶囊）。
  */
 
 import { diagDebug, diagError } from './diag';

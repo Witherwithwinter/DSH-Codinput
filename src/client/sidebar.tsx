@@ -21,6 +21,7 @@ import { claimSidebarInput, subscribeSidebarTabClose, useSidebarCarryOwner, useS
 import { useBarInjected } from './barinject';
 import { useContinueState } from './continuation';
 import { loadPrefs, savePrefs, usePref, type CodinputPrefs } from './prefs';
+import { captureChatFlip } from './float-flip';
 import { diagError, diagWindow } from './diag';
 import { CodinputSurface } from './components/CodinputSurface';
 import { useStableKit } from './components/slotEntry';
@@ -167,10 +168,12 @@ export function SidebarCodinputBody(props: SessionStandard & { useTabInfo?: () =
   const [token, setToken] = useState(0);
   useEffect(() => {
     if (!enabled) return;
+    captureChatFlip(null, sessionId);
     const carry = claimSidebarInput(sessionId, { visible, expanded });
     carryRef.current = carry;
     setToken(carry.token);
     return () => {
+      captureChatFlip(null, sessionId);
       carryRef.current = null;
       carry.release();
     };

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DSH-Codinput",
+    "description": "把聊天输入框换成 CodeMirror 6 编辑器面板，支持普通 / 悬浮 / 侧栏三态、3D 悬浮与实时 Markdown 分屏预览。",
+    "detail": "README.md"
+  }
+}

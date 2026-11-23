@@ -45,6 +45,8 @@ export interface CodinputPrefs {
   composerBodyHeight: number | null;
   /** 入口形态（持久化值只有 normal/float；side 由侧栏标签挂载派生）。 */
   mode: CodinputMode;
+  /** 3D 悬浮：悬浮模式下以视口中心为球心的 3D 球面朝向、拖动惯性浮空与动态光影。默认关。 */
+  float3d: boolean;
   /** 悬浮位置（视口坐标，拖动后记忆）；null = 默认居中偏上。 */
   floatX: number | null;
   floatY: number | null;
@@ -65,6 +67,7 @@ export const DEFAULT_PREFS: Readonly<CodinputPrefs> = Object.freeze({
   defaultPreview: false,
   composerBodyHeight: null,
   mode: 'normal',
+  float3d: false,
   floatX: null,
   floatY: null,
   floatW: null,
@@ -181,6 +184,7 @@ export function normalizePrefs(input: unknown): CodinputPrefs {
   const mode = raw['mode'];
   prefs.mode =
     mode === 'float' || mode === 'normal' ? mode : raw['floating'] === true ? 'float' : DEFAULT_PREFS.mode;
+  prefs.float3d = readBoolean(raw['float3d'], DEFAULT_PREFS.float3d);
   prefs.floatX = readPosition(raw['floatX']);
   prefs.floatY = readPosition(raw['floatY']);
   prefs.floatW = readPositive(raw['floatW'], FLOAT_W_MIN, FLOAT_SIZE_MAX);

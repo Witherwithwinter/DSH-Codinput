@@ -9,6 +9,7 @@ import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primit
 import { useEffect, useRef, useState } from 'react';
 import type { SlotRegisterOptions } from './host-types';
 import { DEFAULT_PREFS, savePrefs, usePrefs, type CodinputPrefs, type Hotkey } from './prefs';
+import { captureChatFlip } from './float-flip';
 import { comboFromEventLike, formatCombo, hotkeysConflict } from './hotkey';
 import { MenuSurface } from './components/MenuSurface';
 import { t, useT } from './i18n';
@@ -231,6 +232,9 @@ export function CodinputSettingsSection(): JSX.Element {
           onToggle={() => update({ markdownMono: !prefs.markdownMono })}
         />
       </Row>
+      <Row title={t('set.float3d')} desc={t('set.float3dDesc')}>
+        <Switch on={prefs.float3d} label={t('set.float3d')} onToggle={() => update({ float3d: !prefs.float3d })} />
+      </Row>
       <Row title={t('set.font')} desc={t('set.fontDesc')}>
         <input
           type="text"
@@ -288,7 +292,10 @@ export function CodinputSettingsSection(): JSX.Element {
         <button
           type="button"
           className="dci-set-selector"
-          onClick={() => savePrefs({ ...DEFAULT_PREFS })}
+          onClick={() => {
+            if (prefs.mode !== DEFAULT_PREFS.mode) captureChatFlip();
+            savePrefs({ ...DEFAULT_PREFS });
+          }}
         >
           {t('set.resetAction')}
         </button>

@@ -408,12 +408,19 @@ export function useAdaptiveOverlayHost(
         host.style.visibility = 'visible';
         // 悬浮 / 侧栏容器里若有 transform 类祖先，fixed 的包含块不再是视口；
         // 实测落点与目标视口坐标的偏差并回补（不依赖祖先结构，零配置）。
-        const rect = host.getBoundingClientRect();
-        const dx = Math.round(rect.left - placement.left);
-        const dy = Math.round(rect.top - placement.top);
-        if (Math.abs(dx) >= 1 || Math.abs(dy) >= 1) {
-          host.style.left = `${placement.left - dx}px`;
-          host.style.top = `${placement.top - dy}px`;
+        // 3D 透视旋转下局部与视口坐标存在轻微缩放因子（cos θ），做两次不动点
+        // 修正即可收敛到亚像素精度。
+        let appliedLeft = placement.left;
+        let appliedTop = placement.top;
+        for (let pass = 0; pass < 2; pass += 1) {
+          const rect = host.getBoundingClientRect();
+          const dx = Math.round(rect.left - placement.left);
+          const dy = Math.round(rect.top - placement.top);
+          if (Math.abs(dx) < 1 && Math.abs(dy) < 1) break;
+          appliedLeft -= dx;
+          appliedTop -= dy;
+          host.style.left = `${appliedLeft}px`;
+          host.style.top = `${appliedTop}px`;
         }
       }
       return true;

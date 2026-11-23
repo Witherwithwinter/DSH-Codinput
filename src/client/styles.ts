@@ -46,10 +46,15 @@ const CSS = `
 .dci-overlay-anchor[data-adaptive][data-mode="dd"] > [data-dci-overlay-dd] {
   max-height: var(--dci-overlay-maxh, 400px) !important;
 }
-/* 主模式 surface 复刻官方 composer root：侧向 clearance 内缩 + 底部 4px，
-   卡片与数据行由数据行自身 padding-top 定距（官方 root 无 gap，dock 上边距 4px）。
+/* 主输入根壳（CodinputBar 原位容器）：承接官方 composer 侧向 clearance 与底部 4px；
+   普通模式下承载卡片与数据行，切悬浮/侧栏后仅保留底部数据行在原位；
+   无卡片且无数据行（如 hero 态切悬浮/侧栏）时 :empty 收起占零高。 */
+.dci-bar-root { display: flex; flex-direction: column; align-items: center; width: 100%; min-width: 0;
+  box-sizing: border-box; padding: 0 var(--dsh-composer-side-clearance, 0px) 4px; color: inherit; }
+.dci-bar-root:empty { display: none; }
+/* 主模式 surface 在 .dci-bar-root 内吃满横宽（侧向 clearance 与底部 4px 由 .dci-bar-root 承担）。
    side/float 形态自带铺满布局，不参与。 */
-.dci-surface:not([data-side]):not([data-float]) { padding: 0 var(--dsh-composer-side-clearance, 0px) 4px; align-items: center; gap: 0; }
+.dci-surface:not([data-side]):not([data-float]) { width: 100%; align-items: center; gap: 0; }
 /* 卡片边缘调节把手：左右调宽、上下调高（对称灵敏度），悬停显形。 */
 .dci-rip { position: absolute; z-index: 60; touch-action: none; }
 .dci-rip[data-axis="y"] { left: 12px; right: 12px; height: 9px; cursor: ns-resize; }
@@ -57,7 +62,8 @@ const CSS = `
 .dci-rip::after { content: ''; position: absolute; inset: 0; margin: auto; border-radius: 3px; background: transparent; transition: background 0.12s; }
 .dci-rip[data-axis="y"]::after { height: 3px; width: 44px; }
 .dci-rip:hover::after, .dci-rip[data-dragging="true"]::after { background: var(--dsw-alias-state-business-primary, currentColor); }
-.dci-accessory { align-items: center; gap: 2px; padding: 6px 12px 0; display: flex; }
+.dci-accessory { position: relative; align-items: center; gap: 2px; padding: 6px 12px 0; display: flex; }
+.dci-accessory .dci-iconbtn { position: relative; z-index: 1; }
 .dci-iconbtn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; padding: 0; border: none; border-radius: 6px;
@@ -278,6 +284,8 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
 
 /* ===== 悬浮模式（拖顶部行空白区脱出；拖回底部输入区回普通；prefs 记忆）===== */
 .dci-float { position: fixed; z-index: 940; min-width: 0; display: flex; flex-direction: column; }
+/* 悬浮内舞台：承载 3D 变换与缩放把手，保持外层 .dci-float 几何无畸变（拖/缩 1:1 跟手）。 */
+.dci-float-stage { position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .dci-float .dci-surface { flex: 1 1 auto; min-height: 0; }
 .dci-float .dci-card { max-width: none; margin-inline: 0; width: 100%; }
 /* 手动缩放过高度后（data-sized）：卡片吃满外壳，编辑区吃满卡片剩余高度。 */
@@ -301,13 +309,153 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
   width: var(--dci-grip-corner); height: var(--dci-grip-corner); cursor: nesw-resize; }
 .dci-float-grip[data-dir="se"] { bottom: calc(-1 * var(--dci-grip-edge)); right: calc(-1 * var(--dci-grip-edge));
   width: var(--dci-grip-corner); height: var(--dci-grip-corner); cursor: nwse-resize; }
-/* 拖动区：accessory 行里开关右侧的空白，按住移动整卡（普通态拖出=悬浮）。 */
-.dci-float-dragzone { flex: 1 1 auto; align-self: stretch; min-width: 24px; cursor: grab; touch-action: none; }
+/* 拖动区：铺满 accessory 行（左右与 .dci-rip 对称齐平，按钮在 z-index:1 之上），
+   使居中抓取条与官方 Tooltip 气泡都严格落在卡片正中。 */
+.dci-float-dragzone { position: absolute; inset: 6px 12px 0; z-index: 0; cursor: grab; touch-action: none;
+  display: flex; align-items: center; justify-content: center; }
+.dci-float-dragzone::after { content: ''; width: 34px; height: 3px; border-radius: 999px;
+  background: var(--dsw-alias-label-tertiary, currentColor); opacity: 0;
+  transition: opacity 0.14s ease, width 0.14s ease, background-color 0.14s ease; }
+.dci-card:hover .dci-float-dragzone::after { opacity: 0.22; }
+.dci-surface[data-float] .dci-float-dragzone::after { opacity: 0.28; }
+.dci-float-dragzone:hover::after { opacity: 0.62; width: 44px; }
 .dci-float-dragzone[data-dragging="true"] { cursor: grabbing; }
-/* 悬浮卡片：数据行收进卡片底部；高度拖把不适用。 */
+.dci-float-dragzone[data-dragging="true"]::after { opacity: 1; width: 52px;
+  background: var(--dsw-alias-state-business-primary, currentColor); }
+/* 悬浮卡片：高度拖把不适用；数据行固定留在对话区底部原位，不随卡片悬浮。 */
 .dci-surface[data-float] .dci-rip { display: none; }
-.dci-surface[data-float] .dci-stat-root { padding: 2px 16px 8px; }
 .dci-surface[data-float] .dci-card { box-shadow: var(--dsw-elevation-prominent, 0 10px 34px rgba(0, 0, 0, 0.35)); }
+
+/* ===== 普通 ↔ 悬浮切换反馈：底部归位落区 + 吸附武装态 + 脱出/归位脉冲 + 轻提示 ===== */
+.dci-dock-zone { position: fixed; z-index: 935; pointer-events: none; box-sizing: border-box;
+  border-radius: var(--dsw-radius-panel, 22px);
+  border: 1.5px dashed var(--dsw-alias-border-l3, color-mix(in srgb, currentColor 28%, transparent));
+  background: color-mix(in srgb, var(--dsw-specific-input-major, currentColor) 55%, transparent);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0.72; transition: opacity 0.14s ease, border-color 0.14s ease, background-color 0.14s ease, box-shadow 0.14s ease; }
+.dci-dock-zone[data-state="idle"] { opacity: 0.56; }
+.dci-dock-zone[data-state="pulling"] { opacity: 0.84;
+  border-color: var(--dsw-alias-label-tertiary, color-mix(in srgb, currentColor 36%, transparent)); }
+.dci-dock-zone[data-state="armed"] { opacity: 1; border-style: solid;
+  border-color: var(--dsw-alias-state-business-primary, currentColor);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary, currentColor) 11%, var(--dsw-specific-input-major, transparent));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--dsw-alias-state-business-primary, currentColor) 16%, transparent); }
+.dci-dock-zone-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px;
+  border-radius: 999px; font-size: 12px; font-weight: 500; line-height: 16px;
+  color: var(--dsw-alias-label-secondary, inherit);
+  background: var(--dsw-specific-menu, var(--dsw-menu-surface-fill, rgba(28, 28, 32, 0.92)));
+  border: 0.5px solid var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 16%, transparent));
+  box-shadow: var(--dsw-elevation-soft, 0 4px 14px rgba(0, 0, 0, 0.16));
+  transition: color 0.14s ease, border-color 0.14s ease, background-color 0.14s ease; }
+.dci-dock-zone[data-state="armed"] .dci-dock-zone-pill {
+  color: var(--dsw-alias-state-business-primary, inherit);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary, currentColor) 48%, transparent); }
+/* 悬浮卡片进入底部归位区（armed）：外缘高亮提示「松手即归位」。 */
+.dci-float[data-dock-armed="true"] .dci-card {
+  outline: 2px solid var(--dsw-alias-state-business-primary, currentColor); outline-offset: -2px; }
+/* 刚脱出悬浮 / 刚归位普通：瞬时轮廓脉冲提示形态已切换。 */
+.dci-float[data-detach-flash="true"] .dci-card,
+.dci-card[data-dock-flash="true"] {
+  outline: 2px solid color-mix(in srgb, var(--dsw-alias-state-business-primary, currentColor) 72%, transparent);
+  outline-offset: -2px; }
+@media (prefers-reduced-motion: no-preference) {
+  .dci-dock-zone { transition: opacity 0.14s ease, transform 0.16s ease, border-color 0.14s ease, background-color 0.14s ease, box-shadow 0.14s ease; }
+  .dci-dock-zone[data-state="armed"] { transform: scale(1.012); }
+  .dci-float .dci-surface { transition: transform 0.14s ease, opacity 0.14s ease; }
+  .dci-float[data-dock-armed="true"] .dci-surface { transform: scale(0.985); opacity: 0.94; }
+  .dci-float[data-detach-flash="true"] .dci-surface { animation: dci-detach-pop 0.24s cubic-bezier(0.22, 1, 0.36, 1); }
+  /* 归位卡片位移由 float-flip.ts 的 GPU 磁吸 FLIP 统一编排，此处仅柔化轮廓脉冲避免 transform 冲突。 */
+  .dci-card[data-dock-flash="true"] { animation: dci-dock-pulse 0.36s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+}
+@keyframes dci-detach-pop {
+  0% { transform: scale(0.97); }
+  55% { transform: scale(1.012); }
+  100% { transform: scale(1); }
+}
+@keyframes dci-dock-pulse {
+  0% { outline-color: color-mix(in srgb, var(--dsw-alias-state-business-primary, currentColor) 72%, transparent); }
+  100% { outline-color: transparent; }
+}
+
+/* ===== 模式切换（normal ↔ float / side）全场景 GPU 合成层过渡辅助层 =====
+   进入 normal 时暂时把宿主 composerSeat 原生渐变底移交 ::before 做纯 GPU scaleY
+   同步抬升（transform-origin: bottom，绝不撑大 scrollHeight），避免首帧底板盖死消息；
+   退出 normal 且下方有被遮消息将露出时，由固定裁切盒内 GPU 幕布同步向下拉开。 */
+[data-composer-seat][data-dci-seat-entering="true"] {
+  background: transparent !important;
+}
+[data-composer-seat][data-dci-seat-entering="true"]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  transform-origin: 50% 100%;
+  transform: scaleY(var(--dci-seat-scale, 1));
+  will-change: transform;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--dsw-alias-bg-base) 0%, transparent) 0px,
+    var(--dsw-alias-bg-base) 36px
+  );
+}
+.dci-chat-veil {
+  position: fixed;
+  z-index: 8;
+  pointer-events: none;
+  overflow: hidden;
+  contain: strict;
+}
+.dci-chat-veil-inner {
+  position: absolute;
+  inset: 0;
+  will-change: transform, opacity;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--dsw-alias-bg-base) 0%, transparent) 0px,
+    var(--dsw-alias-bg-base) 36px
+  );
+}
+
+/* ===== 3D 悬浮（设置 → 3D 悬浮，默认关）：视口中心球面环绕 + 拖动惯性浮空 + 动态光影 ===== */
+.dci-float[data-float-3d="true"] .dci-float-stage {
+  transform-origin: 50% 50%;
+  transform: perspective(1150px) translate3d(0, 0, var(--dci-3d-tz, 0px)) rotateX(var(--dci-3d-rx, 0deg)) rotateY(var(--dci-3d-ry, 0deg));
+  will-change: transform;
+}
+.dci-float[data-float-3d="true"] .dci-surface[data-float] .dci-card {
+  /* 复合立体投影：方向主影 + 接触柔影 + 随倾角游走的边缘反光高光/暗边。 */
+  box-shadow:
+    var(--dci-3d-sx, 0px) var(--dci-3d-sy, 12px) var(--dci-3d-sblur, 30px) -6px rgba(0, 0, 0, var(--dci-3d-salpha, 0.24)),
+    0 2px 10px -2px rgba(0, 0, 0, 0.14),
+    inset var(--dci-3d-rim-x, 0px) var(--dci-3d-rim-y, 0.75px) 0 0 rgba(255, 255, 255, 0.22),
+    inset calc(-1 * var(--dci-3d-rim-x, 0px)) calc(-1 * var(--dci-3d-rim-y, 0.75px)) 0 0 rgba(0, 0, 0, 0.12),
+    0 0 0 0.5px var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 14%, transparent));
+}
+/* 玻璃镜面微高光层：随 3D 倾角滑动，不拦指针、不遮文字，自动裁切到卡片圆角。 */
+.dci-float[data-float-3d="true"] .dci-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 4;
+  opacity: var(--dci-3d-galpha, 0.35);
+  background:
+    radial-gradient(
+      68% 58% at var(--dci-3d-gx, 50%) var(--dci-3d-gy, 22%),
+      rgba(255, 255, 255, 0.14) 0%,
+      rgba(255, 255, 255, 0.04) 44%,
+      transparent 72%
+    ),
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.08) 0%,
+      transparent 38%,
+      transparent 68%,
+      rgba(0, 0, 0, 0.05) 100%
+    );
+}
 
 /* ===== 右上角小球（侧栏收起后的 Codinput 唤出入口）=====
  * 位置由 JS 量标题栏（会话头部）后内联注入：标题栏下方、右对齐（与官方角落
@@ -341,8 +489,7 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
 .dci-surface[data-side] .dci-accessory { padding: 8px 12px 6px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l1, transparent); }
 .dci-surface[data-side] .dci-body { flex: 1 1 auto; max-height: none; min-height: 0; }
-.dci-surface[data-side] .dci-row { padding: 6px 8px;
-  border-top: 0.5px solid var(--dsw-alias-border-l1, transparent); }
+.dci-surface[data-side] .dci-row { padding: 6px 8px; }
 
 /* ===== 设置分区（官方 T1PP 行结构 + 控件样式）===== */
 .dci-settings { display: flex; flex-direction: column; font-size: 14px; color: inherit; }
@@ -379,41 +526,12 @@ button.dci-attach-body { color: inherit; font: inherit; text-align: left; backgr
 
 
 
-/* ===== 数据行（官方 uV2eYG_dock 复刻：root 内居中、无横向 padding）===== */
-.dci-stat-root { max-width: 100%; box-sizing: border-box; width: 100%;
+/* ===== 数据行（官方 uV2eYG_dock 复刻：root 内居中、无横向 padding；窄窗/长状态栏自动折行防叠字）===== */
+.dci-stat-root { max-width: 100%; min-width: 0; box-sizing: border-box; width: 100%;
   padding: 4px 0 0; font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
   line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
-  justify-content: center; gap: 12px; display: flex; }
-.dci-stat-anchor { min-width: 0; display: inline-flex; }
-
-/* 数据行详情面板（官方 bRhRbq 复刻：portal 到 body、fixed、锚点上方弹出）。
-   背景与圆角逐值同官方：--dsw-specific-menu 优先（macOS 桌面上官方把它覆写成不透明），
-   旧宿主/皮肤缺该 token 时回退 --dsw-menu-surface-fill 链，不落到硬编码深色。 */
-.dci-stat-panel { z-index: 1100; box-sizing: border-box; background: var(--dsw-specific-menu, var(--dsw-menu-surface-fill, rgba(30, 30, 34, 0.98)));
-  backdrop-filter: var(--dsw-menu-backdrop-filter, none);
-  color: var(--dsw-alias-label-secondary, inherit); --dsw-elevation-stroke-color: var(--dsw-alias-border-l1, transparent);
-  width: max-content; min-width: min(300px, 100vw - 24px); max-width: min(440px, 100vw - 24px); text-align: left;
-  box-shadow: var(--dsw-elevation-prominent, 0 10px 34px rgba(0, 0, 0, 0.35)); cursor: default; border: 0;
-  border-radius: var(--dsw-radius-lg, 12px); padding: 16px; font-size: 12px; line-height: 18px; position: fixed; }
-.dci-stat-panelTitle { color: var(--dsw-alias-label-primary, inherit); justify-content: space-between; gap: 16px;
-  margin-bottom: 8px; font-weight: 500; display: flex; }
-.dci-stat-panelLabel { align-items: center; gap: 6px; min-width: 0; display: inline-flex; }
-.dci-stat-panelLabel svg { flex: none; width: 14px; height: 14px; }
-.dci-stat-panelValue { font-variant-numeric: tabular-nums; }
-.dci-stat-panelRule { border-top: 0.5px solid var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 10%, transparent)); margin-bottom: 10px; }
-.dci-stat-details { color: var(--dsw-alias-label-tertiary, currentColor); grid-template-columns: minmax(76px, auto) minmax(0, 1fr);
-  gap: 6px 16px; margin: 0; display: grid; }
-.dci-stat-details dt, .dci-stat-details dd { min-width: 0; margin: 0; }
-.dci-stat-details dd { color: var(--dsw-alias-label-secondary, inherit); font-variant-numeric: tabular-nums; text-align: right; }
-.dci-stat-pill { font: inherit; box-sizing: border-box; max-width: 100%; color: var(--dsw-alias-label-tertiary, currentColor);
-  white-space: nowrap; background: transparent; border: none; border-radius: 999px; corner-shape: round;
-  line-height: inherit; align-items: center; gap: 6px;
-  padding: 1px 8px; display: inline-flex; cursor: pointer; font-variant-numeric: tabular-nums; }
-.dci-stat-pill svg { flex: none; width: 14px; height: 14px; }
-.dci-stat-pill:hover, .dci-stat-pill[aria-expanded="true"] { background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 8%, transparent));
-  color: var(--dsw-alias-label-secondary, inherit); }
-.dci-stat-label { text-overflow: ellipsis; min-width: 0; overflow: hidden; }
-.dci-stat-sep { color: var(--dsw-alias-separator-primary, currentColor); margin: 0 6px; }
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 12px; }
+.dci-stat-root:empty { display: none; }
 
 /* ===== 上下文小圈（官方 JObwrW 复刻：双环仪表 + 分段面板）
    0.1.7-rc.2 起官方把它挪进卡片下方 dock 行（stats 胶囊之后），trigger 变为「圈+百分比」药丸 ===== */

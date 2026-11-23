@@ -4,7 +4,6 @@
  * 覆盖无宿主依赖的核心纯逻辑与状态机：
  * - hotkey：校验、规范化、匹配、mod 冲突判定、展示格式化
  * - prefs：内存缓存引用稳定、外部改写失效、v2→v3 迁移、脏数据归一化、写失败兜底
- * - stats：deriveChatStats、formatTokens、formatCacheHitPercent、formatDuration（中/英）
  * - slotEntry：listRows（无 id 多条目不误丢、去重、excludeIds、order 排序）、
  *   isRenderableComponent、kitFromBarProps、entryInjectProps 按会话绑定代失效
  * - markdown：脚注抽取与快速路径、callout/注释/高亮/wikilink/embed/wire、
@@ -58,10 +57,12 @@ const entrySource = `
 export * as hotkey from './src/client/hotkey.ts';
 export * as prefs from './src/client/prefs.ts';
 export * as i18n from './src/client/i18n.ts';
-export * as stats from './src/client/stats.ts';
 export * as services from './src/client/services.ts';
 export * as sideinput from './src/client/sideinput.ts';
 export * as barinject from './src/client/barinject.ts';
+export * as float3d from './src/client/float3d.ts';
+export * as floatDock from './src/client/float-dock.ts';
+export * as floatFlip from './src/client/float-flip.ts';
 export * as slotEntry from './src/client/components/slotEntry.tsx';
 export * as md from './src/client/markdown/index.ts';
 export * as mdExt from './src/client/markdown/extensions.ts';
@@ -244,55 +245,7 @@ console.log('== DSH-Codinput unit tests ==');
     assert.equal(resolved.lineBreakHotkey, DEFAULT_PREFS.lineBreakHotkey);
   });
 
-  // ---------- 3. stats & i18n ----------
-  await test('stats: formatTokens, formatCacheHitPercent, deriveChatStats & localized formatDuration', () => {
-    const { formatTokens, formatCacheHitPercent, formatTokensPerSecond, formatDuration, deriveChatStats } = mod.stats;
-    const { installI18n } = mod.i18n;
-
-    assert.equal(formatTokens(517), '517 tok');
-    assert.equal(formatTokens(12_240), '12.2K tok');
-    assert.equal(formatTokens(999_950), '1M tok');
-    assert.equal(formatTokens(Number.NaN), null);
-
-    assert.equal(formatCacheHitPercent(100, 100), '100');
-    assert.equal(formatCacheHitPercent(9999, 10000), '99.99');
-    assert.equal(formatCacheHitPercent(50, 0), null);
-
-    assert.equal(formatTokensPerSecond(42.6), '43');
-    assert.equal(formatTokensPerSecond(8.34), '8.3');
-    assert.equal(formatTokensPerSecond(Number.POSITIVE_INFINITY), null);
-
-    // 默认中文
-    assert.equal(formatDuration(12_340), '12.3s');
-    assert.equal(formatDuration(125_000), '2分5秒');
-
-    // 切英文后 formatDuration 自动本地化
-    const disposeEn = installI18n({ getSnapshot: () => ({ active: 'en' }) });
-    try {
-      assert.equal(formatDuration(125_000), '2m 5s');
-    } finally {
-      disposeEn?.();
-      installI18n({ getSnapshot: () => ({ active: 'zh' }) })?.();
-    }
-
-    const derived = deriveChatStats([
-      { kind: 'assistant', turn: 1, timing: { stepStartTime: 100, firstTokenTime: 400, completedTime: 1400 }, usage: { outputTokens: 100 } },
-      { kind: 'tool-result', callTime: 1400, time: 1900 },
-      { kind: 'assistant', turn: 1, timing: { stepStartTime: 2000, firstTokenTime: 2200, completedTime: 3200 }, usage: { outputTokens: 200 } },
-    ]);
-    assert.deepEqual(derived, {
-      turns: 1,
-      steps: 2,
-      llmMs: 2500,
-      toolMs: 500,
-      ttftMs: 500,
-      ttftSteps: 2,
-      decodeMs: 2000,
-      decodeTokens: 300,
-    });
-  });
-
-  // ---------- 4. slotEntry ----------
+  // ---------- 3. slotEntry ----------
   await test('slotEntry: listRows preserves multiple id-less entries, dedupes defined ids, filters excludeIds', () => {
     const { listRows, isRenderableComponent, kitFromBarProps } = mod.slotEntry;
     const A = () => null;
@@ -461,6 +414,217 @@ console.log('== DSH-Codinput unit tests ==');
     assert.equal(getBarInjected('sA'), f2);
     clearBarInjected('sA', f2);
     assert.equal(getBarInjected('sA'), undefined);
+  });
+
+  // ---------- 7. float3d & prefs.float3d ----------
+  await test('prefs: float3d defaults to false, persists booleans & rejects dirty values', () => {
+    const { loadPrefs, savePrefs, resetPrefsCache, DEFAULT_PREFS } = mod.prefs;
+    env.storage.clear();
+    resetPrefsCache();
+
+    assert.equal(DEFAULT_PREFS.float3d, false);
+    assert.equal(loadPrefs().float3d, false);
+
+    const on = savePrefs({ float3d: true });
+    assert.equal(on.float3d, true);
+    assert.equal(loadPrefs().float3d, true);
+
+    env.storage.set('dsh-codinput.prefs.v3', JSON.stringify({ float3d: 'yes' }));
+    assert.equal(loadPrefs().float3d, false, 'non-boolean float3d must fall back to false');
+  });
+
+  await test('float3d: spherical wrap symmetry, drag inertia, spring settle & reduced-motion snap', () => {
+    const {
+      MAX_SPHERE_ROT_X,
+      MAX_SPHERE_ROT_Y,
+      MAX_INERTIA_ROT_X,
+      MAX_INERTIA_ROT_Y,
+      DRAG_LIFT_Z,
+      computeSphericalTarget,
+      computeDragInertia,
+      createFloat3dState,
+      recordDragVelocity,
+      stepFloat3dSpring,
+      poseFromState,
+    } = mod.float3d;
+    const vp = { vw: 1440, vh: 900 };
+
+    // 居中严格 0°、0px
+    const center = computeSphericalTarget({ x: 360, y: 330, w: 720, h: 240 }, vp);
+    assert.equal(center.rotX, 0);
+    assert.equal(center.rotY, 0);
+    assert.equal(center.z, 0);
+
+    // 左右/上下对称朝向视口中心（左正右负、上负下正），且不超过封顶角度
+    const left = computeSphericalTarget({ x: 12, y: 330, w: 720, h: 240 }, vp);
+    const right = computeSphericalTarget({ x: 708, y: 330, w: 720, h: 240 }, vp);
+    assert.ok(left.rotY > 0 && left.rotY < MAX_SPHERE_ROT_Y);
+    assert.ok(Math.abs(left.rotY + right.rotY) < 1e-9, 'left/right rotY should be antisymmetric');
+    assert.ok(left.z > 0 && Math.abs(left.z - right.z) < 1e-9);
+
+    const top = computeSphericalTarget({ x: 360, y: 12, w: 720, h: 240 }, vp);
+    const bottom = computeSphericalTarget({ x: 360, y: 648, w: 720, h: 240 }, vp);
+    assert.ok(top.rotX < 0 && top.rotX > -MAX_SPHERE_ROT_X);
+    assert.ok(Math.abs(top.rotX + bottom.rotX) < 1e-9, 'top/bottom rotX should be antisymmetric');
+
+    // 拖动惯性：向右/向下拖时前进边微压入 -Z，极端速度柔饱和不越界
+    const inertia = computeDragInertia(1800, 1800);
+    assert.ok(inertia.rotY > 0 && inertia.rotY < MAX_INERTIA_ROT_Y);
+    assert.ok(inertia.rotX < 0 && inertia.rotX > -MAX_INERTIA_ROT_X);
+    const extreme = computeDragInertia(1e6, -1e6);
+    assert.ok(extreme.rotY <= MAX_INERTIA_ROT_Y && extreme.rotX <= MAX_INERTIA_ROT_X);
+
+    // 拖动浮空 + 松手阻尼收敛
+    const box = { x: 708, y: 12, w: 720, h: 240 };
+    const state = createFloat3dState({ dragging: true });
+    recordDragVelocity(state, 40, -20, 0.016);
+    for (let i = 0; i < 20; i += 1) {
+      assert.equal(stepFloat3dSpring(state, box, vp, 1 / 60, false), false, 'dragging must not report settled');
+    }
+    assert.ok(state.lift > 0.5 && state.z > DRAG_LIFT_Z * 0.5, 'dragging should lift the card in Z');
+
+    state.dragging = false;
+    let settled = false;
+    for (let i = 0; i < 240; i += 1) {
+      if (stepFloat3dSpring(state, box, vp, 1 / 60, false)) {
+        settled = true;
+        break;
+      }
+    }
+    assert.equal(settled, true, 'spring should converge and stop rAF after release');
+    const resting = computeSphericalTarget(box, vp);
+    assert.ok(Math.abs(state.rotX - resting.rotX) < 1e-6);
+    assert.ok(Math.abs(state.rotY - resting.rotY) < 1e-6);
+    assert.equal(state.lift, 0);
+
+    // 动态投影与反光随方位变化（右侧阴影向右偏、左侧缘面受光 rimX > 0）
+    const poseRight = poseFromState(state, box, vp);
+    assert.ok(poseRight.shadowX > 0);
+    assert.ok(poseRight.rimX > 0);
+    assert.ok(poseRight.glareX >= 8 && poseRight.glareX <= 92);
+
+    // prefers-reduced-motion：跳过惯性/抬起，直接吸附到静态球面位姿并立即收敛
+    const rmState = createFloat3dState({ dragging: true });
+    recordDragVelocity(rmState, 80, 80, 0.016);
+    const rmSettled = stepFloat3dSpring(rmState, box, vp, 1 / 60, true);
+    assert.equal(rmSettled, true);
+    assert.equal(rmState.lift, 0);
+    assert.equal(rmState.rotX, resting.rotX);
+    assert.equal(rmState.rotY, resting.rotY);
+  });
+
+  // ---------- 8. float-dock ----------
+  await test('float-dock: dock zone bounds, visual box clamping, hint phases & release outcomes', () => {
+    const {
+      computeDockZone,
+      isPointInDockZone,
+      computeDockVisualBox,
+      resolveDockHintPhase,
+      resolveReleaseOutcome,
+    } = mod.floatDock;
+
+    const seat = { left: 260, right: 1180, top: 820, bottom: 884 };
+    const zone = computeDockZone(seat, 1440, 900);
+    assert.deepEqual(zone, { left: 220, right: 1220, top: 600, bottom: 900 });
+    assert.equal(isPointInDockZone(720, 750, zone), true);
+    assert.equal(isPointInDockZone(720, 500, zone), false);
+    assert.equal(isPointInDockZone(100, 750, zone), false);
+
+    const visual = computeDockVisualBox(seat, zone, 1440, 900);
+    assert.equal(visual.width, 760);
+    assert.equal(visual.left, 340);
+    assert.ok(visual.top >= 12 && visual.top + visual.height <= 900 - 12);
+
+    // 底部状态栏常驻时，虚框底缘抬升至状态栏顶缘上方（不遮挡状态栏）
+    const visualAboveStats = computeDockVisualBox(seat, zone, 1440, 900, 868);
+    assert.equal(visualAboveStats.top + visualAboveStats.height, 866);
+    assert.ok(visualAboveStats.top < visual.top);
+    // 多行折行状态栏也能随真实 statsTop 同步上抬
+    const visualAboveWrappedStats = computeDockVisualBox(seat, zone, 1440, 900, 840);
+    assert.equal(visualAboveWrappedStats.top + visualAboveWrappedStats.height, 838);
+
+    // 窄视口夹取不越界
+    const narrow = computeDockVisualBox(null, computeDockZone(null, 320, 500), 320, 500);
+    assert.equal(narrow.left, 12);
+    assert.equal(narrow.width, 296);
+
+    // 普通态刚起拖（未离开归位区）→ pulling；拉出后 → idle；再拖回 → armed
+    assert.equal(resolveDockHintPhase(false, true, false), 'pulling');
+    assert.equal(resolveDockHintPhase(false, false, true), 'idle');
+    assert.equal(resolveDockHintPhase(false, true, true), 'armed');
+    // 悬浮态直接拖进归位区 → armed；在悬浮区 → idle
+    assert.equal(resolveDockHintPhase(true, true, true), 'armed');
+    assert.equal(resolveDockHintPhase(true, false, true), 'idle');
+
+    // 松手结果四象限严格区分真正切换 vs 取消/挪动
+    assert.equal(resolveReleaseOutcome(false, false), 'enter-float');
+    assert.equal(resolveReleaseOutcome(false, true), 'cancel-detach');
+    assert.equal(resolveReleaseOutcome(true, true), 'dock');
+    assert.equal(resolveReleaseOutcome(true, false), 'move-float');
+  });
+
+  await test('float-flip: delta filtering, adaptive duration, seat scale & dock card magnetic delta', () => {
+    const {
+      computeFlipDelta,
+      computeFlipDuration,
+      computeSeatEnterScale,
+      computeDockCardDelta,
+    } = mod.floatFlip;
+    assert.equal(computeFlipDelta(500, 672), -172);
+    assert.equal(computeFlipDelta(672, 500), 172);
+    assert.equal(computeFlipDelta(500, 501), 0, 'sub-2px jitter should be ignored');
+    assert.equal(computeFlipDelta(100, 900), 0, 'outlier jump beyond default cap should be ignored');
+    assert.equal(computeFlipDelta(100, 700, 900), -600, 'custom viewport-aware cap should allow tall editors');
+    assert.equal(computeFlipDelta(Number.NaN, 500), 0);
+
+    // 距离自适应时长：单调递增且夹取在 [240, 380] ms
+    const dSmall = computeFlipDuration(25);
+    const dMed = computeFlipDuration(150);
+    const dLarge = computeFlipDuration(500);
+    assert.ok(dSmall >= 240 && dSmall <= dMed && dMed <= dLarge && dLarge <= 380);
+    assert.equal(computeFlipDuration(0), 260);
+    assert.equal(computeFlipDuration(Number.NaN), 260);
+
+    // 底板进入缩放比：严格 (0, 1]；未增高或异常值回退 1
+    assert.ok(Math.abs(computeSeatEnterScale(30, 180) - 30 / 180) < 1e-6);
+    assert.equal(computeSeatEnterScale(0, 180), 0.02);
+    assert.equal(computeSeatEnterScale(180, 30), 1);
+    assert.equal(computeSeatEnterScale(180, 181), 1);
+    assert.equal(computeSeatEnterScale(Number.NaN, 180), 1);
+
+    // 磁吸归位偏移：按中心 X + 顶边 Y 计算，极端位置与宽差安全夹取，且绝不向下溢出（dy <= 0, scale <= 1）
+    const dock = computeDockCardDelta(
+      { left: 320, top: 480, width: 700, height: 150 },
+      { left: 340, top: 600, width: 760, height: 150 },
+    );
+    assert.ok(dock !== null);
+    assert.equal(dock.dx, -50);
+    assert.equal(dock.dy, -120);
+    assert.ok(dock.scale >= 0.92 && dock.scale <= 1);
+
+    const belowSeat = computeDockCardDelta(
+      { left: 340, top: 680, width: 820, height: 150 },
+      { left: 340, top: 600, width: 760, height: 150 },
+    );
+    assert.deepEqual(belowSeat, { dx: 30, dy: 0, scale: 1 }, 'downward offset & scale > 1 should clamp to prevent scrollHeight inflation');
+
+    const clamped = computeDockCardDelta(
+      { left: 0, top: 0, width: 360, height: 140 },
+      { left: 800, top: 700, width: 900, height: 150 },
+    );
+    assert.ok(clamped !== null);
+    assert.equal(clamped.dx, -320);
+    assert.equal(clamped.dy, -280);
+    assert.equal(clamped.scale, 0.92);
+
+    assert.equal(
+      computeDockCardDelta(
+        { left: 340, top: 600, width: 760, height: 150 },
+        { left: 340.3, top: 600.2, width: 760, height: 150 },
+      ),
+      null,
+      'negligible dock offset should skip card FLIP',
+    );
   });
 
 console.log(`\n== summary: ${passed} passed, ${failed} failed ==`);

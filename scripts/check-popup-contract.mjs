@@ -184,6 +184,34 @@ if (!editorPane.includes('getDraft(): string') || !surface.includes('editorCtlRe
   errors.push('EditorPane control must expose getDraft() and the send gesture must read it synchronously (same-frame typing+send race)');
 }
 
+// ---- 9. 底部状态栏（StatsRow）原位锚定 + 官方 composer.dock 完整镜像契约 ----
+// StatsRow（含 composer.dock 第三方状态栏插件）必须固定留在 CodinputBar 对话区底部原位，
+// 不得挂进 CodinputSurface（否则悬浮窄卡片/侧栏会挤爆长状态栏，且切换形态触发卸载重挂）；
+// 且 composer.dock 必须原样镜像整座官方 list 槽位（带 display:contents 的 data-slot 包装、
+// 不硬过滤 activity/usage、不再自绘统计胶囊），以便替换型状态栏插件（如 dsh-desktop-statusbar）
+// 通过官方 [data-slot="conversation.composer.dock"] 与官方输入框完全一致地工作。
+if (!bar.includes('<StatsRowMemo')) {
+  errors.push('CodinputBar must keep <StatsRowMemo> anchored in place at the conversation bottom');
+}
+if (/<StatsRowMemo\b|from '\.\/StatsRow'/.test(surface)) {
+  errors.push('CodinputSurface must not render StatsRowMemo (stats dock stays in CodinputBar across normal/float/side)');
+}
+const dockSlotUrl = new URL('../src/client/components/ComposerDockSlot.tsx', import.meta.url);
+const statsRowUrl = new URL('../src/client/components/StatsRow.tsx', import.meta.url);
+const [dockSlot, statsRow] = await Promise.all([
+  readFile(dockSlotUrl, 'utf8'),
+  readFile(statsRowUrl, 'utf8'),
+]);
+if (dockSlot.includes('excludeIds')) {
+  errors.push('ComposerDockSlot must mirror the full conversation.composer.dock list slot without excludeIds');
+}
+if (!dockSlot.includes('data-slot={COMPOSER_DOCK_SLOT}') || !dockSlot.includes("display: 'contents'")) {
+  errors.push('ComposerDockSlot must wrap entries in <div data-slot={COMPOSER_DOCK_SLOT} style={{ display: \'contents\' }}> to match official SlotOutlet');
+}
+if (!statsRow.includes('data-composer-dock="true"') || /function\s+(?:Pill|TokenPill|StatPanel)\b/.test(statsRow)) {
+  errors.push('StatsRow must expose data-composer-dock="true" and must not render self-drawn Pill/TokenPill/StatPanel');
+}
+
 if (errors.length > 0) {
   for (const error of errors) console.error(error);
   process.exitCode = 1;

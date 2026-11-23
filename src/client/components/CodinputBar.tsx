@@ -1,8 +1,7 @@
 /**
  * 接管条目：conversation.composer.bar（single，priority -1 遮蔽官方条目）。
  * 卸载本条目即官方输入框原样恢复（槽位体系一等机制），草稿不丢。
- * 另从 useChat 订阅官方 legacy 节点数组（sessionStats 投影缺席时按官方
- * deriveStats 派生轮次/decode 计时，见 stats.ts），供数据行使用。
+ * 底部数据行（StatsRow）固定留在原位，按官方语义镜像 conversation.composer.dock。
  *
  * 三态单实例（任一时刻恰好一个入口，且不与官方输入框共存）：
  * - `normal`：接管卡片在原输入位；
@@ -13,7 +12,7 @@
  * 高于持久化的 normal/float，因此不可能出现 side+float 并存或双实例。
  */
 
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { SessionMaybeStandard, SlotRegisterOptions } from '../host-types';
 import { usePref, type CodinputPrefs } from '../prefs';
 import { useSidebarInputCarried } from '../sideinput';
@@ -21,7 +20,9 @@ import { setBarInjected, clearBarInjected } from '../barinject';
 import { useContinueState } from '../continuation';
 import { CodinputBall } from './ExpandBall';
 import { CodinputSurface } from './CodinputSurface';
-import { FloatingShell, beginFloatDrag } from './FloatingShell';
+import { FloatingShell, FloatModeFeedback, beginFloatDrag } from './FloatingShell';
+import { StatsRowMemo } from './StatsRow';
+import { cancelChatFlip, playChatFlip } from '../float-flip';
 import { useStableKit } from './slotEntry';
 
 /** ComposerBarOwnerProps 切面（官方 bar owner）。 */
@@ -48,13 +49,13 @@ interface BarInjected {
   }) => () => void;
 }
 
-/** 槽位作用域里的 chat 会话钩子（ui-session chat 源贡献）。 */
-type BarProps = BarOwner & BarInjected & SessionMaybeStandard & { useChat?: <S>(sel: (s: unknown) => S) => S };
+/** 槽位作用域里的 bar 完整 props。 */
+type BarProps = BarOwner & BarInjected & SessionMaybeStandard;
 
 const selectMode = (p: CodinputPrefs): CodinputPrefs['mode'] => p.mode;
 
 export function CodinputBar(props: BarProps): JSX.Element | null {
-  const { variant, blocked, disabled, placeholder, sessionId, useInput, inputActions, useProjection, useChat, useSession } = props;
+  const { variant, blocked, disabled, placeholder, sessionId, useInput, inputActions, useProjection, useSession } = props;
   const state = useInput((s) => s);
   const occurrence: 'main' | 'embedded' = props.occurrence ?? 'main';
   // ---- rc.3「继续生成 / 重试」信号（与侧栏形态共用同一读取面） ----
@@ -70,20 +71,38 @@ export function CodinputBar(props: BarProps): JSX.Element | null {
     setBarInjected(sessionId, face);
     return () => clearBarInjected(sessionId, face);
   }, [sessionId, props.retry, props.registerFileIntake, occurrence]);
-  // conversation.input.left/.right 第三方条目的 standard props 原样面（剔除 owner props）。
+  // conversation.input.left/.right 与 composer.dock 条目的 standard props 原样面（剔除 owner props）。
   const inputStandard = useStableKit(props as unknown as Record<string, unknown>);
-  // 官方 StatsPills 同款数据源：chat store 的 legacy 节点数组。
-  const chatNodes = useChat ? useChat((s: unknown) => (s as { legacy?: { nodes?: unknown } })?.legacy?.nodes) : undefined;
   // 会话运行中（官方 useSession s.running）：空草稿时主按钮变停止。
   const running = useSession ? useSession((s: unknown) => (s as { running?: boolean } | undefined)?.running) === true : false;
   const sideCarried = useSidebarInputCarried(sessionId);
   const mode = usePref(selectMode);
+  const activeMode: 'side' | 'normal' | 'float' = sideCarried ? 'side' : mode === 'float' ? 'float' : 'normal';
 
-  // side 优先：侧栏标签承载本会话输入时，主输入（含悬浮卡片）整体让位；
-  // 侧栏若已收起，则由标题栏下方的小球（portal）承担唯一入口。
-  if (sideCarried) return <CodinputBall sessionId={sessionId} />;
+  const prevModeRef = useRef<'side' | 'normal' | 'float'>(activeMode);
+  const prevSessionRef = useRef<string | undefined>(sessionId);
+
+  // 模式切换（normal ↔ float / side）：布局只改一次，用全场景 GPU 合成层 FLIP
+  // 协同平滑衔接聊天区位移、底部渐变底板、归位卡片与回底按钮，零逐帧回流、零闪动。
+  useLayoutEffect(() => {
+    const prevMode = prevModeRef.current;
+    const prevSession = prevSessionRef.current;
+    prevModeRef.current = activeMode;
+    prevSessionRef.current = sessionId;
+    if (prevSession === sessionId && prevMode !== activeMode && (prevMode === 'normal' || activeMode === 'normal')) {
+      playChatFlip(prevMode, activeMode);
+    } else {
+      cancelChatFlip();
+    }
+  }, [activeMode, sessionId]);
+
+  useEffect(() => () => cancelChatFlip(), []);
+
+  // 底部状态栏（性能与用量 / composer.dock 第三方条目 / 上下文小圈）固定留在对话区底部原位，
+  // 不随普通 ↔ 悬浮 ↔ 侧栏模式切换移动或卸载重挂：避免窄浮窗/侧栏挤爆第三方长状态栏，
+  // 也避免切换形态时状态栏插件内部状态闪断重置。官方 hero 新会话态无状态栏。
   const floating = mode === 'float';
-  const surface = (
+  const surface = !sideCarried ? (
     <CodinputSurface
       sessionId={sessionId}
       state={state}
@@ -94,17 +113,32 @@ export function CodinputBar(props: BarProps): JSX.Element | null {
       disabled={disabled === true}
       blocked={blocked !== undefined}
       running={running}
-      hero={variant === 'hero'}
-      chatNodes={chatNodes}
       float={floating}
       continueState={continueState}
       occurrence={occurrence}
       registerFileIntake={props.registerFileIntake}
       onDragZonePointerDown={beginFloatDrag}
     />
+  ) : null;
+  return (
+    <div className="dci-bar-root" data-mode={activeMode}>
+      {sideCarried ? (
+        <CodinputBall sessionId={sessionId} />
+      ) : floating ? (
+        <FloatingShell>{surface!}</FloatingShell>
+      ) : (
+        surface
+      )}
+      {variant !== 'hero' ? (
+        <StatsRowMemo
+          useProjection={useProjection}
+          sessionId={sessionId}
+          standard={inputStandard}
+        />
+      ) : null}
+      <FloatModeFeedback />
+    </div>
   );
-  if (floating) return <FloatingShell>{surface}</FloatingShell>;
-  return surface;
 }
 
 /** 注册选项（遮蔽条目必须 priority -1：升序最低者渲染）。 */

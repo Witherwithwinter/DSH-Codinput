@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DSH-Codinput",
+    "description": "Replace the chat composer with a CodeMirror 6 editor panel — normal, floating (with optional 3D), and sidebar forms plus live split Markdown preview.",
+    "detail": "README.en.md"
+  }
+}

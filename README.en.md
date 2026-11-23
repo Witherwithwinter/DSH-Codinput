@@ -2,35 +2,23 @@
   <img src="./assets/icon.png" width="128" alt="DSH-Codinput" />
 </p>
 
-<h1 align="center">DSH-Codinput</h1>
+# DSH-Codinput
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/dsh-codinput"><img src="https://img.shields.io/npm/v/dsh-codinput" alt="npm Version" /></a>
-  <a href="https://github.com/deepseek-ai/deepseek-harness"><img src="https://img.shields.io/badge/DSH-0.2.2--rc.3%20desktop-blue" alt="DSH Version" /></a>
-  <a href="https://www.npmjs.com/package/dsh-codinput"><img src="https://img.shields.io/npm/dt/dsh-codinput" alt="Downloads" /></a>
-  <a href="https://github.com/Witherwithwinter/DSH-Codinput/stargazers"><img src="https://img.shields.io/github/stars/Witherwithwinter/DSH-Codinput" alt="GitHub Stars" /></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/github/license/Witherwithwinter/DSH-Codinput" alt="License" /></a>
-</p>
+[![npm Version](https://img.shields.io/npm/v/dsh-codinput)](https://www.npmjs.com/package/dsh-codinput) [![DSH Version](https://img.shields.io/badge/DSH-0.2.2--rc.3%20desktop-blue)](https://github.com/deepseek-ai/deepseek-harness) [![Downloads](https://img.shields.io/npm/dt/dsh-codinput)](https://www.npmjs.com/package/dsh-codinput) [![GitHub Stars](https://img.shields.io/github/stars/Witherwithwinter/DSH-Codinput)](https://github.com/Witherwithwinter/DSH-Codinput/stargazers) [![License](https://img.shields.io/github/license/Witherwithwinter/DSH-Codinput)](./LICENSE)
 
-<p align="center">
-  <a href="./README.md">中文</a> | English
-</p>
+[中文](./README.md) | English
 
-<p align="center">
-  An editor-style input panel, right where the DeepSeek Harness chat composer used to be.<br />
-  <a href="#features">Features</a> · <a href="#installation">Installation</a> · <a href="#theme--skin">Theme / Skin</a> · <a href="#development--verification">Development</a>
-</p>
+An editor-style input panel, right where the DeepSeek Harness chat composer used to be.
 
-<table>
-  <tr>
-    <td width="50%"><img src="./assets/preview-normal.webp" alt="Default mode" /><br /><sub>Default mode (takes over the original composer slot)</sub></td>
-    <td width="50%"><img src="./assets/preview-split.webp" alt="Edit + preview split" /><br /><sub>Edit + preview split (strictly 50/50)</sub></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="./assets/preview-float.webp" alt="Floating mode" /><br /><sub>Floating mode (draggable, 8-way resizable)</sub></td>
-    <td width="50%"><img src="./assets/preview-side.webp" alt="Sidebar tab mode" /><br /><sub>Sidebar tab mode (full-height panel)</sub></td>
-  </tr>
-</table>
+## Previews
+
+| Default mode (takes over the original composer slot) | Edit + preview split (strictly 50/50) |
+| :---: | :---: |
+| ![Default mode](./assets/preview-normal.webp) | ![Edit + preview split](./assets/preview-split.webp) |
+
+| Floating mode (draggable, 8-way resizable, optional 3D float) | Sidebar tab mode (full-height panel) |
+| :---: | :---: |
+| ![Floating mode](./assets/preview-float.webp) | ![Sidebar tab mode](./assets/preview-side.webp) |
 
 ## Features
 
@@ -41,8 +29,8 @@ Three mutually exclusive forms sharing one official input machine and one draft 
 | Form | How to enter | Notes |
 | --- | --- | --- |
 | **Default** `normal` | automatic | Takeover card sits in the original composer slot |
-| **Floating** `float` | drag the blank area of the card's top row | Detaches into a floating window: drag to move, 8-way resize (position & size remembered), drag back to bottom dock to restore |
-| **Sidebar** `side` | open the **Codinput** tab in the right sidebar | Full-height panel; collapsing the sidebar **does not give the slot back** — a small ball below the header recalls it; `/codinput` exits and closes the tab |
+| **Floating** `float` | drag the centered grab bar or blank area on the card's top row | Detaches into a floating window: drag to move, 8-way resize (position & size remembered), drag back to the bottom dashed dock zone to restore with GPU FLIP transition; optional **3D float** in Settings (spherical viewport tilt, drag-inertia lift, and dynamic lighting/shadows) |
+| **Sidebar** `side` | open the **Codinput** tab in the right sidebar | Full-height borderless toolbar panel matching the other two forms; collapsing the sidebar **does not give the slot back** — a small ball below the header recalls it; `/codinput` exits and closes the tab |
 
 - Drafts survive form switches, `/codinput` exits, plugin toggles, and restarts.
 - Undo history persists across forms: drag to float or move to the sidebar and back, `Ctrl+Z` still works.
@@ -72,21 +60,18 @@ The preview pane and user-message bubbles share one rendering pipeline:
 - **Optional ligatures & instant toggle**: previews and user messages can use a monospace ligature body font (on by default; editor stays literal); toggling user-message Markdown off restores official plain text immediately.
 - **Security baseline**: raw HTML is escaped (no forged reference chips), external links get `target=_blank rel=noopener noreferrer`, `javascript:` / `data:` protocols are blocked, KaTeX runs with `trust: false`, and Mermaid SVGs are sanitized via DOMPurify.
 
-### Stats row & settings
+### Bottom status dock & settings
 
-- **Stats row**: replicates the official stats dock below the card (turns/steps · tok/s, cumulative tokens · cache hit rate, context-occupancy ring) with three mutually exclusive portal detail panels (follows scroll/resize, closes on `Escape` or outside click).
-- **Settings → Codinput**: takeover toggle, line numbers, editor font, user-message Markdown, Markdown monospace ligatures, hotkey recording, and default view. Opening the **Codinput** sidebar tab automatically re-enables takeover if disabled.
+- **Bottom status dock (anchored in place, fully native slot)**: `conversation.composer.dock` stays anchored at the bottom of the conversation pane across normal / float / side transitions without unmounting (the drag-dock outline automatically clears the status bar, and narrow windows wrap cleanly). Preserves the exact official `[data-composer-dock="true"]` and `<div data-slot="conversation.composer.dock">` DOM structure with zero self-drawn stats pills, ensuring seamless compatibility with official stats as well as replacement and additive plugins like `dsh-desktop-statusbar` and `dsh-cost-meter`; only the non-slot hardcoded context-occupancy ring is replicated (and yields automatically to replacement statusbar selectors).
+- **Settings → Codinput**: takeover toggle, user-message Markdown, line numbers, Markdown monospace ligatures, **3D float**, editor font, hotkey recording, default view, and one-click reset. Opening the **Codinput** sidebar tab automatically re-enables takeover if disabled.
 
-<details>
-<summary>Architecture: Official mirror vs. replicated vs. plugin-owned</summary>
+### Architecture: Official mirror vs. replicated vs. plugin-owned
 
 | Area | Classification | Notes |
 | --- | --- | --- |
-| Model / permission / plan / voice / attachment rail / `/` `@` menu & popups / Tooltip / image lightbox | **Official mirror** | Mirrors official slot entries or uses host `@deepseek-ai/dsh-client-ui-primitives` directly |
-| Normal card shell, toolbar chrome (`+` / send / stop), attachment intake handlers, stats dock, settings controls, user-message bubble shell | **Replicated official** | Corresponding JSX is private inside official entries and not exported; replicated value-for-value using host tokens and live host state |
-| CodeMirror 6 editor (ShadowRoot-isolated), split preview, floating/sidebar forms & four-side adaptive overlay host, Markdown pipeline, hotkey recorder | **Plugin-owned** | No host equivalent; colors inherit from official `--dsw-*` tokens |
-
-</details>
+| Model / permission / plan / voice / attachment rail / `/` `@` menu & popups / `composer.dock` stats bar / Tooltip / image lightbox | **Official mirror** | Mirrors official slot entries or uses host `@deepseek-ai/dsh-client-ui-primitives` directly |
+| Normal card shell, toolbar chrome (`+` / send / stop), attachment intake handlers, context-occupancy ring, settings controls, user-message bubble shell | **Replicated official** | Corresponding JSX is private inside official entries and not exported; replicated value-for-value using host tokens and live host state |
+| CodeMirror 6 editor (ShadowRoot-isolated), split preview, floating/3D float/sidebar forms & four-side adaptive overlay host, Markdown pipeline, hotkey recorder | **Plugin-owned** | No host equivalent; colors inherit from official `--dsw-*` tokens |
 
 ## Installation
 
@@ -104,49 +89,22 @@ dsh plugin --profile desktop add dsh-codinput
 
 Replace `desktop` with your local profile name. Restart the desktop app afterwards (or hard-refresh the page; profiles default to `patchReload: live`).
 
-<details>
-<summary>Other installation methods: GitHub source / local dev link / manual config</summary>
+### Other installation methods
 
-#### GitHub source
+- **GitHub source** (the repository ships the prebuilt `lib/client.js`, so no local build is required):
 
-The repository ships the prebuilt `lib/client.js`, so installing from source **requires no local build** (`esbuild` is only in `devDependencies` for local development or forks that remove `lib/`; if pnpm asks for build approval in that case, allow `esbuild@0.25.12: true` in your profile's `pnpm-workspace.yaml`):
+  ```bash
+  dsh plugin --profile desktop add github:Witherwithwinter/DSH-Codinput
+  ```
 
-```bash
-dsh plugin --profile desktop add github:Witherwithwinter/DSH-Codinput
-```
+- **Local source development (`link:`)** (does not copy files — run `npm run build` and refresh the page to pick up changes):
 
-#### Local source development (`link:`)
+  ```bash
+  git clone https://github.com/Witherwithwinter/DSH-Codinput.git
+  dsh plugin --profile desktop add link:/abs/path/to/DSH-Codinput
+  ```
 
-```bash
-git clone https://github.com/Witherwithwinter/DSH-Codinput.git
-dsh plugin --profile desktop add link:/abs/path/to/DSH-Codinput
-```
-
-A `link:` install does not copy files — run `npm run build` and refresh the page to pick up changes.
-
-#### Manual profile config (`~/.dsh/profiles/desktop/package.json`)
-
-```jsonc
-{
-  "dependencies": {
-    "dsh-codinput": "^0.5.3"          // local development: "link:/abs/path/to/DSH-Codinput"
-  },
-  "dsh": {
-    "profile": {
-      "bundles": [
-        "@deepseek-ai/dsh-base",
-        "@deepseek-ai/dsh-web-app",
-        "dsh-codinput"                // ← append last
-      ],
-      "patchReload": "live"
-    }
-  }
-}
-```
-
-Run `pnpm install` in the profile directory (or `dsh plugin --profile desktop install`) and start the desktop app.
-
-</details>
+- **Manual profile config** (`~/.dsh/profiles/desktop/package.json`): add `"dsh-codinput": "^0.6.0"` to `dependencies`, append `"dsh-codinput"` to `dsh.profile.bundles`, run `dsh plugin --profile desktop install`, and restart the desktop app.
 
 ## Theme / skin
 
@@ -154,7 +112,7 @@ Codinput ships no palette of its own — every color inherits from the host's `-
 
 - **Overriding host tokens changes everything**: overriding `--dsw-*` and `--dsh-scrollbar-*` styles the card, menus, buttons, caret, and scrollbars alongside the official UI. Note that the host defines tokens on `body` (`body[data-ds-dark-theme]`), so override at the same layer (`:root` declarations are overridden by `body`).
 - **Official hard-coded values stay parity-matched**: e.g., send icon white foreground and context meter tools purple.
-- **Stable class prefix**: outer elements carry `dci-` classes (`.dci-card`, `.dci-send`, `.dci-menu`, `.dci-stat-root`, `.dci-ball`, etc.). Styles are injected once into `<style id="dsh-codinput-styles">`, so skins injected afterwards override with standard CSS specificity.
+- **Stable class prefix**: outer elements carry `dci-` classes (`.dci-bar-root`, `.dci-card`, `.dci-send`, `.dci-menu`, `.dci-stat-root`, `.dci-ball`, etc.). Styles are injected once into `<style id="dsh-codinput-styles">`, so skins injected afterwards override with standard CSS specificity.
 - **ShadowRoot boundary**: `.cm-editor` and `.dci-pos` mount inside `.dci-cm-host`'s open ShadowRoot to isolate typing from host-wide style recalculation. `--dsw-*` / `--dsh-scrollbar-*` CSS variables and `color` inherit automatically, while external `.cm-*` selectors do not cross the shadow boundary; the editor font follows the user preference.
 
 ## Development & verification
@@ -163,7 +121,7 @@ Codinput ships no palette of its own — every color inherits from the host's `-
 npm install              # install devDependencies (bundler / typecheck)
 npm run build            # contract check + minified lib/client.js build
 npm run build:dev        # unminified build with inline sourcemap
-npm test                 # zero-dependency unit test suite (10 suites)
+npm test                 # zero-dependency unit test suite (13 suites)
 npm run typecheck        # TypeScript typecheck
 npm run prepublishOnly   # full release gate (check:popup + test + build + typecheck)
 ```
@@ -179,7 +137,7 @@ See [TESTING.md](./TESTING.md) (manual smoke & release checklists), [scripts/ver
 
 If this project helps you, you are welcome to buy me a bowl of rice 🍚:
 
-<img src="./assets/donate-qr.jpg" alt="0x2f's tip QR code (buy me a bowl of rice)" width="280" />
+![0x2f's tip QR code (buy me a bowl of rice)](./assets/donate-qr.jpg)
 
 ## License
 

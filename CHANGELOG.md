@@ -2,6 +2,28 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.6.0] — 2026-11-23（3D 悬浮、GPU FLIP 丝滑过渡、底部状态栏交回官方槽位与插件元信息完善）
+
+### 新增
+
+- **3D 悬浮模式（`src/client/float3d.ts`、设置 →「3D 悬浮」，默认关）**：悬浮模式下以视口中心为球心呈球面微倾朝向（居中严格 0° 保持代码编辑清晰），拖动时 Z 轴浮空并随平滑速度矢量产生迎风惯性倾摆，松手由欠阻尼弹簧自然落回；实时输出动态投影、内凹边缘高光与镜面微高光，并尊重 `prefers-reduced-motion`。`overlay-host.ts` 同步增加 3D 透视下的两次不动点坐标修正，确保 `/` `@` 菜单与官方弹层在 3D 倾角下仍贴合卡片。
+- **全场景 GPU 合成层 FLIP 模式切换过渡（`src/client/float-flip.ts`）**：`normal ↔ float / side` 切换时仅改一次布局，通过一次性 `ResizeObserver` 紧随宿主 `ChatViewport` / `seatObserver` 捕获异步 `scrollTop` 与 `--dsh-composer-height` 更新，在 GPU 合成层协同动画化聊天内容区、`composerSeat::before` 渐变底板（`scaleY`）、固定 GPU 幕布、归位卡片磁吸与回底浮动按钮，零逐帧回流、零首帧上跳闪动。
+- **拖动脱出与底部归位区引导（`src/client/float-dock.ts`、`FloatingShell.tsx`）**：卡片顶部新增居中抓取条与官方 `Tooltip` 提示；拖动期间在底部展示自动避让状态栏的虚线归位区及 `pulling / idle / armed` 三态反馈，松手区分 `enter-float / dock / cancel-detach / move-float` 并触发卡片脉冲反馈。
+- **插件多语言元信息与文档刷新**：新增 `locale/zh.json` 与 `locale/en.json`（含 `meta.title`、`meta.description` 与 `detail` 指向 `README.md` / `README.en.md`），重写 `package.json` `description`（移除「DSH 插件（桌面版，适配 DSH 0.2.2-rc.3）」前缀）并将 `locale/`、`README.md`、`README.en.md` 纳入 `package.json` `files`；精简优化中英文 `README`，刷新 4 张预览图（`assets/preview-*.webp`）。
+
+### 变更
+
+- **底部状态栏原位常驻，彻底交回官方槽位（`StatsRow.tsx`、`ComposerDockSlot.tsx`）**：`StatsRow` 从 `CodinputSurface` 迁回 `CodinputBar` 对话区底部原位锚定，不随 `normal / float / side` 切换移动或卸载重挂，窄窗自动折行防叠字；移除自绘 `src/client/stats.ts` 统计胶囊与三详情面板，完整保留官方 `[data-composer-dock="true"]` 与 `<div data-slot="conversation.composer.dock" style="display: contents">` DOM 结构，使官方统计以及 `dsh-desktop-statusbar`（替换型）、`dsh-cost-meter`（追加型）等第三方插件按官方语义原样生效；仅保留官方非槽位上下文占用小圈（`ContextGauge`）。
+
+### 质量与验证
+
+- `scripts/check-popup-contract.mjs` 新增 §9 契约断言（校验 `StatsRowMemo` 锚定在 `CodinputBar`、`ComposerDockSlot` 完整镜像 `composer.dock` 且无自绘统计胶囊）；`scripts/test-unit.mjs` 扩充至 **13/13** 组单元测试（覆盖 `prefs.float3d`、`float3d`、`float-dock`、`float-flip`）。
+- `npm run prepublishOnly`（`check:popup` + `npm test` 13/13 + `npm run build` + `tsc --noEmit`）全过。
+- 隔离宿主 `@deepseek-ai/dsh@0.2.2-rc.3` + 无头 Edge CDP：
+  - `scripts/verify/probe.mjs` 三形态 **23/23** 通过（0 插件错误、0 console 错误）；
+  - `scripts/verify/probe-switch.mjs` 会话切换 **6/6** 通过（0 插件错误、0 console 错误）。
+- `lib/client.js`：`3,539,025 B`（gzip `1,158,827 B` / brotli `957,447 B`），md5 `0cd19246a28cf0588e655f3311f659c6`，sha256 `ffa78f1635ec49649505f836df785a2cca382641bf3357d10132fbf5482e0204`。
+
 ## [0.5.3] — 2026-11-20（长按回车/退格满帧流畅优化与全项目架构整改）
 
 ### 性能（编辑器长按 Enter / Backspace 满帧流畅）
@@ -180,6 +202,7 @@
   - **行号三位预留**：仅 1 行时行号栏宽度即 39px（= `calc(3ch + 16px)`，默认等宽字体），证明 ≤999 行内不会随位数变化。
 - 桌面实机终检（用户侧）：强刷页面后按 `TESTING.md` §8.0 清单目检模型/推理选择器、`/model`、`/permission`、行号与悬停提示。
 
+[0.6.0]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.0...v0.5.1

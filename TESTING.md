@@ -4,7 +4,7 @@
 
 1. **自动静态与单测门禁**（`npm run prepublishOnly` / `.github/workflows/ci.yml`）：
    - `npm run check:popup`（`scripts/check-popup-contract.mjs`）：源码级架构与宿主契约自检（座位镜像、自适应浮层宿主、ShadowRoot 隔离、rc.3 注入面与构建 external 断言）。
-   - `npm test`（`scripts/test-unit.mjs`）：10 组零依赖单元测试（快捷键解析与冲突检测、偏好归一化与 v2→v3 迁移、统计与缓存命中格式化、座位条目合成、Markdown 扩展与 XSS 净化、侧栏承载与 bar 注入总线）。
+   - `npm test`（`scripts/test-unit.mjs`）：13 组零依赖单元测试（快捷键解析与冲突检测、偏好归一化与 v2→v3 迁移、座位条目合成、Markdown 扩展与 XSS 净化、侧栏承载与 bar 注入总线、3D 悬浮与归位区几何、FLIP 过渡）。
    - `npm run build`（`scripts/build.mjs`）：生产压缩构建 + `node --check` 语法自检；CI 同时检查 `git status --porcelain -- lib/`，确保入库的 `lib/client.js` 与当前源码构建结果逐字节一致（源码安装用户直接消费该产物）。
    - `npm run typecheck`（`tsc --noEmit`）：TypeScript 类型检查。
 2. **隔离宿主 CDP 运行时探针**（`scripts/verify/`）：
@@ -30,8 +30,8 @@
 任何操作后均须满足：`document.querySelectorAll('.dci-surface').length === 1`，`.dci-cm-host.shadowRoot` 内全局仅 **1** 个 `.cm-editor`，且官方输入框不存在（`[data-composer-seat]` 内除 `.dci-card` 外无其它可编辑控件）。
 
 - [ ] **普通 `normal`**：接管卡片位于原输入位，`.dci-surface[data-side]` 与 `.dci-float` 均不存在。
-- [ ] **悬浮 `float`**：按住卡片顶部行空白区拖动（越过 6px 阈值）→ 脱出为 `.dci-float` 并跟手；松手在底部输入区之外 → 保持悬浮，刷新页面位置恢复；窗口缩小后悬浮卡自动夹回视口内。
-- [ ] **悬浮 → 普通**：将悬浮卡拖回底部输入区松手 → 回到普通形态（悬浮位置与尺寸记忆保留）。
+- [ ] **悬浮 `float` 与 3D 悬浮（0.6.0）**：按住卡片顶部居中抓取条或空白区拖动（越过 6px 阈值）→ 脱出为 `.dci-float` 并跟手，底部出现可避让状态栏的虚线归位引导区（`pulling / idle / armed` 三态反馈）；松手在底部输入区之外 → 保持悬浮，刷新页面位置恢复；窗口缩小后悬浮卡自动夹回视口内；开启「3D 悬浮」后随视口中心呈球面朝向，拖动浮空并随松手弹簧自然落回。
+- [ ] **悬浮 / 侧栏 ↔ 普通 GPU FLIP 过渡（0.6.0）**：将悬浮卡拖回底部归位区松手或开关侧栏标签 → 聊天内容区、底部渐变底板、归位卡片与回底按钮同步顺滑过渡，无首帧上跳闪动、无逐帧回流卡顿（悬浮位置与尺寸记忆保留）。
 - [ ] **悬浮八向缩放**：拖动四条边与四个角落 → 1:1 跟手、对边锚定不动、不越出视口（12px 边距）、不小于 `360×140`；手动调高后外壳带 `data-sized` 且编辑区撑满卡片；刷新页面尺寸保持。
 - [ ] **侧栏标签 `side`**：展开右侧栏 → 从指南页点「Codinput」（带鲸鱼蓝品牌标）→ 输入面出现在侧栏面板内，**主输入位为空**。
 - [ ] **同栏切标签不让位**：在右侧栏加开「工作区文件」并切换过去 → 主输入位**仍不**回来（`keepMounted: true` 保持承载；页面重载后首次点选激活一次 Codinput 标签即恢复保活）。
@@ -92,9 +92,9 @@
   - 三条入口：slash「添加 · 文件」、**粘贴图片/文件**（含编辑器聚焦内粘贴与未聚焦编辑器时的**文档级粘贴路由** `registerFileIntake`，普通与侧栏形态均生效）、**拖文件进卡片**（出现官方 DropOverlay）；
   - 渲染官方 64×64 图片缩略图与官方 FileCard（名称、扩展名、体积、上传进度条、失败红框重试），非回退态下自绘 `.dci-attach-*` 元素数为 0；
   - 点击图片缩略图打开官方原图预览灯箱（`Esc` / 背板点击 / 右上关闭钮可关，关闭后焦点归还缩略图）。
-- [ ] **数据行与三面板互斥 Portal**：
-  - 卡片下方显示 `{turns} 轮 {steps} 步 · {tps} tok/s`、`{total} · 缓存命中 {pct}%` 与上下文占用小圈（`99.99%`、`999_950 → 1M tok` 等边界格式化与官方一致；新会话 hero 态不渲染）；
-  - 点击展开「会话统计 / Token 用量 / 上下文分段」三枚详情面板：**任意时刻至多展开一枚**（开新关旧、再点收起）；面板 portal 到 `body`（`position: fixed`），滚动页面或缩放窗口时实时跟随锚点并夹在视口内，`Escape` 或点外部关闭。
+- [ ] **底部数据行（`composer.dock` 原样镜像 + 上下文占用小圈，0.6.0）**：
+  - 底部数据行（`.dci-stat-root[data-composer-dock="true"]`）固定锚定在对话区底部原位，不随 `normal / float / side` 切换移动或重挂，窄窗自动折行防叠字，新会话 hero 态不渲染；
+  - `<div data-slot="conversation.composer.dock" style="display: contents">` 原样镜像官方与第三方状态栏条目（不再自绘统计胶囊）；上下文占用小圈点击展开分段面板（portal 到 `body`、`position: fixed`、滚动/resize 跟随、`Escape` 或点外部关闭）。
 
 ## 5. Markdown 渲染与安全基线
 
@@ -150,7 +150,7 @@ flowchart LR
 
 ## 6. 设置与偏好持久化
 
-- [ ] **设置 → Codinput 控件**：启用接管（关闭即还原官方输入框且草稿不丢）、显示行号、编辑器字体（支持完整清空后重新输入）、用户消息 Markdown 渲染（开关即时切换已落库消息形态，无需刷新）、Markdown 等宽连字、发送/换行快捷键录制（支持任意组合键、冲突拒绝、自定义换行键可正确替换当前选区）、默认视图。
+- [ ] **设置 → Codinput 控件**：启用接管（关闭即还原官方输入框且草稿不丢）、用户消息 Markdown 渲染（开关即时切换已落库消息形态，无需刷新）、显示行号、Markdown 等宽连字、**3D 悬浮**、编辑器字体（支持完整清空后重新输入）、发送/换行快捷键录制（支持任意组合键、冲突拒绝、自定义换行键可正确替换当前选区）、默认视图与一键恢复默认设置。
 - [ ] **官方同款 Switch 与下拉菜单**：开关尺寸 `36×20`、`999px` 圆角、ON 轨道跟随 `--dsw-alias-brand-primary`、键盘 `focus-visible` 显示官方焦点环；设置页下拉菜单（`.dci-menu`）portal 到 `body`，滚动/缩放实时跟随且支持 `Escape` 与连点开合。
 - [ ] **偏好存储与迁移**：刷新页面后偏好保持（`localStorage['dsh-codinput.prefs.v3']`）；多标签页修改自动同步；存储写入脏 JSON 不崩溃并回退默认值；旧版 `.v2` 键首次加载后一次性迁移至 `.v3`（自动修正历史坏值 `shift-enter` → `shift+enter`）并清理旧键。
 
@@ -158,7 +158,7 @@ flowchart LR
 
 官方 InputBar 的全部 9 个子座位（`left` / `right` / `model` / `permission` / `plan` / `activity` / `overlay` / `attachments` / `composer.dock`）均按官方语义镜像，单条目报错由 `EntryBoundary` 隔离并在切会话时自动复位：
 
-- [ ] **`conversation.composer.dock`（如 `dsh-cost-meter`）**：启用后在数据行复刻胶囊之前显示第三方成本读数（三形态均可见）；官方自带的 `ActivityPill` / `UsagePill` 已按 `SHIPPED_DOCK_IDS` 过滤，**绝不出现双份统计胶囊**；卸载后零残留。
+- [ ] **`conversation.composer.dock`（如 `dsh-cost-meter`、`dsh-desktop-statusbar`）**：完整保留官方 `[data-composer-dock="true"]` 与 `<div data-slot="conversation.composer.dock">` 结构，官方 `ActivityPill` / `UsagePill` 与追加型插件（如 `dsh-cost-meter`）、替换型状态栏插件（如 `dsh-desktop-statusbar`）均按官方语义原样生效，普通 / 悬浮 / 侧栏切换不导致状态栏卸载重挂，卸载第三方插件后零残留。
 - [ ] **`conversation.input.overlay` 与 `attachments`（如 `dsh-context`、`@knyazevai/dsh-client-ui-attachment`）**：在 `normal / float / side` 三形态下，`/context` 弹层与第三方附件 rail 均正常渲染且不被裁剪，`__dshCodinputErrs` 为空。
 - [ ] **`conversation.input.left` 与 `right`（如 `dsh-prompt-enhancer`）**：第三方工具按钮按官方 order / priority 出现在工具行对应位置。
 - [ ] **`conversation.input.model` 第三方替换与降级**：

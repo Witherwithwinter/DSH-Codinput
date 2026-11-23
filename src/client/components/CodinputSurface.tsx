@@ -1,7 +1,8 @@
 /**
- * Codinput 主体表面：头部行（品牌 · 编辑/预览双开关）、编辑预览区
- * （左右分屏）、工具行、数据行。主输入（composer bar 遮蔽条目）与
- * 侧边标签页共用本表面；读写同一台官方输入机，草稿天然同源。
+ * Codinput 主体表面：头部行（编辑/预览双开关 + 拖动区）、编辑预览区
+ * （左右分屏）、工具行。主输入（composer bar 遮蔽条目）与侧边标签页共用
+ * 本表面；读写同一台官方输入机，草稿天然同源。底部数据行（StatsRow）固定
+ * 留在 CodinputBar 原位，不随形态迁移。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -32,7 +33,6 @@ import { InputSlotSeat } from './InputSlotSeat';
 import { AttachmentsSeat, useOfficialAttachmentsActive } from './AttachmentsSeat';
 import { ImageLightbox, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives';
 import { Toolbar } from './Toolbar';
-import { StatsRowMemo } from './StatsRow';
 import { useAdaptiveOverlayHost } from './overlay-host';
 
 /**
@@ -68,10 +68,6 @@ export interface CodinputSurfaceProps {
   occurrence?: 'main' | 'embedded';
   /** rc.3 bar 注入的文档级粘贴路由注册器。 */
   registerFileIntake?: (target: ComposerFileIntakeTarget) => () => void;
-  /** 官方 bar variant：hero（新会话，无对话记录）不渲染数据行。 */
-  hero?: boolean;
-  /** chat legacy 节点数组（sessionStats 投影缺席时派生轮次/decode 计时）。 */
-  chatNodes?: unknown;
   /** 侧栏形态（视觉略紧凑）。 */
   side?: boolean;
   /** 悬浮形态（卡片在 FloatingShell 内 portal 渲染；拖动由 FloatingShell 管理）。 */
@@ -92,8 +88,6 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
     blocked,
     running,
     side,
-    hero,
-    chatNodes,
     float,
     onDragZonePointerDown,
     continueState,
@@ -546,8 +540,17 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
               <IconEye size={14} />
             </button>
           </Tooltip>
-          {/* 主输入卡片：开关右侧的空白即拖动区——一拖自动脱出悬浮，拖回底部自动回普通。 */}
-          {!side ? <div className="dci-float-dragzone" onPointerDown={onDragZonePointerDown} /> : null}
+          {/* 主输入卡片：顶部居中抓取条与空白拖动区——一拖自动脱出悬浮，拖回底部自动回普通。
+              使用官方 Tooltip 原语保持与其余按钮一致的悬停提示样式（不用原生 title）。 */}
+          {!side ? (
+            <Tooltip label={float ? t('float.dragToMove') : t('float.dragToFloat')} side="top" delayMs={500} portal>
+              <div
+                className="dci-float-dragzone"
+                aria-label={float ? t('float.dragToMove') : t('float.dragToFloat')}
+                onPointerDown={onDragZonePointerDown}
+              />
+            </Tooltip>
+          ) : null}
         </div>
 
         {/* 官方附件座位（0.5.0）：条目可镜像时渲染官方 ComposerAttachments；缺席时回退自绘。 */}
@@ -635,17 +638,7 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
           getDraft={getLiveDraft}
           onBeforeHostAction={onOverlayPointerDown}
         />
-
-        {/* 数据行：悬浮形态收进卡片（工具行下方，随卡片圆角一体）。 */}
-        {float && hero !== true ? (
-          <StatsRowMemo useProjection={useProjection} sessionId={sessionId} chatNodes={chatNodes} standard={inputStandard} />
-        ) : null}
       </div>
-
-      {/* 数据行：主输入/侧栏渲染在卡片下方（官方 hero 新会话态无 stats）。 */}
-      {!float && hero !== true ? (
-        <StatsRowMemo useProjection={useProjection} sessionId={sessionId} chatNodes={chatNodes} standard={inputStandard} />
-      ) : null}
 
       {/* Markdown 图片大图灯箱（用户消息侧同组件同行为）。 */}
       {lightbox ? (

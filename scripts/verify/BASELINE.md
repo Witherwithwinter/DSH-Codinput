@@ -1,13 +1,13 @@
-# 基线报告：v0.5.3 · 隔离宿主运行时验收
+# 基线报告：v0.6.0 · 隔离宿主运行时验收
 
-- 日期：2026-11-20（Asia/Shanghai）
+- 日期：2026-11-23（Asia/Shanghai）
 - 宿主：`@deepseek-ai/dsh@0.2.2-rc.3`（隔离 `DSH_HOME`，web profile 以 `link:` 装载本仓库；`probe.mjs` 端口 `3099`，`probe-switch.mjs` 端口 `3098`）
 - 浏览器：系统 Edge，headless，窗口 `1440×900` → 视口 **`1410×805`**，DPR 1
-- 被测产物：`lib/client.js` **`3,524,758 B`**（gzip `1,151,194 B` / brotli `952,892 B`），md5 `2908e39e1fe833c53e003ebf0aa8fc96`，sha256 `97cf4085042867249a5c4a1d1fff010ca4a8cc775dbe19d28cede11bfe7ad6c0`
+- 被测产物：`lib/client.js` **`3,539,025 B`**（gzip `1,158,827 B` / brotli `957,447 B`），md5 `0cd19246a28cf0588e655f3311f659c6`，sha256 `ffa78f1635ec49649505f836df785a2cca382641bf3357d10132fbf5482e0204`
 - 结论：
   - `node scripts/verify/probe.mjs`：**23 / 23 PASS，0 FAIL**；`__dshCodinputErrs` 与 console 错误均为 0
   - `node scripts/verify/probe-switch.mjs`：**6 / 6 PASS，0 FAIL**；`__dshCodinputErrs` 与 console 错误均为 0
-  - `npm test`（`scripts/test-unit.mjs`）：**10 / 10 PASS**
+  - `npm test`（`scripts/test-unit.mjs`）：**13 / 13 PASS**
 
 ## 1. 装载健康（H1–H3）
 
@@ -32,11 +32,11 @@
 | `floatY=655`（贴底） | `(60, 655, 720×138)` | `(60, 251, 720×400)` | **`top`**，gap 4 | 同上 |
 | `floatX=12`（贴左） | `(12, 300, 720×138)` | `(736, 300, 360×400)` | **`right`**，gap 4 | 同上，宽度 360（侧位上限） |
 | `/model` 弹层（贴顶） | `(60, 16, 720×138)` | `(60, 158, 720×131)` | **`bottom`**，gap 4 | 可见、不遮卡片 |
-| 菜单打开时拖卡 | `(120, 200)` → `(112, 77)` | 由 `right (844, 200, 360×400)` 重排为 `bottom (112, 219, 720×400)` | 逐帧跟手 | 拖动后菜单仍开且几何合法 |
+| 菜单打开时拖卡 | `(120, 200)` → `(168, 77)` | 由 `right (844, 200, 360×400)` 重排为 `bottom (168, 219, 720×400)` | 逐帧跟手 | 拖动后菜单仍开且几何合法 |
 
 ## 4. side 形态（右侧栏承载 + 消息区左侧选位）
 
-- 承载：`.dci-surface[data-side]` 位于 `[data-sidebar-right-tab]` 内，卡片 `(776, 38, 634×735)`，pane `(775, 0, 635×805)`；`shell.session.side === true`；全局仍只有 1 个 `.cm-editor`。
+- 承载：`.dci-surface[data-side]` 位于 `[data-sidebar-right-tab]` 内，卡片 `(776, 38, 634×767)`，pane `(775, 0, 635×805)`；`shell.session.side === true`；全局仍只有 1 个 `.cm-editor`。
 - slash 菜单：rect = `(412, 38, 360×400)`，`data-mode="dd"`、`data-placement="left"`、`--dci-overlay-maxh: 400px`；**右边缘 `772 ≤ pane 左边缘 775`**，落在对话区、不被裁剪。
 - `/model` 弹层：rect = `(412, 38, 360×131)`，`data-placement="left"`，落在对话区。
 
