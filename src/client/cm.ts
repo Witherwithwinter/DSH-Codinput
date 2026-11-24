@@ -12,6 +12,7 @@ import {
 } from '@codemirror/view';
 import { Annotation, Compartment, EditorState, type Extension, type Text } from '@codemirror/state';
 import { loadPrefs, subscribePrefs } from './prefs';
+import { dragHasFiles } from './attachments';
 
 /**
  * ShadowRoot 内样式：把 CodeMirror DOM 与宿主 160+ 样式表和 `:has()` 祖先链彻底隔离。
@@ -172,6 +173,8 @@ export function clearActiveEditorHooks(hooks: EditorHooks): void {
 export function createEditorExtensions(options: EditorOptions): Extension[] {
   return [
     EditorView.domEventHandlers({
+      // 文件归附件入口处理；阻止 CM 默认异步 readAsText 入正文，但保留冒泡给官方 document 监听。
+      drop: (event) => dragHasFiles(event.dataTransfer),
       keydown: (event, view) => activeHooks?.onKeydown(view, event) ?? false,
       keyup: (event, view) => {
         activeHooks?.onKeyup?.(view, event);

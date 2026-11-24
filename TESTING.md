@@ -4,7 +4,7 @@
 
 1. **自动静态与单测门禁**（`npm run prepublishOnly` / `.github/workflows/ci.yml`）：
    - `npm run check:popup`（`scripts/check-popup-contract.mjs`）：源码级架构与宿主契约自检（座位镜像、自适应浮层宿主、ShadowRoot 隔离、rc.3 注入面与构建 external 断言）。
-   - `npm test`（`scripts/test-unit.mjs`）：13 组零依赖单元测试（快捷键解析与冲突检测、偏好归一化与 v2→v3 迁移、座位条目合成、Markdown 扩展与 XSS 净化、侧栏承载与 bar 注入总线、3D 悬浮与归位区几何、FLIP 过渡）。
+   - `npm test`（`scripts/test-unit.mjs`）：14 组零依赖单元测试（快捷键解析与冲突检测、偏好归一化与 v2→v3 迁移、座位条目合成、Markdown 扩展与 XSS 净化、侧栏承载与 bar 注入总线、3D 悬浮与归位区几何、FLIP 过渡、编辑器文件拖放拦截）。
    - `npm run build`（`scripts/build.mjs`）：生产压缩构建 + `node --check` 语法自检；CI 同时检查 `git status --porcelain -- lib/`，确保入库的 `lib/client.js` 与当前源码构建结果逐字节一致（源码安装用户直接消费该产物）。
    - `npm run typecheck`（`tsc --noEmit`）：TypeScript 类型检查。
 2. **隔离宿主 CDP 运行时探针**（`scripts/verify/`）：
@@ -89,7 +89,7 @@
   - **失败轮次继续生成（rc.3）**：会话出现失败轮次且输入面干净（草稿/附件/队列皆空、非运行中、无待回答问题）时，主按钮变为官方 **Continue 三角 + Tooltip「继续生成」**（普通 / 悬浮 / 侧栏三形态均生效），点击后调用 `retry(failureSeq)` 重试。
 - [ ] **官方 Tooltip**：悬停工具行按钮、右上角编辑/预览开关、侧栏唤回小球、数据行胶囊、用户消息复制钮约 500 ms 后出现官方深色气泡提示（`aria-describedby` 生效，无原生 `title` 双重提示）。
 - [ ] **附件行（官方 `ComposerAttachments` 镜像）与文档级粘贴路由**：
-  - 三条入口：slash「添加 · 文件」、**粘贴图片/文件**（含编辑器聚焦内粘贴与未聚焦编辑器时的**文档级粘贴路由** `registerFileIntake`，普通与侧栏形态均生效）、**拖文件进卡片**（出现官方 DropOverlay）；
+  - 三条入口：slash「添加 · 文件」、**粘贴图片/文件**（含编辑器聚焦内粘贴与未聚焦编辑器时的**文档级粘贴路由** `registerFileIntake`，普通与侧栏形态均生效）、**拖文件进卡片**（出现官方 DropOverlay；拖放 `.html` / `.txt` 等文本类文件进编辑区仅添加附件，源码不进入草稿）；
   - 渲染官方 64×64 图片缩略图与官方 FileCard（名称、扩展名、体积、上传进度条、失败红框重试），非回退态下自绘 `.dci-attach-*` 元素数为 0；
   - 点击图片缩略图打开官方原图预览灯箱（`Esc` / 背板点击 / 右上关闭钮可关，关闭后焦点归还缩略图）。
 - [ ] **底部数据行（`composer.dock` 原样镜像 + 上下文占用小圈，0.6.0）**：
