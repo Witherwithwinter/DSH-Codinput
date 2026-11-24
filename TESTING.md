@@ -1,5 +1,14 @@
 # 测试与冒烟清单
 
+## HTML 文件拖放回归
+
+- 新 checkout 先执行 `npm ci`，再运行下列命令；不需要 DSH、浏览器、账号或 Git 历史。
+- `npm run test:drop`：jsdom 中挂载真实 CodeMirror 与 open ShadowRoot，dispatch composed/bubbling drop、paste、dragstart，验证文件不触发 CM FileReader，纯文本 drop/paste 与内部文本 move 保持原行为。
+- `npm run verify:drop`：先在内存中精确移除 `cm.ts` 的本次 import、注释和 drop guard，运行 **pre-fix mutation control（非历史上游基线）**；要求控制组 11 pass / 7 fail、HTML sentinel 实际进入草稿且 FileReader 被调用，再要求工作树 18 pass / 0 fail、0 FileReader。精确 import/handler/context 必须唯一，否则失败，不将环境或锚点错误视为预期红。无需 `git show` 或固定 commit，适用于浅克隆；不改源码，原始日志保留在命令打印的 OS 临时目录供检查（可在检查后删除）。
+- `npm test` 自动包含上述编辑器回归与原 13 组单元测试；`npm run prepublishOnly` 再执行完整构建/类型检查。
+- 几何与未使用的 React 偏好 hooks 为测试环境桩；核心 CM DOM handlers/FileReader/事务是真实实现，附件捕获与文档监听为按安装版 rc.5 源码契约的最小镜像。不是完整宿主、系统剪贴板/拖放或视觉实测。
+- 预期语义：拖入文件走既有附件入口（而非展开源码/生成路径文本）；拖入纯文本和普通粘贴仍是字面正文。真实系统目录 Entry、内部图片 token、三形态完整 GUI 仍需获准安装后人工冒烟。
+
 本项目的质量把关分为**三层**：
 
 1. **自动静态与单测门禁**（`npm run prepublishOnly` / `.github/workflows/ci.yml`）：
