@@ -9,6 +9,7 @@
  * - markdown：脚注抽取与快速路径、callout/注释/高亮/wikilink/embed/wire、
  *   B5 安全（原始 HTML 转义、伪造 data-dci-wire 拦截、危险 URI 拦截）、代码高亮
  * - sideinput / barinject：多标签归属选举与按身份清理
+ * - cm & attachments：编辑器文件拖放拦截（阻断 CM 默认 FileReader 读取且保留 DOM 冒泡）
  */
 
 import assert from 'node:assert/strict';
@@ -68,6 +69,9 @@ export * as md from './src/client/markdown/index.ts';
 export * as mdExt from './src/client/markdown/extensions.ts';
 export * as mdCode from './src/client/markdown/code.ts';
 export * as mdSanitize from './src/client/markdown/sanitize.ts';
+export * as attachments from './src/client/attachments.ts';
+export * as cm from './src/client/cm.ts';
+export { EditorState } from '@codemirror/state';
 `;
 
 let failed = 0;
@@ -625,6 +629,52 @@ console.log('== DSH-Codinput unit tests ==');
       null,
       'negligible dock offset should skip card FLIP',
     );
+  });
+
+  // ---------- 9. cm & attachments ----------
+  await test('cm & attachments: dragHasFiles & EditorView drop handler blocks file drops without stopping propagation', () => {
+    const { dragHasFiles } = mod.attachments;
+    const { createEditorExtensions } = mod.cm;
+    const { EditorState } = mod;
+
+    assert.equal(dragHasFiles(null), false);
+    assert.equal(dragHasFiles({ types: ['text/plain'] }), false);
+    assert.equal(dragHasFiles({ types: ['Files'] }), true);
+    assert.equal(dragHasFiles({ types: ['Files', 'text/html', 'text/plain'] }), true);
+
+    const extensions = createEditorExtensions({
+      lineNumbers: false,
+      fontFamily: 'monospace',
+      placeholder: '',
+      editable: true,
+    });
+    EditorState.create({ doc: 'draft:', extensions });
+    const dropHandlers = extensions
+      .flat(Infinity)
+      .map((ext) => ext?.domEventHandlers?.drop)
+      .filter((fn) => typeof fn === 'function');
+    assert.ok(dropHandlers.length >= 1, 'createEditorExtensions must register an EditorView drop handler');
+
+    const runDrop = (dataTransfer) => {
+      let stopped = 0;
+      const event = {
+        dataTransfer,
+        defaultPrevented: false,
+        preventDefault() {
+          this.defaultPrevented = true;
+        },
+        stopPropagation() {
+          stopped += 1;
+        },
+      };
+      const handled = dropHandlers.some((fn) => fn(event, null) === true);
+      return { handled, stopped };
+    };
+
+    assert.deepEqual(runDrop({ types: ['Files'] }), { handled: true, stopped: 0 });
+    assert.deepEqual(runDrop({ types: ['Files', 'text/html', 'text/plain'] }), { handled: true, stopped: 0 });
+    assert.deepEqual(runDrop({ types: ['text/plain'] }), { handled: false, stopped: 0 });
+    assert.deepEqual(runDrop(null), { handled: false, stopped: 0 });
   });
 
 console.log(`\n== summary: ${passed} passed, ${failed} failed ==`);
