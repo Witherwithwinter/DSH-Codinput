@@ -2,6 +2,22 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.6.1] — 2026-11-25（修复拖放 HTML 等文件时源码进入草稿与文档预览图更新）
+
+### 修复
+
+- **拖放 HTML / 文本类文件进编辑区仅添加附件，源码不再进入草稿（PR #17，贡献者 `@RaM-bugourp`）**：启用官方附件座位（`officialAttachments = true`）时，`CodinputSurface` 的捕获阶段 `drop` 会让权给官方 `document` 级附件监听；但事件先经过 ShadowRoot 内 CodeMirror `contentDOM`，导致 CM6 默认 `drop` 处理器对 `.html` / `.txt` 等文件调用 `FileReader.readAsText` 并把文件内容写入草稿。现于 `src/client/cm.ts` 的 `EditorView.domEventHandlers` 中增加 `drop: (event) => dragHasFiles(event.dataTransfer)`，含文件载荷时阻止 CM 默认读取，同时**不**调用 `stopPropagation()` 以保留事件冒泡给官方 `document` 监听；普通纯文本拖放、粘贴与编辑器内选区拖动仍维持原语义。
+
+### 文档与资源
+
+- **预览图与 README 排版刷新**：中英文 `README` 换用浅色主题四态预览图（`assets/preview-*.webp`），修复开头徽章与标题居中对齐，并将赞赏码缩小至 `280×280`（`assets/donate-qr.jpg`）；同步更新中英文 README 单测计数为 14 组，并将拖放验收要点整理入 `TESTING.md` §4 附件行清单。
+
+### 质量与验证
+
+- `scripts/test-unit.mjs` 扩充至 **14/14** 组零依赖单元测试（新增 `cm & attachments` 文件拖放拦截用例，验证 `dragHasFiles` 与 `EditorView.domEventHandlers.drop` 拦截含 `Files` 拖放且保留冒泡）。
+- CI（`check:popup` + `npm test` 14/14 + `npm run build` + `tsc --noEmit` + `lib/` 与源码逐字节一致性校验）全过。
+- `lib/client.js`：`3,539,052 B`（gzip `1,155,928 B` / brotli `957,251 B`），md5 `fb7fdc3904c172a44529977aab45dd9e`，sha256 `8d687781f4ccf6e7021154925eec44f861cd5f6887b1acecca3564b6b5aade30`。
+
 ## [0.6.0] — 2026-11-23（3D 悬浮、GPU FLIP 丝滑过渡、底部状态栏交回官方槽位与插件元信息完善）
 
 ### 新增
@@ -202,6 +218,7 @@
   - **行号三位预留**：仅 1 行时行号栏宽度即 39px（= `calc(3ch + 16px)`，默认等宽字体），证明 ≤999 行内不会随位数变化。
 - 桌面实机终检（用户侧）：强刷页面后按 `TESTING.md` §8.0 清单目检模型/推理选择器、`/model`、`/permission`、行号与悬停提示。
 
+[0.6.1]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.1...v0.5.2
