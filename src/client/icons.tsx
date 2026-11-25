@@ -34,11 +34,11 @@ function svg(paths: JSX.Element, size: number | undefined, className: string | u
  */
 const BRAND_MARK = (
   <>
-    <path d="M6.8 5.8 2.9 11l4 4.4" />
-    <path d="M17.2 5.8 21.1 11l-3.9 4.4" />
-    <path d="M10.7 9.5 12.5 3.9" />
-    <path d="M16.6 9.4 6.9 14l2.9 1.3.1 2.5q.1.8.7.3l1-2.3 2.2 1.4Z" />
-    <path d="M9.8 15.3 16.6 9.4" />
+    <path d="M6.2 6.5 2.2 11.5l4 5" />
+    <path d="M17.8 6.5 21.8 11.5l-4 5" />
+    <path d="M10.7 10.4 12.6 4.6" />
+    <path d="M16.9 10.1 7.9 14.4l2.9 1.4.2 2.8q.1.8.8.2l1.1-2.2 2.3 1.4Z" />
+    <path d="M10.8 15.8 16.9 10.1" />
   </>
 );
 
