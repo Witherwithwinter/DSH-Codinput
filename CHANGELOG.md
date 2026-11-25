@@ -218,12 +218,12 @@
   - **行号三位预留**：仅 1 行时行号栏宽度即 39px（= `calc(3ch + 16px)`，默认等宽字体），证明 ≤999 行内不会随位数变化。
 - 桌面实机终检（用户侧）：强刷页面后按 `TESTING.md` §8.0 清单目检模型/推理选择器、`/model`、`/permission`、行号与悬停提示。
 
-[0.6.1]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.6.0...v0.6.1
-[0.6.0]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.3...v0.6.0
-[0.5.3]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.2...v0.5.3
-[0.5.2]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.1...v0.5.2
-[0.5.1]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.5.0...v0.5.1
-[0.5.0]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.4.1...v0.5.0
+[0.6.1]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.5.3...v0.6.0
+[0.5.3]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.5.2...v0.5.3
+[0.5.2]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.5.1...v0.5.2
+[0.5.1]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.4.1...v0.5.0
 
 ## [0.4.1] — 2026-11-13
 
@@ -240,7 +240,7 @@
 
 - **修正 README 的租客断言**：原文「`input.attachments` / `overlay` / `dock` 生态暂无租客，留扩展位」未经核验且不成立——`dsh-cost-meter` 默认注册 `conversation.composer.dock`、`dsh-context` 注册 `conversation.input.overlay`、`@knyazevai/dsh-client-ui-attachment` 无条件注册 `conversation.input.attachments`（其首版早于该断言）。中英 README 同步改为「已镜像 / 未镜像」清单 + 宿主侧原因（slot 声明单 owner、无原生转发），并区分 `conversation.input.dock`（bar 之外、不受影响）与 `conversation.composer.dock`（bar 体内、原被抹掉）；同时补上这些座位上**官方自带占用者**（composer.dock 的 Activity/Usage 胶囊、attachments 的 `ComposerAttachments`、overlay 的指令/斜杠/反馈弹层）——镜像与审计都只针对第三方。
 
-[0.4.1]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.4.0...v0.4.1
+[0.4.1]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.4.0...v0.4.1
 
 ## [0.4.0] — 2026-11-10
 
@@ -292,7 +292,7 @@
 - **验收记录**（隔离 web DSH `0.2.2-rc.1` + 无头 Edge；隔离桌面 Electron 44.7 / Chromium 152 抽验）：底部工具行/麦克风、带图用户消息与问答、prefs 迁移与统计边界、Markdown 渲染（GFM/脚注/Callouts/Obsidian 语法/图片尺寸与灯箱/代码高亮/KaTeX/Mermaid/正文与行内代码连字）、安全与回归全部 PASS；桌面抽验（编辑器字面渲染、预览正文连字、无第一格空白）PASS；`__dshCodinputErrs` / console error 全为 0。
 - **发布材料**：`npm run typecheck` 通过；`lib/client.js` 由当前源码重建（md5 `a7708d2d00ce005de5e599cc7819296f`，3,555,033 B；gzip 1,157,872 B / brotli 958,709 B；构建自检 `node --check` OK）。
 
-[0.4.0]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.9...v0.4.0
+[0.4.0]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.3.9...v0.4.0
 
 ## [0.3.9] — 2026-11-06
 
@@ -311,7 +311,7 @@
 - 未覆盖：模型子页长列表滚动（隔离宿主无凭据、目录为空）、视口 12px 夹取分支、真实模型/权限切换提交。
 - 0.3.8 既有功能与行为不变；本版仅调整菜单定位与开合实现（`lib/client.js` 同步重建）。PR #5（@LittleFishStars）。
 
-[0.3.9]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.8...v0.3.9
+[0.3.9]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.3.8...v0.3.9
 
 ## [0.3.8] — 2026-10-30
 
@@ -338,7 +338,7 @@
 - 桌面 `0.2.1-rc.3` 取证：从该版 `app.asar` 提取官方 CSS Modules 与主题 token，逐值核对 Switch 规则、stats / ContextMeter 面板的 portal+fixed 与背景/圆角、`--dsh-frame-top-clearance`，与 0.3.8 实现一致；macOS 毛玻璃/不透明度差异未实机目检。
 - 0.3.7 已发布的三项功能（用户消息 Markdown、插件页图标、数据行三面板互斥）机制不变；本版修正其带图崩溃与安全基线，以及交互/样式细节。
 
-[0.3.8]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.7...v0.3.8
+[0.3.8]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.3.7...v0.3.8
 
 ## [0.3.7] — 2026-10-29
 
@@ -358,7 +358,7 @@
 - **挂载面事实**：键控座每 key 低 priority 者胜，宿主动态包守卫对插件 register 强制分配唯一负秩——注册即遮蔽、卸载即还座官方（与 `composer.bar` 接管同机制）。
 - **已实测**（真实 web 宿主 `0.2.0-rc.2`，本地 link 安装本仓库构建产物，Chromium 自动化探针）：Markdown 消息渲染语义正确（ARIA 树 paragraph/strong/code/list、截图目检排版）、设置开关不刷新页面即时切换形态、整页重载后持久消息保持 Markdown、复制/时间戳/引用 chip 行为正常、`__dshCodinputErrs` 为空；插件卡图标与 `assets/icon.png` 逐字节一致；轮步/用量/上下文三面板互斥展开（开新关旧、再点收起）实测通过。
 
-[0.3.7]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.6...v0.3.7
+[0.3.7]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.3.6...v0.3.7
 
 ## [0.3.6] — 2026-10-28
 
@@ -377,7 +377,7 @@
 - **机制覆盖未逐一实测**：悬浮 / 侧栏两形态与普通形态共用同一 Toolbar（座位自动同享）；`locked` 置灰只在会话拒绝交互时可见（官方语义 `removed || inert || !live`，Codinput 下发自身 `inert`，含 blocked，口径略严一档）。
 - **边界**：第三方若自行给该座补声明 children 会与宿主已声明冲突（宿主 `already declared`），镜像层不做；多个插件同时遮蔽同一单值座属槽位竞争，由宿主 fail-loud。
 
-[0.3.6]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.5...v0.3.6
+[0.3.6]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.3.5...v0.3.6
 
 ## [0.3.5] — 2026-10-23
 
@@ -395,7 +395,7 @@
 - **已知限制（本版边界）**：`conversation.input.model` 单座（如 dsh-model-accordion 类替换模型选择器的插件）与自绘模型芯片 UX 冲突，本版不镜像；`conversation.input.attachments` / `overlay` / `dock` 生态暂无租客，留扩展位。
 - **覆盖边界（措辞分界）**：左座转发在真实 web 宿主（`0.2.0-rc.2`）上以确定性探针条目实测通过（渲染位置/三形态/卸载零残留）；dsh-qoder-plugin 的左额度读数与右探针双座条目实测注册成功、无报错，但其组件按官方契约在未选中 Qoder provider 时返回 `null`，可见读数属机制推断、未实测；左座席位的「上传视频」类插件真身未在本环境出现，同属机制覆盖（其注册形态与已实测样本同轴）。右座既有租客（dsh-prompt-enhancer）端到端回归实测不受影响。
 
-[0.3.5]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.4...v0.3.5
+[0.3.5]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.3.4...v0.3.5
 
 ## [0.3.4] — 2026-10-23
 
@@ -418,7 +418,7 @@
 - **覆盖边界**：本版转发的是 `conversation.input.right`（右座）；`conversation.input.left`（左座，如部分插件的「上传视频」按钮与 qoder-plugin 的额度读数）暂未转发，后续版本补齐。
 - **右座覆盖面**：同座其他条目（如各 Qoder 渠道插件的积分/余额读数）按同一合成机制恢复显示——推断自各包源码的槽位注册（五家 Qoder 桥接包均注册于 right 座），未逐一实测。
 
-[0.3.4]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.3...v0.3.4
+[0.3.4]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.3.3...v0.3.4
 
 ## [0.3.3] — 2026-10-23
 
@@ -433,7 +433,7 @@
 
 - **README 皮肤作者指南（中英）**：新增「主题 / 皮肤插件兼容」章节——覆写宿主 `--dsw-*` token 即全盘生效（含 token 定义在 body 层、覆写需写同层的注意点）；官方写死的值清单（发送钮图标前景白等，属预期不跟 token）；稳定的 `dci-` 前缀类名契约与注入顺序（皮肤后注入按常规 CSS 权重覆盖）。
 
-[0.3.3]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.2...v0.3.3
+[0.3.3]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.3.2...v0.3.3
 
 ## [0.3.2] — 2026-10-18
 
@@ -453,7 +453,7 @@
 
 - **检测即兼容**：模型徽章经官方槽位条目渲染，条目缺席时自动回退纯名，无样式无行为残留。桌面版 `0.2.1-rc.2` 端到端实测（徽章、强度显示、品牌标、触发器）；web `0.1.7-rc.2` 按官方包逐行取证（无该子槽位与徽章插件、目录快照字段一致）加守卫降级覆盖；`0.1.5-rc.2` / `0.1.6-alpha.2` 沿用既往结论。升级宿主后建议按 [TESTING.md](./TESTING.md) 冒烟。
 
-[0.3.2]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.1...v0.3.2
+[0.3.2]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.3.1...v0.3.2
 
 ## [0.3.1] — 2026-10-11
 
@@ -473,7 +473,7 @@
 
 - 宿主兼容不变：桌面版（Electron，`0.2.0-rc.2`）与 `0.1.7-rc.2`（next）实测通过，`0.1.5-rc.2` / `0.1.6-alpha.2` 沿用既往结论；升级宿主后建议按 [TESTING.md](./TESTING.md) 冒烟。
 
-[0.3.1]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.3.0...v0.3.1
+[0.3.1]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.3.0...v0.3.1
 
 ## [0.3.0] — 2026-10-02
 
@@ -490,7 +490,7 @@
 - **web 宿主回归**：`0.1.7-rc.2` 实测无语音插件时按钮不渲染、工具行无任何变化，既往功能不受影响。
 - 宿主兼容其余不变：`0.1.7-rc.2`（next）实测通过，`0.1.5-rc.2` / `0.1.6-alpha.2` 沿用既往结论；升级宿主后建议按 [TESTING.md](./TESTING.md) 冒烟。
 
-[0.3.0]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.2.0...v0.3.0
+[0.3.0]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.2.0...v0.3.0
 
 ## [0.2.0] — 2026-09-29
 
@@ -521,7 +521,7 @@
 
 - 宿主兼容不变：`0.1.7-rc.2`（next）实测通过，`0.1.5-rc.2` / `0.1.6-alpha.2` 沿用既往结论；升级宿主后建议按 [TESTING.md](./TESTING.md) 冒烟。
 
-[0.2.0]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.1.1...v0.2.0
+[0.2.0]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.1.1...v0.2.0
 
 ## [0.1.1] — 2026-09-25
 
@@ -543,7 +543,7 @@
 - 官方 rc.2 新增的候选菜单 `[data-overflow-below]` 底部渐隐未复刻（需宿主溢出方向状态，仅影响菜单向下展开的变体）。
 - 测试状况（分两层）：静态层面，官方 CSS 从 `dsh-client-ui-theme` / `dsh-client-ui-input-trigger` / `dsh-client-ui-conversation` 的 `0.1.7-rc.2` 包内逐值提取核对；运行时层面，在实机 `0.1.7-rc.2` 上验证了暗/亮主题亚克力、悬浮形态菜单与小圈挪位（CI 仍只做静态把关，运行时零覆盖不变）。
 
-[0.1.1]: https://github.com/Witherwithwinter/DSH-Codinput/compare/v0.1.0...v0.1.1
+[0.1.1]: https://github.com/0x2fovo/DSH-Codinput/compare/v0.1.0...v0.1.1
 
 ## [0.1.0] — 2026-09-23
 
@@ -570,4 +570,4 @@
 
 - **侧栏标签里打字不落草稿**：编辑器回调走的是模块级单槽（跨形态复用 `EditorState` 必需），但卸载时无条件清空——侧栏 body 先挂载、主输入面晚一拍才卸载，于是晚卸载的旧实例把新实例的 hooks 摘掉。症状是在侧栏 Codinput 里打字只留在本地面板：不进草稿（刷新/关标签即丢）、行列指示不动、发送/换行手势失效。改为按实例身份清空（`clearActiveEditorHooks`）。
 
-[0.1.0]: https://github.com/Witherwithwinter/DSH-Codinput/releases/tag/v0.1.0
+[0.1.0]: https://github.com/0x2fovo/DSH-Codinput/releases/tag/v0.1.0

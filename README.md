@@ -4,7 +4,7 @@
 
 # DSH-Codinput
 
-[![npm Version](https://img.shields.io/npm/v/dsh-codinput)](https://www.npmjs.com/package/dsh-codinput) [![DSH Version](https://img.shields.io/badge/DSH-0.2.2--rc.3%20desktop-blue)](https://github.com/deepseek-ai/deepseek-harness) [![Downloads](https://img.shields.io/npm/dt/dsh-codinput)](https://www.npmjs.com/package/dsh-codinput) [![GitHub Stars](https://img.shields.io/github/stars/Witherwithwinter/DSH-Codinput)](https://github.com/Witherwithwinter/DSH-Codinput/stargazers) [![License](https://img.shields.io/github/license/Witherwithwinter/DSH-Codinput)](./LICENSE)
+[![npm Version](https://img.shields.io/npm/v/dsh-codinput)](https://www.npmjs.com/package/dsh-codinput) [![DSH Version](https://img.shields.io/badge/DSH-0.2.2--rc.3%20desktop-blue)](https://github.com/deepseek-ai/deepseek-harness) [![Downloads](https://img.shields.io/npm/dt/dsh-codinput)](https://www.npmjs.com/package/dsh-codinput) [![GitHub Stars](https://img.shields.io/github/stars/0x2fovo/DSH-Codinput)](https://github.com/0x2fovo/DSH-Codinput/stargazers) [![License](https://img.shields.io/github/license/0x2fovo/DSH-Codinput)](./LICENSE)
 
 中文 | [English](./README.en.md)
 
@@ -98,13 +98,13 @@ dsh plugin --profile desktop add dsh-codinput
 - **GitHub 源码安装**（仓库已含预构建 `lib/client.js`，直接安装无需本地构建）：
 
   ```bash
-  dsh plugin --profile desktop add github:Witherwithwinter/DSH-Codinput
+  dsh plugin --profile desktop add github:0x2fovo/DSH-Codinput
   ```
 
 - **本地源码开发（`link:`）**（不复制文件，改代码后执行 `npm run build` 刷新即生效）：
 
   ```bash
-  git clone https://github.com/Witherwithwinter/DSH-Codinput.git
+  git clone https://github.com/0x2fovo/DSH-Codinput.git
   dsh plugin --profile desktop add link:/abs/path/to/DSH-Codinput
   ```
 
