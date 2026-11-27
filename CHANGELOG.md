@@ -2,6 +2,24 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.6.2] — 2026-11-27（修复运行中排队/插话跟随宿主设置与用户消息 Markdown 兼容 dsh-rewind）
+
+### 修复
+
+- **运行中发送跟随 DSH「运行中按 Enter 的行为」设置（Issue #18）**：此前接管后的输入框统一走 `actions.submit()`（宿主内固定为排队）且 `Toolbar` 硬编码返回 `'queue'`，导致宿主「插话 / 排队」设置失效。现新增 `src/client/submission.ts`，通过 `slots.entries('conversation.composer.bar')`（`inject(undefined)`，无会话上下文副作用）与 `settings.general.item`（`composer-enter`）订阅宿主实时 `hooks.busyEnter`（旧 0.2.0 宿主缺席时安全回退 `'queue'`），在 `CodinputBar` / `SidebarCodinputBody` 派生 `steeringAvailable`，`CodinputSurface` 改走 `keyboard.submit(primarySubmitMode, source)`，`Toolbar` 主按钮标签实时跟随切换「插话发送 / 排队发送」（覆盖普通、悬浮、侧栏三态）。
+- **开启「用户消息 Markdown 渲染」与 `dsh-rewind` 等插件共存（Issue #19）**：此前 `UserMessageMarkdown` 以 `priority: -1` 遮蔽 `conversation.chat.node` 的 `user` / `steering` 条目，导致同样包装该槽位默认条目的 `dsh-rewind-plugin` 无法挂载撤回按钮。现于 DSH 0.2.2+ 改为接入 `uiConversation.userText` 规则与 `conversation.user.text.node` 槽位，完全让出 `conversation.chat.node`，使 `dsh-rewind` 等节点包装插件及官方附件、操作行与引用划词完整保留；规则自动跳过 `QueueDock` 与 `/goal` 输入卡，并复用 `file` / `skill` 条目注入动作；旧 0.2.0 宿主无 `uiConversation` 时仍自动回退 `conversation.chat.node`。
+
+### 优化
+
+- **品牌图标精修**：优化品牌图标几何对称性与小尺寸清晰度（`f467fd5`）。
+
+### 质量与验证
+
+- `scripts/test-unit.mjs` 扩充至 **16/16** 组零依赖单元测试（新增 `userTextMarkdownRule` 与 `submission` 用例）。
+- `npm run prepublishOnly`（`check:popup` + `npm test` 16/16 + `npm run build` + `tsc --noEmit`）全过。
+- 隔离宿主 `@deepseek-ai/dsh@0.2.2-rc.3` 实测：`probe.mjs` 三形态 **23/23**、`probe-switch.mjs` 会话切换 **6/6**，以及用户消息气泡 `user-text` 渲染/切换与运行中 `steer` / `queue` 实测全过（0 插件错误）。
+- `lib/client.js`：`3,543,263 B`（gzip `1,156,698 B` / brotli `958,311 B`），md5 `4dba2909c334b32efec6ad790011e8bd`，sha256 `f78c5c2fcfb2241091aa5c6261f7462827a0326ce1190626aeb2d7dc0d9e70bf`。
+
 ## [0.6.1] — 2026-11-25（修复拖放 HTML 等文件时源码进入草稿与文档预览图更新）
 
 ### 修复

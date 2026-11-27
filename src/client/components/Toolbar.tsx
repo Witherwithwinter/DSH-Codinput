@@ -94,6 +94,10 @@ export interface ToolbarProps {
   blocked?: boolean;
   /** 会话运行中（官方 useSession s.running）：双按钮语义与标签用。 */
   running?: boolean;
+  /** 运行中主发送模式（跟随宿主 busyEnter 偏好解析出的 queue / steer）。 */
+  primarySubmitMode?: 'steer' | 'queue';
+  /** 是否允许运行中插话（普通会话与可续跑子智能体为 true）。 */
+  steeringAvailable?: boolean;
   onNotify?(level: 'info' | 'error', text: string): void;
   /** 主发送手势（与编辑器发送键同一策略）。 */
   onSend(): void;
@@ -121,18 +125,6 @@ export interface ToolbarProps {
 /** 官方 keepFocus：mousedown 阻止默认，避免编辑器失焦。 */
 function keepFocus(event: React.MouseEvent): void {
   event.preventDefault();
-}
-
-/**
- * 官方 `resolveSubmitMode(busyEnter, running, gesture, steeringAvailable)` 的
- * 插件侧等价（该函数在「running && steeringAvailable」时对 enter 手势原样返回
- * busyEnter 偏好）。宿主偏好藏在官方 bar 条目的 inject 面里，本插件拿不到，
- * 取官方默认值 `DEFAULT_BUSY_ENTER_BEHAVIOR = "queue"`（0.2.2
- * dsh-client-ui-conversation/lib/client.js L16334）。返回联合类型是为了让
- * 「steer/queue」两条标签分支都成为可达代码，后续宿主透传偏好时只改这里。
- */
-function resolvePrimarySubmitMode(): 'steer' | 'queue' {
-  return 'queue';
 }
 
 /**
@@ -230,21 +222,14 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
   const plainMessageDraft = !empty && phase === 'plain' && !draft.trimStart().startsWith('/');
   /** 官方 interruptible（普通会话：subagent 不适用、continuable=false）= running && sending。 */
   const interruptible = running === true && sending;
-  /**
-   * 官方 resolveSubmitMode(busyEnter, running, "enter", steeringAvailable)：
-   * gesture 是 "enter" → 返回 busyEnter 偏好。插件侧读不到宿主偏好（该值在
-   * 官方 bar 条目自己的 inject 面里，不归本插件所有），取官方默认
-   * DEFAULT_BUSY_ENTER_BEHAVIOR = "queue"（conversation client.js L16334）。
-   * 留成函数返回联合类型：宿主未来透传偏好时只改这一处。
-   */
-  const primarySubmitMode = resolvePrimarySubmitMode();
+  const primarySubmitMode = props.primarySubmitMode ?? 'queue';
   const primaryLabel = props.primaryStops
     ? tBar('tool.stop')
     : sending
       ? tBar('tool.sending')
       : props.primaryRetries === true
         ? tBar('tool.continue')
-        : running === true && !locked && plainMessageDraft
+        : running === true && props.steeringAvailable !== false && !locked && plainMessageDraft
           ? tBar(primarySubmitMode === 'steer' ? 'tool.sendSteer' : 'tool.sendQueue')
           : tBar('tool.send');
 

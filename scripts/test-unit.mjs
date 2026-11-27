@@ -65,6 +65,8 @@ export * as float3d from './src/client/float3d.ts';
 export * as floatDock from './src/client/float-dock.ts';
 export * as floatFlip from './src/client/float-flip.ts';
 export * as slotEntry from './src/client/components/slotEntry.tsx';
+export * as submission from './src/client/submission.ts';
+export * as userMsgMd from './src/client/components/UserMessageMarkdown.tsx';
 export * as md from './src/client/markdown/index.ts';
 export * as mdExt from './src/client/markdown/extensions.ts';
 export * as mdCode from './src/client/markdown/code.ts';
@@ -124,14 +126,19 @@ const built = await build({
           return {
             contents: `
               export const createElement = (...a) => ({ $$stub: true, a });
+              export const memo = (c) => c;
               export const useCallback = (fn) => fn;
+              export const useEffect = () => {};
               export const useMemo = (fn) => fn();
               export const useRef = (v) => ({ current: v });
+              export const useState = (v) => [typeof v === 'function' ? v() : v, () => {}];
               export const useSyncExternalStore = (_s, get) => get();
               export class Component { constructor(p) { this.props = p; } }
               export const jsx = () => null;
               export const jsxs = () => null;
               export const Fragment = Symbol('fragment');
+              export const ImageLightbox = () => null;
+              export const Tooltip = ({ children }) => children ?? null;
             `,
             loader: 'js',
           };
@@ -675,6 +682,84 @@ console.log('== DSH-Codinput unit tests ==');
     assert.deepEqual(runDrop({ types: ['Files', 'text/html', 'text/plain'] }), { handled: true, stopped: 0 });
     assert.deepEqual(runDrop({ types: ['text/plain'] }), { handled: false, stopped: 0 });
     assert.deepEqual(runDrop(null), { handled: false, stopped: 0 });
+  });
+
+  // ---------- 10. userTextMarkdownRule ----------
+  await test('userTextMarkdownRule: matches user bubble text, tracks facts, and skips QueueDock/Goal inputs', () => {
+    const { USER_TEXT_MARKDOWN_ID, userTextMarkdownRule } = mod.userMsgMd;
+    const rule = userTextMarkdownRule();
+    assert.equal(rule.id, USER_TEXT_MARKDOWN_ID);
+    assert.ok(rule.order < -10, 'must take precedence over built-in inline rules such as quote (-10)');
+
+    const makeCtx = (facts) => {
+      const reads = [];
+      return {
+        reads,
+        context: {
+          read(key) {
+            reads.push(key);
+            return facts[key];
+          },
+        },
+      };
+    };
+
+    const normal = makeCtx({ sessionLabels: ['Session A', 42, 'Session B'], skillNames: ['commit', null] });
+    const text = '# Hello\n\n@Session A /commit';
+    assert.deepEqual(rule.match(text, 0, normal.context), {
+      id: USER_TEXT_MARKDOWN_ID,
+      start: 0,
+      end: text.length,
+      data: { sessionLabels: ['Session A', 'Session B'], skillNames: ['commit'] },
+    });
+    assert.ok(normal.reads.includes('sessionLabels') && normal.reads.includes('skillNames'));
+
+    assert.equal(rule.match(text, 1, makeCtx({}).context), undefined);
+    assert.equal(rule.match('', 0, makeCtx({}).context), undefined);
+    assert.equal(rule.match(text, 0, makeCtx({ collapseWhitespace: true }).context), undefined);
+    assert.equal(rule.match(text, 0, makeCtx({ trimWhitespace: true }).context), undefined);
+    assert.equal(rule.match(text, 0, makeCtx({ commands: [{ start: 0, end: 5, name: 'goal' }] }).context), undefined);
+  });
+
+  // ---------- 11. submission ----------
+  await test('submission: resolves steer/queue mode and reads host busyEnter observable safely', () => {
+    const { findBusyEnterSource, normalizeBusyEnter, resolveSubmitMode } = mod.submission;
+
+    assert.equal(normalizeBusyEnter('steer'), 'steer');
+    assert.equal(normalizeBusyEnter('queue'), 'queue');
+    assert.equal(normalizeBusyEnter(undefined), 'queue');
+    assert.equal(normalizeBusyEnter('invalid'), 'queue');
+
+    assert.equal(resolveSubmitMode('steer', true, true), 'steer');
+    assert.equal(resolveSubmitMode('queue', true, true), 'queue');
+    assert.equal(resolveSubmitMode('steer', false, true), 'queue');
+    assert.equal(resolveSubmitMode('steer', true, false), 'queue');
+
+    const barObs = { getSnapshot: () => 'steer', subscribe: () => () => {} };
+    const settingsObs = { getSnapshot: () => 'queue', subscribe: () => () => {} };
+    const codinputEntry = {
+      registrant: 'dsh-codinput',
+      options: { priority: -1, registrant: 'dsh-codinput' },
+      inject: () => ({ hooks: { busyEnter: { getSnapshot: () => 'queue', subscribe: () => () => {} } } }),
+    };
+    const brokenEntry = {
+      options: { priority: 0 },
+      inject: () => {
+        throw new Error('session required');
+      },
+    };
+    const officialBarEntry = {
+      options: { priority: 0 },
+      inject: (sid) => (sid === undefined ? { hooks: { busyEnter: barObs } } : {}),
+    };
+    const settingsEntry = {
+      options: { id: 'composer-enter' },
+      inject: () => ({ hooks: { busyEnter: settingsObs } }),
+    };
+
+    assert.equal(findBusyEnterSource([codinputEntry, brokenEntry, officialBarEntry], [settingsEntry]), barObs);
+    assert.equal(findBusyEnterSource([codinputEntry, brokenEntry], [settingsEntry]), settingsObs);
+    assert.equal(findBusyEnterSource([codinputEntry, brokenEntry], []), null);
   });
 
 console.log(`\n== summary: ${passed} passed, ${failed} failed ==`);

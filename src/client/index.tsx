@@ -14,7 +14,8 @@
  * 插件禁用/卸载时不残留监听、定时器或样式/手势劫持。
  */
 
-import type { ClientContext } from './host-types';
+import { userMarkdownRegistrations, userTextMarkdownRegistration, userTextMarkdownRule } from './components/UserMessageMarkdown';
+import type { ClientContext, UiConversationFace } from './host-types';
 import { installServices } from './services';
 import { setTakeoverActive, stopSeatAudit } from './seats';
 import { injectStyles } from './styles';
@@ -22,7 +23,6 @@ import { diagError, diagWindow, runGuarded } from './diag';
 import { loadPrefs, subscribePrefs } from './prefs';
 import { isAnySidebarInputCarried, subscribeSidebarInput } from './sideinput';
 import { barRegistration, CodinputBar } from './components/CodinputBar';
-import { userMarkdownRegistrations } from './components/UserMessageMarkdown';
 import { registerHeavyMarkdown } from './markdown/heavy';
 import { sidebarBodyRegistration, sidebarTabDefinition, sidebarTitleRegistration } from './sidebar';
 import { settingsRegistration } from './settings';
@@ -195,59 +195,147 @@ export function apply(ctx: ClientContext): void {
     };
   }, 'dsh-codinput: bar lifecycle');
 
-  // ---- 用户消息 Markdown：conversation.chat.node 键控座 user/steering 遮蔽 ----
-  // 独立于接管开关，自带 prefs.userMarkdown；关闭即卸载条目把消息渲染还座
-  // 官方（同 key 低 priority 者胜，动态包守卫强制分配负秩）。
+  // ---- 用户消息 Markdown：0.2.2+ 优先 uiConversation.userText + conversation.user.text.node ----
+  // 留出 conversation.chat.node（dsh-rewind 等外挂可继续包装官方 user 气泡）；
+  // 旧 0.2.0 宿主无 uiConversation 时回退 conversation.chat.node（user / steering 遮蔽）。
   runGuarded('md.register', () => {
-    const mdSeats = userMarkdownRegistrations();
-    const mdMounted = new Map<string, () => void>();
-    const mdRetries = new Map<string, () => void>();
     const mdWanted = (): boolean => loadPrefs().userMarkdown;
-    const mountMdSeat = (seat: (typeof mdSeats)[number]): void => {
-      const key = seat.options.key ?? '';
-      if (mdMounted.has(key) || !mdWanted()) return;
-      mdMounted.set(key, ctx.slots.register(seat.options, seat.component));
-      diagWindow().__dshCodinputShell[`md.${key}`] = 'mounted';
-    };
-    const unmountMdSeat = (key: string): void => {
-      mdRetries.get(key)?.();
-      mdRetries.delete(key);
-      const disposer = mdMounted.get(key);
-      if (!disposer) return;
-      mdMounted.delete(key);
-      try {
-        disposer();
-        diagWindow().__dshCodinputShell[`md.${key}`] = 'unmounted';
-      } catch (error) {
-        diagError('md.dispose', error);
-      }
-    };
-    const reconcileMd = (): void => {
-      for (const seat of mdSeats) {
-        const key = seat.options.key ?? '';
+    let userTextMode = false;
+    let teardownLegacy: (() => void) | null = null;
+
+    ctx.inject(['uiConversation'], (scope: Record<string, unknown>) => {
+      const uiConv = scope['uiConversation'] as UiConversationFace | undefined;
+      if (typeof uiConv?.userText?.register !== 'function') return;
+      const registerRule = uiConv.userText.register.bind(uiConv.userText);
+      userTextMode = true;
+      teardownLegacy?.();
+      teardownLegacy = null;
+      diagWindow().__dshCodinputShell['md.mode'] = 'user-text';
+
+      const textNodeSeat = userTextMarkdownRegistration();
+      const rule = userTextMarkdownRule();
+      let textNodeDisposer: (() => void) | null = null;
+      let textNodeRetry: (() => void) | null = null;
+      let ruleDisposer: (() => void) | null = null;
+
+      const mountRule = (): void => {
+        if (ruleDisposer || !textNodeDisposer || !mdWanted()) return;
+        ruleDisposer = registerRule(rule);
+        diagWindow().__dshCodinputShell['md.textRule'] = 'registered';
+      };
+
+      const unmountUserText = (): void => {
+        // 先卸规则再卸节点槽，避免 UserText 在中间态把 node.id 当成无对应槽位的未知节点。
+        const offRule = ruleDisposer;
+        ruleDisposer = null;
+        try {
+          offRule?.();
+          if (offRule) diagWindow().__dshCodinputShell['md.textRule'] = 'unmounted';
+        } catch (error) {
+          diagError('md.textRule.dispose', error);
+        }
+        textNodeRetry?.();
+        textNodeRetry = null;
+        const offNode = textNodeDisposer;
+        textNodeDisposer = null;
+        try {
+          offNode?.();
+          if (offNode) diagWindow().__dshCodinputShell['md.textNode'] = 'unmounted';
+        } catch (error) {
+          diagError('md.textNode.dispose', error);
+        }
+      };
+
+      const reconcileUserText = (): void => {
         if (mdWanted()) {
-          if (!mdMounted.has(key) && !mdRetries.has(key)) {
+          if (textNodeDisposer) {
+            mountRule();
+            return;
+          }
+          if (!textNodeRetry) {
             let pending = true;
             const cancel = tryRegister(() => {
-              mountMdSeat(seat);
+              if (!mdWanted()) {
+                pending = false;
+                textNodeRetry = null;
+                return;
+              }
+              textNodeDisposer = ctx.slots.register(textNodeSeat.options, textNodeSeat.component);
+              diagWindow().__dshCodinputShell['md.textNode'] = 'mounted';
               pending = false;
-              mdRetries.delete(key);
-            }, `md.${key}`);
-            if (pending) mdRetries.set(key, cancel);
+              textNodeRetry = null;
+              mountRule();
+            }, 'md.textNode');
+            if (pending) textNodeRetry = cancel;
           }
         } else {
-          unmountMdSeat(key);
+          unmountUserText();
         }
-      }
-    };
-    reconcileMd();
-    ctx.effect(() => {
+      };
+
+      reconcileUserText();
+      ctx.effect(() => {
+        const offPrefs = subscribePrefs(reconcileUserText);
+        return () => {
+          offPrefs();
+          unmountUserText();
+        };
+      }, 'dsh-codinput: user markdown lifecycle');
+    });
+
+    if (!userTextMode) {
+      diagWindow().__dshCodinputShell['md.mode'] = 'chat-node';
+      const mdSeats = userMarkdownRegistrations();
+      const mdMounted = new Map<string, () => void>();
+      const mdRetries = new Map<string, () => void>();
+      const mountMdSeat = (seat: (typeof mdSeats)[number]): void => {
+        const key = seat.options.key ?? '';
+        if (mdMounted.has(key) || !mdWanted()) return;
+        mdMounted.set(key, ctx.slots.register(seat.options, seat.component));
+        diagWindow().__dshCodinputShell[`md.${key}`] = 'mounted';
+      };
+      const unmountMdSeat = (key: string): void => {
+        mdRetries.get(key)?.();
+        mdRetries.delete(key);
+        const disposer = mdMounted.get(key);
+        if (!disposer) return;
+        mdMounted.delete(key);
+        try {
+          disposer();
+          diagWindow().__dshCodinputShell[`md.${key}`] = 'unmounted';
+        } catch (error) {
+          diagError('md.dispose', error);
+        }
+      };
+      const reconcileMd = (): void => {
+        for (const seat of mdSeats) {
+          const key = seat.options.key ?? '';
+          if (mdWanted()) {
+            if (!mdMounted.has(key) && !mdRetries.has(key)) {
+              let pending = true;
+              const cancel = tryRegister(() => {
+                mountMdSeat(seat);
+                pending = false;
+                mdRetries.delete(key);
+              }, `md.${key}`);
+              if (pending) mdRetries.set(key, cancel);
+            }
+          } else {
+            unmountMdSeat(key);
+          }
+        }
+      };
+      reconcileMd();
       const offPrefs = subscribePrefs(reconcileMd);
-      return () => {
+      let disposed = false;
+      teardownLegacy = () => {
+        if (disposed) return;
+        disposed = true;
         offPrefs();
         for (const seat of mdSeats) unmountMdSeat(seat.options.key ?? '');
       };
-    }, 'dsh-codinput: user markdown lifecycle');
+      ctx.effect(() => teardownLegacy ?? undefined, 'dsh-codinput: user markdown legacy lifecycle');
+    }
   });
 
   // ---- 侧边模式：sidebarRightTabs 三段式注册（dockkit 承担停靠/浮动） ----

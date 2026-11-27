@@ -29,7 +29,7 @@ body:
     attributes:
       label: 环境
       description: Codinput 版本、宿主版本、平台（桌面 / web）、运行形态（普通 / 悬浮 / 侧栏 / 已退出接管）
-      placeholder: Codinput 0.6.1 / 宿主 0.2.2-rc.3 / 桌面版 / 普通形态
+      placeholder: Codinput 0.6.2 / 宿主 0.2.2-rc.3 / 桌面版 / 普通形态
     validations:
       required: true
 

@@ -33,7 +33,12 @@
 
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ImageLightbox, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives';
-import type { SlotRegisterOptions } from '../host-types';
+import type {
+  SlotEntryLike,
+  SlotRegisterOptions,
+  UserTextRuleFace,
+  UserTextTransformContextFace,
+} from '../host-types';
 import { diagError } from '../diag';
 import { usePref, type CodinputPrefs } from '../prefs';
 import { bindForeign, t, useT, type TranslateParams } from '../i18n';
@@ -45,13 +50,69 @@ import {
   type MarkdownImageTarget,
 } from '../markdown';
 import { FileGlyph, fileExtension, fileSizeText } from './AttachmentRail';
+import { entryInjectProps, useSlotEntries } from './slotEntry';
 
 const selectMarkdownMono = (p: CodinputPrefs): boolean => p.markdownMono;
 
 /* ---------- 注册 ---------- */
 
+/** 0.2.2+ `conversation.user.text.node` 键控槽与 `uiConversation.userText` 规则共用 ID。 */
+export const USER_TEXT_MARKDOWN_ID = 'dsh-codinput-markdown';
+
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  for (const item of value) {
+    if (typeof item === 'string') out.push(item);
+  }
+  return out;
+}
+
+/**
+ * 0.2.2+ 用户文本整段接管规则：挂在 `uiConversation.userText` 上，把完整用户消息
+ * 交给 `conversation.user.text.node` 的 `dsh-codinput-markdown` 渲染，完全让出
+ * `conversation.chat.node`（使 dsh-rewind 等包装插件与官方气泡操作行保持完整）。
+ */
+export function userTextMarkdownRule(): UserTextRuleFace {
+  return {
+    id: USER_TEXT_MARKDOWN_ID,
+    // 早于内置 quote(-10) / session(10) / command(20) / file / folder / skill / secret。
+    order: -1000,
+    match(text: string, from: number, context: UserTextTransformContextFace) {
+      if (from > 0 || text.length === 0) return undefined;
+      // 排队单行摘要（QueueDock）与 /goal 命令输入卡不渲染 Markdown。
+      if (Boolean(context.read('collapseWhitespace')) || Boolean(context.read('trimWhitespace'))) return undefined;
+      if (context.read('commands') !== undefined) return undefined;
+      // 通过 context.read 登记 facts 依赖，确保引用/技能投影刷新时重新求值。
+      const sessionLabels = stringArray(context.read('sessionLabels'));
+      const skillNames = stringArray(context.read('skillNames'));
+      return {
+        id: USER_TEXT_MARKDOWN_ID,
+        start: 0,
+        end: text.length,
+        data: {
+          ...(sessionLabels.length > 0 ? { sessionLabels } : {}),
+          ...(skillNames.length > 0 ? { skillNames } : {}),
+        },
+      };
+    },
+  };
+}
+
+export function userTextMarkdownRegistration(): { options: SlotRegisterOptions; component: unknown } {
+  return {
+    options: {
+      name: 'conversation.user.text.node',
+      key: USER_TEXT_MARKDOWN_ID,
+      priority: -1,
+      registrant: 'dsh-codinput',
+    },
+    component: UserMessageMarkdownNode,
+  };
+}
+
 export function userMarkdownRegistrations(): { options: SlotRegisterOptions; component: unknown }[] {
-  // user：落库用户消息；steering：落库插队消息。同一气泡渲染。
+  // 旧 0.2.0 宿主回退：user 落库用户消息；steering 落库插队消息。同一气泡渲染。
   return (['user', 'steering'] as const).map((key) => ({
     options: {
       name: 'conversation.chat.node',
@@ -562,6 +623,115 @@ function AttachmentRowFallback({
   );
 }
 
+interface UserMessageMarkdownBodyProps {
+  text: string;
+  referenceLabels: readonly string[];
+  skillNames: readonly string[];
+  openFile?: ((path: string) => void) | undefined;
+  openSkill?: ((name: string) => void) | undefined;
+}
+
+function UserMessageMarkdownBody({
+  text,
+  referenceLabels,
+  skillNames,
+  openFile,
+  openSkill,
+}: UserMessageMarkdownBodyProps): JSX.Element {
+  /** Markdown 正文等宽连字（prefs.markdownMono）：即时跟随设置变化。 */
+  const markdownMono = usePref(selectMarkdownMono);
+  const html = useMemo(() => renderMarkdown(text, { surface: 'user-message' }), [text]);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  /** Markdown 内 http(s) 图片点击后的大图（用户消息里的 Markdown 图片与预览一致走灯箱）。 */
+  const [lightbox, setLightbox] = useState<MarkdownImageTarget | null>(null);
+  const onMarkdownClick = useCallback((event: React.MouseEvent<HTMLDivElement>): void => {
+    handleMarkdownClick(event, { onImage: setLightbox });
+  }, []);
+  const actionsRef = useRef<ChipActions>({ openFile, openSkill, skillNames, referenceLabels });
+  actionsRef.current = { openFile, openSkill, skillNames, referenceLabels };
+  // 引用标签 / 技能名单后到（投影刷新）时重跑装饰，补齐 @引用与 /技能 chip。
+  useEffect(() => {
+    decorateMarkdownRoot(bodyRef.current, actionsRef);
+  }, [html, referenceLabels, skillNames]);
+  // 扩展渲染 扩展（代码高亮 / KaTeX / Mermaid）的 DOM 激活口；本批未注册扩展时是 no-op。
+  useEffect(() => activateMarkdown(bodyRef.current, 'user-message'), [html]);
+
+  return (
+    <>
+      <div
+        className="dci-umsg-md dci-md"
+        data-dci-md="user-message"
+        data-mono={markdownMono ? 'true' : undefined}
+        ref={bodyRef}
+        onClick={onMarkdownClick}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+      {lightbox ? (
+        <ImageLightbox
+          src={lightbox.src}
+          alt={lightbox.alt}
+          labels={{ dialog: t('image.preview'), close: t('image.closePreview') }}
+          onClose={() => setLightbox(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+export interface UserMessageTextNodeProps {
+  node?: { data?: { sessionLabels?: unknown; skillNames?: unknown } } | undefined;
+  raw?: string | undefined;
+  interactive?: boolean | undefined;
+  sessionId?: string | undefined;
+}
+
+function resolveUserTextAction(
+  entries: readonly unknown[],
+  key: 'file' | 'skill',
+  propName: 'openFile' | 'openSkill',
+  sessionId: string,
+): ((arg: string) => void) | undefined {
+  for (const candidate of entries) {
+    const entry = candidate as SlotEntryLike | null | undefined;
+    if (!entry || entry.options?.key !== key) continue;
+    const injected = entryInjectProps(entry, sessionId);
+    const fn = injected?.[propName];
+    if (typeof fn === 'function') return fn as (arg: string) => void;
+  }
+  return undefined;
+}
+
+function UserMessageMarkdownNodeView(props: UserMessageTextNodeProps): JSX.Element | null {
+  const { node, raw, interactive, sessionId } = props;
+  // 订阅宿主 locale 快照：语言切换时灯箱 aria 文案即时刷新。
+  useT();
+  const text = typeof raw === 'string' ? raw : '';
+  const referenceLabels = useMemo(() => stringArray(node?.data?.sessionLabels), [node?.data?.sessionLabels]);
+  const skillNames = useMemo(() => stringArray(node?.data?.skillNames), [node?.data?.skillNames]);
+  const textNodeEntries = useSlotEntries('conversation.user.text.node');
+  const activeSessionId = interactive !== false && typeof sessionId === 'string' && sessionId !== '' ? sessionId : '';
+  const openFile = useMemo(
+    () => (activeSessionId === '' ? undefined : resolveUserTextAction(textNodeEntries, 'file', 'openFile', activeSessionId)),
+    [activeSessionId, textNodeEntries],
+  );
+  const openSkill = useMemo(
+    () => (activeSessionId === '' ? undefined : resolveUserTextAction(textNodeEntries, 'skill', 'openSkill', activeSessionId)),
+    [activeSessionId, textNodeEntries],
+  );
+  if (text === '') return null;
+  return (
+    <UserMessageMarkdownBody
+      text={text}
+      referenceLabels={referenceLabels}
+      skillNames={skillNames}
+      openFile={openFile}
+      openSkill={openSkill}
+    />
+  );
+}
+
+export const UserMessageMarkdownNode = memo(UserMessageMarkdownNodeView);
+
 function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element | null {
   const { node, renderMessageImages, renderFactorySlot, loadImage, openFile, openSkill } = props;
   // 订阅宿主 locale 快照：语言切换时复制钮/引用摘要等文案即时刷新（其它组件同款）。
@@ -582,25 +752,6 @@ function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element |
     [referenceLabels, skillNames],
   );
   const sourceKind = (data.source as { kind?: unknown } | null | undefined)?.kind;
-
-  /** Markdown 正文等宽连字（prefs.markdownMono）：即时跟随设置变化。 */
-  const markdownMono = usePref(selectMarkdownMono);
-
-  const html = useMemo(() => (text === '' ? '' : renderMarkdown(text, { surface: 'user-message' })), [text]);
-  const bodyRef = useRef<HTMLDivElement | null>(null);
-  /** Markdown 内 http(s) 图片点击后的大图（用户消息里的 Markdown 图片与预览一致走灯箱）。 */
-  const [lightbox, setLightbox] = useState<MarkdownImageTarget | null>(null);
-  const onMarkdownClick = useCallback((event: React.MouseEvent<HTMLDivElement>): void => {
-    handleMarkdownClick(event, { onImage: setLightbox });
-  }, []);
-  const actionsRef = useRef<ChipActions>({ openFile, openSkill, skillNames, referenceLabels });
-  actionsRef.current = { openFile, openSkill, skillNames, referenceLabels };
-  // 引用标签 / 技能名单后到（投影刷新）时重跑装饰，补齐 @引用与 /技能 chip。
-  useEffect(() => {
-    decorateMarkdownRoot(bodyRef.current, actionsRef);
-  }, [html, referenceLabels, skillNames]);
-  // 扩展渲染 扩展（代码高亮 / KaTeX / Mermaid）的 DOM 激活口；本批未注册扩展时是 no-op。
-  useEffect(() => activateMarkdown(bodyRef.current, 'user-message'), [html]);
 
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<number | null>(null);
@@ -667,13 +818,12 @@ function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element |
         {showBubble && (
           <div className="dci-umsg-bubble">
             {text !== '' && (
-              <div
-                className="dci-umsg-md dci-md"
-                data-dci-md="user-message"
-                data-mono={markdownMono ? 'true' : undefined}
-                ref={bodyRef}
-                onClick={onMarkdownClick}
-                dangerouslySetInnerHTML={{ __html: html }}
+              <UserMessageMarkdownBody
+                text={text}
+                referenceLabels={referenceLabels}
+                skillNames={skillNames}
+                openFile={openFile}
+                openSkill={openSkill}
               />
             )}
             {rest.map((block, index) => (
@@ -705,14 +855,6 @@ function UserMessageMarkdownView(props: UserMessageMarkdownProps): JSX.Element |
             </button>
           </Tooltip>
         </div>
-        {lightbox ? (
-          <ImageLightbox
-            src={lightbox.src}
-            alt={lightbox.alt}
-            labels={{ dialog: t('image.preview'), close: t('image.closePreview') }}
-            onClose={() => setLightbox(null)}
-          />
-        ) : null}
       </div>
     </div>
   );

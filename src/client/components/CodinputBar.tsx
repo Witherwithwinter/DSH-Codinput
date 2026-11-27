@@ -75,6 +75,13 @@ export function CodinputBar(props: BarProps): JSX.Element | null {
   const inputStandard = useStableKit(props as unknown as Record<string, unknown>);
   // 会话运行中（官方 useSession s.running）：空草稿时主按钮变停止。
   const running = useSession ? useSession((s: unknown) => (s as { running?: boolean } | undefined)?.running) === true : false;
+  // 官方 InputBar L172：普通会话与可续跑子智能体支持运行中插话（steer）。
+  const steeringAvailable = useSession
+    ? useSession((s: unknown) => {
+        const subagent = (s as { subagent?: { address?: { mode?: unknown } } | null } | undefined)?.subagent ?? null;
+        return subagent === null || subagent.address?.mode === 'continuable';
+      }) !== false
+    : true;
   const sideCarried = useSidebarInputCarried(sessionId);
   const mode = usePref(selectMode);
   const activeMode: 'side' | 'normal' | 'float' = sideCarried ? 'side' : mode === 'float' ? 'float' : 'normal';
@@ -113,6 +120,7 @@ export function CodinputBar(props: BarProps): JSX.Element | null {
       disabled={disabled === true}
       blocked={blocked !== undefined}
       running={running}
+      steeringAvailable={steeringAvailable}
       float={floating}
       continueState={continueState}
       occurrence={occurrence}

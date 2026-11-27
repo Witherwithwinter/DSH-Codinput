@@ -108,7 +108,7 @@ Replace `desktop` with your local profile name. Restart the desktop app afterwar
   dsh plugin --profile desktop add link:/abs/path/to/DSH-Codinput
   ```
 
-- **Manual profile config** (`~/.dsh/profiles/desktop/package.json`): add `"dsh-codinput": "^0.6.1"` to `dependencies`, append `"dsh-codinput"` to `dsh.profile.bundles`, run `dsh plugin --profile desktop install`, and restart the desktop app.
+- **Manual profile config** (`~/.dsh/profiles/desktop/package.json`): add `"dsh-codinput": "^0.6.2"` to `dependencies`, append `"dsh-codinput"` to `dsh.profile.bundles`, run `dsh plugin --profile desktop install`, and restart the desktop app.
 
 ## Theme / skin
 
@@ -125,7 +125,7 @@ Codinput ships no palette of its own — every color inherits from the host's `-
 npm install              # install devDependencies (bundler / typecheck)
 npm run build            # contract check + minified lib/client.js build
 npm run build:dev        # unminified build with inline sourcemap
-npm test                 # zero-dependency unit test suite (14 suites)
+npm test                 # zero-dependency unit test suite (16 suites)
 npm run typecheck        # TypeScript typecheck
 npm run prepublishOnly   # full release gate (check:popup + test + build + typecheck)
 ```

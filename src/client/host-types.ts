@@ -68,6 +68,7 @@ export interface SlotEntryLike {
   /** 注册选项切面：priority 负数 = 动态包被守卫分配的页内遮蔽秩（见 slotEntry）。 */
   readonly options?: {
     readonly id?: string;
+    readonly key?: string;
     readonly order?: number;
     readonly priority?: number;
     readonly registrant?: string;
@@ -109,7 +110,7 @@ export interface EditSelection {
 
 export interface ComposerKeyboard {
   readonly snapshot: InputState;
-  submit(mode: string): void;
+  submit(mode: string, source?: string): void;
   steerQueue(): void;
   paste(text: string): void;
   caretSpan(): EditSelection;
@@ -397,5 +398,30 @@ export interface SidebarTabInfo {
     readonly title?: string;
     /** tab 域动作面（occurrence held）：close() 关闭本标签。 */
     readonly actions?: { readonly close?: () => void };
+  };
+}
+
+// ---------- uiConversation.userText（0.2.2+ 用户文本规则与节点槽位） ----------
+
+export interface UserTextTransformContextFace {
+  read(key: string): unknown;
+}
+
+export interface UserTextNodeFace {
+  readonly id: string;
+  readonly start: number;
+  readonly end: number;
+  readonly data: Record<string, unknown>;
+}
+
+export interface UserTextRuleFace {
+  readonly id: string;
+  readonly order: number;
+  match(text: string, from: number, context: UserTextTransformContextFace): UserTextNodeFace | undefined;
+}
+
+export interface UiConversationFace {
+  readonly userText?: {
+    register?(rule: UserTextRuleFace): () => void;
   };
 }

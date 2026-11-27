@@ -108,7 +108,7 @@ dsh plugin --profile desktop add dsh-codinput
   dsh plugin --profile desktop add link:/abs/path/to/DSH-Codinput
   ```
 
-- **手写 profile 配置**（`~/.dsh/profiles/desktop/package.json`）：将 `"dsh-codinput": "^0.6.1"` 加入 `dependencies`、将 `"dsh-codinput"` 追加到 `dsh.profile.bundles` 末尾，执行 `dsh plugin --profile desktop install` 后重启桌面版。
+- **手写 profile 配置**（`~/.dsh/profiles/desktop/package.json`）：将 `"dsh-codinput": "^0.6.2"` 加入 `dependencies`、将 `"dsh-codinput"` 追加到 `dsh.profile.bundles` 末尾，执行 `dsh plugin --profile desktop install` 后重启桌面版。
 
 ## 主题 / 皮肤
 
@@ -125,7 +125,7 @@ Codinput 不自带配色，全部颜色继承自宿主的 `--dsw-*` 设计 token
 npm install              # 安装开发依赖（打包与类型检查）
 npm run build            # 契约自检 + 构建压缩版 lib/client.js
 npm run build:dev        # 构建带内联 sourcemap 的开发产物
-npm test                 # 运行零依赖单元测试（14 组）
+npm test                 # 运行零依赖单元测试（16 组）
 npm run typecheck        # TypeScript 类型检查
 npm run prepublishOnly   # 完整发布门禁（check:popup + test + build + typecheck）
 ```

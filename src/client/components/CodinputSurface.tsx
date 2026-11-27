@@ -18,6 +18,7 @@ import type {
 } from '../host-types';
 import { stash, useService } from '../services';
 import { loadPrefs, savePrefs, usePref, type CodinputPrefs } from '../prefs';
+import { resolveSubmitMode, useBusyEnterBehavior } from '../submission';
 import { addFilesToDraft, bindSessionFilePicker, dragHasFiles } from '../attachments';
 import { diagError, diagSession, diagWindow } from '../diag';
 import { IconEdit, IconEye } from '../icons';
@@ -62,6 +63,8 @@ export interface CodinputSurfaceProps {
   blocked?: boolean;
   /** 会话运行中（useSession s.running）：空草稿时主按钮变停止（官方同款）。 */
   running?: boolean;
+  /** 是否允许运行中插话（普通会话与可续跑子智能体为 true）。 */
+  steeringAvailable?: boolean;
   /** rc.3 Continue/Retry 信号（bar 条目层用 useSession/useProjection 读到后下发）。 */
   continueState?: ContinueState;
   /** 本 composer 的 occurrence：文档级粘贴路由按 main/embedded 选举。 */
@@ -87,6 +90,7 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
     disabled,
     blocked,
     running,
+    steeringAvailable,
     side,
     float,
     onDragZonePointerDown,
@@ -325,7 +329,11 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
   };
   const onStop = stopSession;
 
-  const sendGesture = (): void => {
+  const busyEnter = useBusyEnterBehavior();
+  const canSteer = steeringAvailable !== false;
+  const primarySubmitMode = resolveSubmitMode(busyEnter, running === true, canSteer);
+
+  const sendGesture = (source: 'enter' | 'click' = 'enter'): void => {
     if (!actions) return;
     // 发送读的是宿主输入机里的草稿：本地输入期间草稿还没上报，先同步最后一版。
     editorCtlRef.current?.flush();
@@ -336,6 +344,10 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
     const noAttachments = !st || st.attachmentIds.length === 0;
     if (draftEmpty && noAttachments) {
       keyboard?.steerQueue(); // 空草稿：发送手势转队列全量 Steer
+      return;
+    }
+    if (typeof keyboard?.submit === 'function') {
+      keyboard.submit(primarySubmitMode, source);
       return;
     }
     actions.submit();
@@ -582,7 +594,7 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
               actions={actions}
               triggers={triggers}
               keyboard={keyboard}
-              onSendGesture={sendGesture}
+              onSendGesture={() => sendGesture('enter')}
               placeholder={placeholderText}
               viewRef={viewRef}
               editorCtlRef={editorCtlRef}
@@ -631,7 +643,9 @@ export function CodinputSurface(props: CodinputSurfaceProps): JSX.Element {
           onRetry={onRetry}
           onStop={onStop}
           onNotify={notify}
-          onSend={sendGesture}
+          onSend={() => sendGesture('click')}
+          primarySubmitMode={primarySubmitMode}
+          steeringAvailable={canSteer}
           sendDisabled={sendDisabled}
           inputStandard={inputStandard}
           draftText={draftText}
